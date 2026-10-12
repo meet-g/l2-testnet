@@ -59,6 +59,7 @@ class StrategyState:
     trough_unrealized_bps: float = 0.0
     last_exit_time_ms: int = 0
     last_exit_was_loss: bool = False
+    consecutive_losses: int = 0  # Track consecutive loss streak for escalated cooldown
 
     @property
     def is_in_position(self) -> bool:
@@ -308,6 +309,8 @@ class EdgeEvaluator:
                         exit_reason = "TRAILING_STOP" if state.trailing_stop_active else "STOP_LOSS"
                     elif score <= -reversal_thresh and (gain_bps >= 4.5 or gain_bps <= -8.0):
                         exit_reason = "SIGNAL_REVERSAL"
+                    elif state.peak_unrealized_bps >= 4.0 and gain_bps <= 0.5 and score <= 0.0:
+                        exit_reason = "PROFIT_DECAY_EXIT"  # Was profitable, decayed back to breakeven
                     elif holding_time_secs >= max_hold_secs and gain_bps <= 0.0 and score <= 0.10:
                         exit_reason = "TIME_LIMIT"
                     elif holding_time_secs >= max_hold_secs * 2.0:
@@ -404,6 +407,10 @@ class EdgeEvaluator:
                         state.trough_unrealized_bps = 0.0
                         state.last_exit_time_ms = timestamp_ms
                         state.last_exit_was_loss = (net_pnl < 0.0)
+                        if net_pnl < 0.0:
+                            state.consecutive_losses += 1
+                        else:
+                            state.consecutive_losses = 0
 
                 else:
                     # Short position tracking
@@ -439,6 +446,8 @@ class EdgeEvaluator:
                         exit_reason = "TRAILING_STOP" if state.trailing_stop_active else "STOP_LOSS"
                     elif score >= reversal_thresh and (gain_bps >= 4.5 or gain_bps <= -8.0):
                         exit_reason = "SIGNAL_REVERSAL"
+                    elif state.peak_unrealized_bps >= 4.0 and gain_bps <= 0.5 and score >= 0.0:
+                        exit_reason = "PROFIT_DECAY_EXIT"  # Was profitable, decayed back to breakeven
                     elif holding_time_secs >= max_hold_secs and gain_bps <= 0.0 and score >= -0.10:
                         exit_reason = "TIME_LIMIT"
                     elif holding_time_secs >= max_hold_secs * 2.0:
@@ -533,6 +542,10 @@ class EdgeEvaluator:
                         state.trough_unrealized_bps = 0.0
                         state.last_exit_time_ms = timestamp_ms
                         state.last_exit_was_loss = (net_pnl < 0.0)
+                        if net_pnl < 0.0:
+                            state.consecutive_losses += 1
+                        else:
+                            state.consecutive_losses = 0
 
             # =========================================================================
             # B. SMART ENTRY GATING
@@ -547,14 +560,38 @@ class EdgeEvaluator:
                 if min_vol_bps > 0.0 and self.current_volatility_bps < min_vol_bps:
                     continue
 
-                # Post-Loss Whipsaw Cooldown: Prevent rapid-fire churn after a loss/hedge
-                loss_cooldown_ms = params.get("loss_cooldown_secs", 60) * 1000
+                # Post-Loss Whipsaw Cooldown with Escalation: Prevent rapid-fire churn after loss
+                base_cooldown_ms = params.get("loss_cooldown_secs", 60) * 1000
+                # Escalate cooldown geometrically: 60s -> 120s -> 240s (cap at 4x base)
+                escalation_factor = min(4, 2 ** max(0, state.consecutive_losses - 1)) if state.consecutive_losses > 0 else 1
+                loss_cooldown_ms = base_cooldown_ms * escalation_factor
                 if state.last_exit_was_loss and (timestamp_ms - state.last_exit_time_ms) < loss_cooldown_ms:
                     continue
 
+                # Co-Entry Protection: If another strategy already holds a position in the same direction,
+                # require higher conviction (+0.04) or discount size to prevent double-dip leverage on traps
+                is_bull_sig = score >= entry_thresh
+                is_bear_sig = score <= -entry_thresh
+                same_dir_active = any(
+                    other_s != s_name and other_st.is_in_position and (
+                        (other_st.position_btc > 0 and is_bull_sig) or (other_st.position_btc < 0 and is_bear_sig)
+                    )
+                    for other_s, other_st in self.strategies.items()
+                )
+                if same_dir_active:
+                    # Require elevated conviction hurdle (+0.04) to join an existing position
+                    hurdle = entry_thresh + 0.04
+                    if (is_bull_sig and score < hurdle) or (is_bear_sig and score > -hurdle):
+                        continue
+
                 sz = self.strategy_params.get(s_name, {}).get("order_size_btc", self.bt_cfg.order_size_btc)
+                if same_dir_active:
+                    sz = sz * 0.5  # 50% size discount on co-entry
                 if self.market_cfg.coin.upper() != "BTC" and mid_price > 0 and sz <= 1.0:
                     sz = round(sz * (85000.0 / mid_price), 2)
+                elif sz > 1.0:
+                    sz = round(sz, 2)
+
 
                 # Bullish Entry Trigger
                 if score >= entry_thresh:

@@ -173,8 +173,8 @@ class ConvexityCascadeSignal(BaseSignal):
         # ---------------------------------------------------------------------
         # 9. Absorption Trap Shielding & Strict Confluence Gating
         # ---------------------------------------------------------------------
-        is_bull_trap = (s_cvd > 0.20 and s_d5 < -self.absorption_hurdle)
-        is_bear_trap = (s_cvd < -0.20 and s_d5 > self.absorption_hurdle)
+        is_bull_trap = (s_cvd > 0.15 and s_d5 < -self.absorption_hurdle)
+        is_bear_trap = (s_cvd < -0.15 and s_d5 > self.absorption_hurdle)
 
         book_score = (
             self.w_touch * s_touch
@@ -186,8 +186,12 @@ class ConvexityCascadeSignal(BaseSignal):
             book_score += self.w_hole_bonus * s_hole
 
         has_active_flow = abs(s_cvd) >= 0.18
-        trend_aligned = (s_cvd > 0 and trend_score >= -0.10) or (s_cvd < 0 and trend_score <= 0.10)
+        trend_aligned = (s_cvd > 0 and trend_score >= -0.02) or (s_cvd < 0 and trend_score <= 0.02)
         direction_agree = (book_score * s_cvd > 0) and has_active_flow and trend_aligned
+
+        # Counter-trend suppression: if CVD impulse fights 2-min trend, suppress entry
+        strong_counter_trend = (s_cvd > 0.12 and trend_score < -0.10) or (s_cvd < -0.12 and trend_score > 0.10)
+
 
         if is_bull_trap:
             raw_alpha = -0.35
@@ -197,9 +201,17 @@ class ConvexityCascadeSignal(BaseSignal):
             raw_alpha = 0.35
             regime_flag = "BEAR_ABSORPTION_TRAP"
             confidence = 0.70
+        elif strong_counter_trend:
+            raw_alpha = max(-0.25, min(0.25, 0.15 * book_score))
+            confidence = 0.15
+            regime_flag = "COUNTER_TREND_SUPPRESSED"
         elif direction_agree:
-            raw_alpha = 0.50 * book_score + 0.35 * s_cvd + 0.15 * trend_score
-            confidence = 0.40 * abs(book_score) + 0.35 * abs(s_cvd) + 0.25 * abs(trend_score)
+            # Microprice drift confirmation: agree with flow direction for higher conviction
+            micro_aligned = (s_micro * s_cvd > 0)
+            micro_bonus = 0.10 * s_micro if micro_aligned else 0.0
+            raw_alpha = 0.45 * book_score + 0.30 * s_cvd + 0.15 * trend_score + 0.10 * s_micro
+            # Boost confidence when microprice confirms flow direction
+            confidence = 0.35 * abs(book_score) + 0.30 * abs(s_cvd) + 0.20 * abs(trend_score) + 0.15 * abs(s_micro)
             regime_flag = "CONVEXITY_CASCADE"
         else:
             raw_alpha = max(-0.40, min(0.40, 0.25 * (book_score + s_cvd)))

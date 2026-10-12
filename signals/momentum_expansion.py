@@ -128,9 +128,9 @@ class MomentumExpansionSignal(BaseSignal):
 
         s_hole = 0.0
         if b_sz_1 >= 6.0 * scale and (d5_b - b_sz_1) < 1.0 * scale:
-            s_hole -= 0.50
+            s_hole -= 0.25  # Reduced from 0.50 to prevent book_score distortion
         if a_sz_1 >= 6.0 * scale and (d5_a - a_sz_1) < 1.0 * scale:
-            s_hole += 0.50
+            s_hole += 0.25  # Reduced from 0.50 to prevent book_score distortion
 
         # Composite Book Structure Score (Empirical IC > +0.30)
         if book.has_macro_book:
@@ -148,6 +148,8 @@ class MomentumExpansionSignal(BaseSignal):
                 + 0.25 * n_imb_score
                 + s_hole
             )
+        # Clamp book_score to prevent s_hole from distorting the composite beyond [-1, 1]
+        book_score = max(-1.0, min(1.0, book_score))
 
         # ---------------------------------------------------------------------
         # 2. Dual-Horizon Taker Order Flow Momentum & Acceleration (CVD Delta)
@@ -178,13 +180,16 @@ class MomentumExpansionSignal(BaseSignal):
         # Phenomenon verified across 2026-08-12 dataset:
         # Aggressive buyers hitting resting ask walls (WOBI < -0.15) reverse DOWN 56.2% of the time (-0.98 bps).
         # Aggressive sellers hitting resting bid walls (WOBI > +0.15) bounce UP 54.4% of the time (+0.54 bps).
-        is_bull_trap = (flow_score > 0.15 and book_score < -self.absorption_hurdle)
-        is_bear_trap = (flow_score < -0.15 and book_score > self.absorption_hurdle)
+        is_bull_trap = (flow_score > 0.12 and book_score < -self.absorption_hurdle)
+        is_bear_trap = (flow_score < -0.12 and book_score > self.absorption_hurdle)
 
         # Strict Confluence check: active taker volume must be present and aligned with book pressure and trend
         has_active_flow = abs(flow_score) >= 0.18
-        trend_aligned = (flow_score > 0 and trend_score >= -0.10) or (flow_score < 0 and trend_score <= 0.10)
+        trend_aligned = (flow_score > 0 and trend_score >= -0.02) or (flow_score < 0 and trend_score <= 0.02)
         direction_agree = (book_score * flow_score > 0) and has_active_flow and trend_aligned
+        # Counter-trend suppression: suppress momentum entries against macro trend
+        strong_counter_trend = (flow_score > 0.12 and trend_score < -0.10) or (flow_score < -0.12 and trend_score > 0.10)
+
         absorption_flag = "NONE"
 
         if is_bull_trap:
@@ -197,6 +202,10 @@ class MomentumExpansionSignal(BaseSignal):
             raw_score = 0.35
             confidence = 0.70
             absorption_flag = "BEAR_ABSORPTION_TRAP"
+        elif strong_counter_trend:
+            raw_score = max(-0.25, min(0.25, 0.15 * book_score))
+            confidence = 0.15
+            absorption_flag = "COUNTER_TREND_SUPPRESSED"
         elif direction_agree:
             # Pure Momentum Confluence: flow and book in full agreement
             raw_score = (

@@ -552,10 +552,12 @@ class L2EngineRunner:
                     )
 
         self.console.print(f"[bold green]Saved detailed Markdown report to: {report_path}[/bold green]")
-        self.console.print(f"[bold cyan]Session Audit Logs saved to: {self.auditor.session_path}/[/bold cyan]")
-        self.console.print(f"  - Master Trade Audit CSV: [dim]{self.auditor.master_csv_file}[/dim]")
-        self.console.print(f"  - Strategy Audit CSVs:   [dim]{self.auditor.strategies_path}/*.csv[/dim]")
-        self.console.print(f"  - Session Audit Report:   [dim]{self.auditor.report_markdown_file}[/dim]\n")
+        if self.auditor:
+            self.console.print(f"[bold cyan]Session Audit Logs saved to: {self.auditor.session_path}/[/bold cyan]")
+            self.console.print(f"  - Master Trade Audit CSV: [dim]{self.auditor.master_csv_file}[/dim]")
+            self.console.print(f"  - Strategy Audit CSVs:   [dim]{self.auditor.strategies_path}/*.csv[/dim]")
+            self.console.print(f"  - Session Audit Report:   [dim]{self.auditor.report_markdown_file}[/dim]\n")
+
 
 
 async def test_hyperliquid_connection(
