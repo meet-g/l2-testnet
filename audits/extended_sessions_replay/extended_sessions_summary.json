@@ -1,0 +1,91 @@
+{
+  "total_extended_files": 74,
+  "total_extended_mb": 420.35089015960693,
+  "duration_s": 539.7414305210114,
+  "combined_trades": 447,
+  "combined_win_rate": 61.74496644295302,
+  "combined_gross_pnl": 1050.0029220000943,
+  "combined_fees": 1182.9988680732001,
+  "combined_net_pnl": -132.99594607310567,
+  "combined_profit_factor": 2.9557975499824343,
+  "strategy_breakdown": {
+    "Hedged_Convexity": {
+      "trades": 154,
+      "wins": 97,
+      "gross_pnl": 382.71759400002924,
+      "fees": 403.5381207437998,
+      "net_pnl": -20.820526743770774,
+      "gw": 522.2413010000266,
+      "gl": 157.2081269999966
+    },
+    "Convexity_Cascade": {
+      "trades": 229,
+      "wins": 136,
+      "gross_pnl": 518.6948100000519,
+      "fees": 611.7083874786002,
+      "net_pnl": -93.01357747854819,
+      "gw": 754.3340560000421,
+      "gl": 264.24060799999125
+    },
+    "Momentum_Expansion": {
+      "trades": 64,
+      "wins": 43,
+      "gross_pnl": 148.59051800001328,
+      "fees": 167.75235985080002,
+      "net_pnl": -19.161841850786715,
+      "gw": 238.52916200001349,
+      "gl": 91.13864400000018
+    }
+  },
+  "exit_reason_breakdown": {
+    "DEFENSIVE_MAKER_HEDGE": {
+      "count": 15,
+      "win_rate": 0.0,
+      "net_pnl": -167.08097000000004,
+      "gross_pnl": -129.20000000000002,
+      "fees": 37.880970000000005
+    },
+    "TRAILING_STOP": {
+      "count": 268,
+      "win_rate": 0.9626865671641791,
+      "net_pnl": 645.7204418915348,
+      "gross_pnl": 1326.480315000083,
+      "fees": 680.7598731085498
+    },
+    "TIME_LIMIT": {
+      "count": 133,
+      "win_rate": 0.06766917293233082,
+      "net_pnl": -463.909815,
+      "gross_pnl": -126.89999999999989,
+      "fees": 337.00981499999983
+    },
+    "TAKE_PROFIT": {
+      "count": 8,
+      "win_rate": 1.0,
+      "net_pnl": 114.65655000000001,
+      "gross_pnl": 135.0,
+      "fees": 20.343449999999997
+    },
+    "STOP_LOSS": {
+      "count": 12,
+      "win_rate": 0.0,
+      "net_pnl": -202.75951474729646,
+      "gross_pnl": -141.44406199999648,
+      "fees": 61.3154527473
+    },
+    "SIGNAL_REVERSAL": {
+      "count": 4,
+      "win_rate": 0.25,
+      "net_pnl": -26.889365,
+      "gross_pnl": -16.7,
+      "fees": 10.189365
+    },
+    "SESSION_SHUTDOWN": {
+      "count": 7,
+      "win_rate": 0.0,
+      "net_pnl": -32.73327321734436,
+      "gross_pnl": 2.766669000005641,
+      "fees": 35.49994221735
+    }
+  }
+}

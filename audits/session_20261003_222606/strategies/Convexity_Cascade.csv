@@ -1,0 +1,2 @@
+trade_id,session_id,strategy_name,coin,network,is_live,side,execution_type,entry_time,entry_price,size_btc,notional_usd,entry_signal,exit_time,exit_price,exit_signal,holding_secs,gross_pnl_usd,entry_fee_usd,exit_fee_usd,total_fees_usd,net_pnl_usd,return_bps,exit_reason,peak_mfe_bps,trough_mae_bps,strategy_equity_after,order_id,notes
+CC-0001,session_20261003_222606,Convexity_Cascade,HYPE,Mainnet,NO,LONG,MAKER,2026-10-03T23:12:10,89.67,0.1000,8.97,+0.881,2026-10-03T23:15:10,89.60,-0.040,180.69,-0.01,+0.0013,+0.0013,+0.0027,-0.01,-11.25,TIME_LIMIT,+0.72,-9.53,9999.99,,

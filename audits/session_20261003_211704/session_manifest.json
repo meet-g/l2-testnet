@@ -1,0 +1,80 @@
+{
+  "session_id": "session_20261003_211704",
+  "status": "CLOSED",
+  "start_time_iso": "2026-10-03T21:17:04",
+  "end_time_iso": "2026-10-04T15:06:38",
+  "duration_secs": 64173.6,
+  "coin": "BTC",
+  "network": "Mainnet",
+  "is_live_mode": false,
+  "enabled_strategies": [
+    "Hedged_Convexity",
+    "Convexity_Cascade",
+    "Momentum_Expansion"
+  ],
+  "session_summary": {
+    "total_trades": 6,
+    "winning_trades": 0,
+    "losing_trades": 6,
+    "win_rate_pct": 0.0,
+    "gross_pnl_usd": -2.6,
+    "total_fees_usd": 15.2652,
+    "net_pnl_usd": -17.87,
+    "profit_factor": 0.0,
+    "total_volume_btc": 0.6
+  },
+  "strategies": {
+    "Momentum_Expansion": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "win_rate_pct": 0.0,
+      "gross_pnl_usd": -0.1,
+      "total_fees_usd": 2.5439249999999998,
+      "net_pnl_usd": -2.643925,
+      "profit_factor": 0.0,
+      "avg_trade_pnl": -2.643925,
+      "avg_return_bps": -3.1179096205099173,
+      "max_drawdown_usd": 2.8219699999990553,
+      "total_volume_btc": 0.1,
+      "csv_file": "strategies/Momentum_Expansion.csv"
+    },
+    "Hedged_Convexity": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "win_rate_pct": 0.0,
+      "gross_pnl_usd": -0.5,
+      "total_fees_usd": 2.540895,
+      "net_pnl_usd": -3.040895,
+      "profit_factor": 0.0,
+      "avg_trade_pnl": -3.040895,
+      "avg_return_bps": -3.590237192883033,
+      "max_drawdown_usd": 1.8999999999996362,
+      "total_volume_btc": 0.1,
+      "csv_file": "strategies/Hedged_Convexity.csv"
+    },
+    "Convexity_Cascade": {
+      "trades": 4,
+      "wins": 0,
+      "losses": 4,
+      "win_rate_pct": 0.0,
+      "gross_pnl_usd": -2.0,
+      "total_fees_usd": 10.180409999999998,
+      "net_pnl_usd": -12.180409999999998,
+      "profit_factor": 0.0,
+      "avg_trade_pnl": -3.0451024999999996,
+      "avg_return_bps": -3.588221543590353,
+      "max_drawdown_usd": 11.033035000000382,
+      "total_volume_btc": 0.4,
+      "csv_file": "strategies/Convexity_Cascade.csv"
+    }
+  },
+  "files": {
+    "master_csv": "all_trades.csv",
+    "audit_jsonl": "trades_audit.jsonl",
+    "session_report": "session_audit_report.md",
+    "live_orders_csv": null,
+    "live_exchange_fills_csv": null
+  }
+}

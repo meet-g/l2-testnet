@@ -1,0 +1,2 @@
+trade_id,session_id,strategy_name,coin,network,is_live,side,execution_type,entry_time,entry_price,size_btc,notional_usd,entry_signal,exit_time,exit_price,exit_signal,holding_secs,gross_pnl_usd,entry_fee_usd,exit_fee_usd,total_fees_usd,net_pnl_usd,return_bps,exit_reason,peak_mfe_bps,trough_mae_bps,strategy_equity_after,order_id,notes
+ME-0005,session_20261003_211704,Momentum_Expansion,BTC,Mainnet,NO,LONG,MAKER,2026-10-04T01:02:39,84798.00,0.1000,8479.80,+0.815,2026-10-04T01:05:39,84797.00,-0.008,180.03,-0.10,+1.2720,+1.2720,+2.5439,-2.64,-3.12,TIME_LIMIT,+0.06,-1.83,9997.36,,

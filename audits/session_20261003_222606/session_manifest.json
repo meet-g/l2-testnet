@@ -1,0 +1,80 @@
+{
+  "session_id": "session_20261003_222606",
+  "status": "CLOSED",
+  "start_time_iso": "2026-10-03T22:26:06",
+  "end_time_iso": "2026-10-04T15:06:41",
+  "duration_secs": 60035.6,
+  "coin": "HYPE",
+  "network": "Mainnet",
+  "is_live_mode": false,
+  "enabled_strategies": [
+    "Hedged_Convexity",
+    "Convexity_Cascade",
+    "Momentum_Expansion"
+  ],
+  "session_summary": {
+    "total_trades": 1,
+    "winning_trades": 0,
+    "losing_trades": 1,
+    "win_rate_pct": 0.0,
+    "gross_pnl_usd": -0.01,
+    "total_fees_usd": 0.0027,
+    "net_pnl_usd": -0.01,
+    "profit_factor": 0.0,
+    "total_volume_btc": 0.1
+  },
+  "strategies": {
+    "Hedged_Convexity": {
+      "trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate_pct": 0.0,
+      "gross_pnl_usd": 0.0,
+      "total_fees_usd": 0.0,
+      "net_pnl_usd": 0.0,
+      "profit_factor": 0.0,
+      "avg_trade_pnl": 0.0,
+      "avg_return_bps": 0.0,
+      "max_drawdown_usd": 0.0,
+      "total_volume_btc": 0.0,
+      "csv_file": "strategies/Hedged_Convexity.csv"
+    },
+    "Convexity_Cascade": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "win_rate_pct": 0.0,
+      "gross_pnl_usd": -0.007399999999999807,
+      "total_fees_usd": 0.0026889899999999996,
+      "net_pnl_usd": -0.010088989999999807,
+      "profit_factor": 0.0,
+      "avg_trade_pnl": -0.010088989999999807,
+      "avg_return_bps": -11.251243448198736,
+      "max_drawdown_usd": 0.009895049999613548,
+      "total_volume_btc": 0.1,
+      "csv_file": "strategies/Convexity_Cascade.csv"
+    },
+    "Momentum_Expansion": {
+      "trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate_pct": 0.0,
+      "gross_pnl_usd": 0.0,
+      "total_fees_usd": 0.0,
+      "net_pnl_usd": 0.0,
+      "profit_factor": 0.0,
+      "avg_trade_pnl": 0.0,
+      "avg_return_bps": 0.0,
+      "max_drawdown_usd": 0.0,
+      "total_volume_btc": 0.0,
+      "csv_file": "strategies/Momentum_Expansion.csv"
+    }
+  },
+  "files": {
+    "master_csv": "all_trades.csv",
+    "audit_jsonl": "trades_audit.jsonl",
+    "session_report": "session_audit_report.md",
+    "live_orders_csv": null,
+    "live_exchange_fills_csv": null
+  }
+}

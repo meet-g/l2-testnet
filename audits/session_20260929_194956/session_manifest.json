@@ -1,0 +1,80 @@
+{
+  "session_id": "session_20260929_194956",
+  "status": "CLOSED",
+  "start_time_iso": "2026-09-29T19:49:59",
+  "end_time_iso": "2026-09-29T19:54:16",
+  "duration_secs": 257.0,
+  "coin": "BTC",
+  "network": "Mainnet",
+  "is_live_mode": true,
+  "enabled_strategies": [
+    "Composite_Maker",
+    "WOBI_Maker",
+    "MicroPrice_Maker"
+  ],
+  "session_summary": {
+    "total_trades": 56,
+    "winning_trades": 36,
+    "losing_trades": 20,
+    "win_rate_pct": 64.3,
+    "gross_pnl_usd": 40.84,
+    "total_fees_usd": -9.4484,
+    "net_pnl_usd": 50.05,
+    "profit_factor": 5.46,
+    "total_volume_btc": 5.6
+  },
+  "strategies": {
+    "Composite_Maker": {
+      "trades": 18,
+      "wins": 12,
+      "losses": 6,
+      "win_rate_pct": 66.7,
+      "gross_pnl_usd": 13.88,
+      "total_fees_usd": -2.9266,
+      "net_pnl_usd": 16.73,
+      "profit_factor": 5.61,
+      "avg_trade_pnl": 0.9294,
+      "avg_return_bps": 1.12,
+      "max_drawdown_usd": 0.0,
+      "total_volume_btc": 1.8,
+      "csv_file": "strategies/Composite_Maker.csv"
+    },
+    "WOBI_Maker": {
+      "trades": 19,
+      "wins": 12,
+      "losses": 7,
+      "win_rate_pct": 63.2,
+      "gross_pnl_usd": 13.48,
+      "total_fees_usd": -3.2609,
+      "net_pnl_usd": 16.66,
+      "profit_factor": 5.38,
+      "avg_trade_pnl": 0.8768,
+      "avg_return_bps": 1.05,
+      "max_drawdown_usd": 0.0,
+      "total_volume_btc": 1.9,
+      "csv_file": "strategies/WOBI_Maker.csv"
+    },
+    "MicroPrice_Maker": {
+      "trades": 19,
+      "wins": 12,
+      "losses": 7,
+      "win_rate_pct": 63.2,
+      "gross_pnl_usd": 13.48,
+      "total_fees_usd": -3.2609,
+      "net_pnl_usd": 16.66,
+      "profit_factor": 5.38,
+      "avg_trade_pnl": 0.8768,
+      "avg_return_bps": 1.05,
+      "max_drawdown_usd": 0.0,
+      "total_volume_btc": 1.9,
+      "csv_file": "strategies/MicroPrice_Maker.csv"
+    }
+  },
+  "files": {
+    "master_csv": "all_trades.csv",
+    "audit_jsonl": "trades_audit.jsonl",
+    "session_report": "session_audit_report.md",
+    "live_orders_csv": "live_orders.csv",
+    "live_exchange_fills_csv": "live_exchange_fills.csv"
+  }
+}

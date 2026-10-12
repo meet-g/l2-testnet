@@ -1,0 +1,2 @@
+trade_id,session_id,strategy_name,coin,network,is_live,side,execution_type,entry_time,entry_price,size_btc,notional_usd,entry_signal,exit_time,exit_price,exit_signal,holding_secs,gross_pnl_usd,entry_fee_usd,exit_fee_usd,total_fees_usd,net_pnl_usd,return_bps,exit_reason,peak_mfe_bps,trough_mae_bps,strategy_equity_after,order_id,notes
+HC-0001,session_20261003_211704,Hedged_Convexity,BTC,Mainnet,NO,LONG,MAKER,2026-10-03T22:47:56,84699.00,0.1000,8469.90,+0.969,2026-10-03T22:52:19,84694.00,-0.853,262.91,-0.50,+1.2705,+1.2704,+2.5409,-3.04,-3.59,TIME_LIMIT,+1.59,-0.65,9996.96,,

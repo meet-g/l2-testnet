@@ -1,0 +1,80 @@
+{
+  "session_id": "session_20261007_170230_219_94ab",
+  "status": "CLOSED",
+  "start_time_iso": "2026-10-07T17:02:30",
+  "end_time_iso": "2026-10-09T19:53:48",
+  "duration_secs": 183078.0,
+  "coin": "HYPE",
+  "network": "Mainnet",
+  "is_live_mode": false,
+  "enabled_strategies": [
+    "Hedged_Convexity",
+    "Convexity_Cascade",
+    "Momentum_Expansion"
+  ],
+  "session_summary": {
+    "total_trades": 200,
+    "winning_trades": 140,
+    "losing_trades": 60,
+    "win_rate_pct": 70.0,
+    "gross_pnl_usd": 691.87,
+    "total_fees_usd": 599.2327,
+    "net_pnl_usd": 92.64,
+    "profit_factor": 1.12,
+    "total_volume_btc": 20030.32
+  },
+  "strategies": {
+    "Momentum_Expansion": {
+      "trades": 84,
+      "wins": 62,
+      "losses": 22,
+      "win_rate_pct": 73.80952380952381,
+      "gross_pnl_usd": 344.92929050820555,
+      "total_fees_usd": 244.79267629428858,
+      "net_pnl_usd": 100.13661421391694,
+      "profit_factor": 1.3834811480398332,
+      "avg_trade_pnl": 1.192102550165678,
+      "avg_return_bps": 1.402464592383228,
+      "max_drawdown_usd": 82.61652647845767,
+      "total_volume_btc": 8415.08,
+      "csv_file": "strategies/Momentum_Expansion.csv"
+    },
+    "Hedged_Convexity": {
+      "trades": 47,
+      "wins": 31,
+      "losses": 16,
+      "win_rate_pct": 65.95744680851064,
+      "gross_pnl_usd": 169.30700847901448,
+      "total_fees_usd": 142.8044197915452,
+      "net_pnl_usd": 26.50258868746935,
+      "profit_factor": 1.1195824043503004,
+      "avg_trade_pnl": 0.5638848656908372,
+      "avg_return_bps": 0.6634423871612605,
+      "max_drawdown_usd": 63.4441783557013,
+      "total_volume_btc": 4708.100000000001,
+      "csv_file": "strategies/Hedged_Convexity.csv"
+    },
+    "Convexity_Cascade": {
+      "trades": 69,
+      "wins": 47,
+      "losses": 22,
+      "win_rate_pct": 68.11594202898551,
+      "gross_pnl_usd": 177.63758500210145,
+      "total_fees_usd": 211.63559004694704,
+      "net_pnl_usd": -33.99800504484568,
+      "profit_factor": 0.876136489027042,
+      "avg_trade_pnl": -0.49272471079486485,
+      "avg_return_bps": -0.5797458681835643,
+      "max_drawdown_usd": 80.15591605637928,
+      "total_volume_btc": 6907.140000000001,
+      "csv_file": "strategies/Convexity_Cascade.csv"
+    }
+  },
+  "files": {
+    "master_csv": "all_trades.csv",
+    "audit_jsonl": "trades_audit.jsonl",
+    "session_report": "session_audit_report.md",
+    "live_orders_csv": null,
+    "live_exchange_fills_csv": null
+  }
+}
