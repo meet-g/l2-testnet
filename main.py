@@ -1523,7 +1523,19 @@ def main():
     parser.add_argument("--duration", type=int, default=0, help="Run duration in seconds (0 = infinite)")
     parser.add_argument("--hours", type=float, default=0.0, help="Max collection duration in hours (0 = continuous)")
     parser.add_argument("--horizon", type=float, default=5.0, help="Forward prediction horizon in seconds for ML training")
-    parser.add_argument("--no-ui", action="store_true", help="Disable rich interactive UI")
+    parser.add_argument(
+        "--ui",
+        type=str,
+        choices=["cli", "browser", "web", "none", "no-ui"],
+        default=None,
+        help="Interface display mode: 'cli' (interactive terminal UI), 'browser' (web dashboard), or 'no-ui'/'none' (headless)",
+    )
+    parser.add_argument("--cli", action="store_true", help="Display interactive Rich CLI terminal dashboard")
+    parser.add_argument("--browser", action="store_true", help="Launch lightweight hardware-accelerated Web Dashboard (alias for --web)")
+    parser.add_argument("--no-ui", action="store_true", help="Disable visual UI (run in headless mode)")
+    parser.add_argument("--web", action="store_true", help="Launch lightweight hardware-accelerated Web Dashboard (FastAPI + WebSocket)")
+    parser.add_argument("--port", type=int, default=8000, help="Web dashboard port (default: 8000)")
+    parser.add_argument("--open-browser", action="store_true", help="Automatically open web dashboard in default browser")
     parser.add_argument("--replay-file", type=str, default="", help="Path to recording file for replay mode")
     parser.add_argument("--speed", type=float, default=1.0, help="Replay speed multiplier")
     parser.add_argument("--size", type=float, default=0.1, help="Simulated order size in BTC (default: 0.1 BTC)")
@@ -1534,9 +1546,6 @@ def main():
     parser.add_argument("--repair", action="store_true", help="Repair and backfill stalled audit manifests from trade CSVs")
     parser.add_argument("--include-empty", action="store_true", help="Include 0-trade sessions in audit listing")
     parser.add_argument("--no-audit", action="store_true", help="Disable audit recording in live/replay")
-    parser.add_argument("--web", action="store_true", help="Launch lightweight hardware-accelerated Web Dashboard (FastAPI + WebSocket)")
-    parser.add_argument("--port", type=int, default=8000, help="Web dashboard port (default: 8000)")
-    parser.add_argument("--open-browser", action="store_true", help="Automatically open web dashboard in default browser")
     args = parser.parse_args()
 
     cfg = AppConfig()
@@ -1560,6 +1569,26 @@ def main():
             args.size = 95.0       # 95.0 HYPE (~$8,550 notional, matching 0.1 BTC baseline)
     cfg.backtest.order_size_btc = args.size
     cfg.backtest.initial_cash_usd = args.cash
+
+    # Resolve UI display mode (3 explicit choices: 'cli', 'browser', 'no-ui')
+    ui_mode = "cli"
+    if args.ui:
+        m = args.ui.lower()
+        if m in ("none", "no-ui"):
+            ui_mode = "no-ui"
+        elif m in ("browser", "web"):
+            ui_mode = "browser"
+        elif m == "cli":
+            ui_mode = "cli"
+    elif args.no_ui:
+        ui_mode = "no-ui"
+    elif args.browser or args.web:
+        ui_mode = "browser"
+    elif args.cli:
+        ui_mode = "cli"
+
+    show_cli_ui = (ui_mode == "cli")
+    enable_web = (ui_mode == "browser" or args.web or args.browser)
 
     console = Console()
 
@@ -1602,24 +1631,29 @@ def main():
         en_strats = list(cfg.strategies.get_enabled_strategy_defs().keys())
         dis_strats = [s for s in cfg.strategies.execution_strategies if s not in en_strats]
         console.print(f"[bold cyan]Strategies Configuration ({cfg.strategies.filepath}):[/bold cyan] [green]{len(en_strats)} active[/green] ({', '.join(en_strats)}) | [dim red]{len(dis_strats)} deselected[/dim red]")
+        ui_label = {
+            "cli": "CLI (Interactive Terminal Dashboard)",
+            "browser": f"BROWSER (Web Dashboard running on http://localhost:{args.port})",
+            "no-ui": "NO-UI (Headless Background Mode)",
+        }.get(ui_mode, ui_mode.upper())
+        console.print(f"[bold cyan]Interface Mode:[/bold cyan] [bold green]{ui_label}[/bold green]")
         if args.live_orders:
             cfg.backtest.order_size_btc = args.order_size
             net = cfg.hyperliquid.network_name.upper()
             active_live = cfg.strategies.live_execution.active_strategy
             console.print(f"\n[bold red blink]⚠ LIVE {net} ORDER EXECUTION ENABLED! Strategy: {active_live}[/bold red blink]\n")
-        show_ui = not args.no_ui and not args.web
         runner = L2EngineRunner(
             config=cfg,
             record_data=True,
             live_orders=args.live_orders,
             order_size_btc=args.order_size,
             enable_audit=not args.no_audit,
-            web_mode=args.web,
+            web_mode=enable_web,
             web_port=args.port,
             open_browser=args.open_browser,
         )
         try:
-            asyncio.run(runner.run_live(duration_secs=args.duration if args.duration > 0 else None, show_ui=show_ui))
+            asyncio.run(runner.run_live(duration_secs=args.duration if args.duration > 0 else None, show_ui=show_cli_ui))
         except (KeyboardInterrupt, asyncio.CancelledError):
             pass
         finally:
@@ -1630,17 +1664,22 @@ def main():
     elif args.mode == "benchmark":
         duration = args.duration if args.duration > 0 else 30
         console.print(f"[bold yellow]Running live benchmark on {cfg.market.coin} ({cfg.hyperliquid.network_name}) for {duration} seconds...[/bold yellow]")
-        show_ui = not args.no_ui and not args.web
+        ui_label = {
+            "cli": "CLI (Interactive Terminal Dashboard)",
+            "browser": f"BROWSER (Web Dashboard running on http://localhost:{args.port})",
+            "no-ui": "NO-UI (Headless Background Mode)",
+        }.get(ui_mode, ui_mode.upper())
+        console.print(f"[bold cyan]Interface Mode:[/bold cyan] [bold green]{ui_label}[/bold green]")
         runner = L2EngineRunner(
             config=cfg,
             record_data=True,
             enable_audit=not args.no_audit,
-            web_mode=args.web,
+            web_mode=enable_web,
             web_port=args.port,
             open_browser=args.open_browser,
         )
         try:
-            asyncio.run(runner.run_live(duration_secs=duration, show_ui=show_ui))
+            asyncio.run(runner.run_live(duration_secs=duration, show_ui=show_cli_ui))
         except (KeyboardInterrupt, asyncio.CancelledError):
             pass
         finally:
