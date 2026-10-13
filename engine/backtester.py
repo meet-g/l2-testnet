@@ -184,9 +184,11 @@ class EdgeEvaluator:
             self.rolling_prices.popleft()
 
         if len(self.rolling_prices) >= 15:
-            p_min = min(p for _, p in self.rolling_prices)
-            p_max = max(p for _, p in self.rolling_prices)
-            self.current_volatility_bps = ((p_max - p_min) / mid_price) * 10_000.0 if mid_price > 0 else 0.0
+            if not hasattr(self, "_last_vol_calc_ms") or (timestamp_ms - self._last_vol_calc_ms) >= 1000:
+                self._last_vol_calc_ms = timestamp_ms
+                p_min = min(p for _, p in self.rolling_prices)
+                p_max = max(p for _, p in self.rolling_prices)
+                self.current_volatility_bps = ((p_max - p_min) / mid_price) * 10_000.0 if mid_price > 0 else 0.0
         else:
             self.current_volatility_bps = 99.0  # Warmup
 
@@ -196,6 +198,10 @@ class EdgeEvaluator:
     def _update_forward_returns(self, current_time_ms: int, current_price: float) -> None:
         """Matches past observations with current price once horizon elapses."""
         num_horizons = len(self.bt_cfg.horizons_seconds)
+        # Prune fully evaluated observations from the front of the queue
+        while self.observations and len(self.observations[0].evaluated_horizons) >= num_horizons:
+            self.observations.popleft()
+
         for obs in self.observations:
             if len(obs.evaluated_horizons) >= num_horizons:
                 continue

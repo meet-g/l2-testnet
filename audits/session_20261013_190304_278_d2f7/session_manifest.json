@@ -1,0 +1,80 @@
+{
+  "session_id": "session_20261013_190304_278_d2f7",
+  "status": "RUNNING",
+  "start_time_iso": "2026-10-13T19:03:04",
+  "end_time_iso": "2026-10-13T19:07:21",
+  "duration_secs": 257.7,
+  "coin": "BTC",
+  "network": "Mainnet",
+  "is_live_mode": false,
+  "enabled_strategies": [
+    "Hedged_Convexity",
+    "Convexity_Cascade",
+    "Momentum_Expansion"
+  ],
+  "session_summary": {
+    "total_trades": 0,
+    "winning_trades": 0,
+    "losing_trades": 0,
+    "win_rate_pct": 0.0,
+    "gross_pnl_usd": 0,
+    "total_fees_usd": 0,
+    "net_pnl_usd": 0,
+    "profit_factor": 0.0,
+    "total_volume_btc": 0
+  },
+  "strategies": {
+    "Hedged_Convexity": {
+      "trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate_pct": 0.0,
+      "gross_pnl_usd": 0.0,
+      "total_fees_usd": 0.0,
+      "net_pnl_usd": 0.0,
+      "profit_factor": 0.0,
+      "avg_trade_pnl": 0.0,
+      "avg_return_bps": 0.0,
+      "max_drawdown_usd": 0.0,
+      "total_volume_btc": 0.0,
+      "csv_file": "strategies/Hedged_Convexity.csv"
+    },
+    "Momentum_Expansion": {
+      "trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate_pct": 0.0,
+      "gross_pnl_usd": 0.0,
+      "total_fees_usd": 0.0,
+      "net_pnl_usd": 0.0,
+      "profit_factor": 0.0,
+      "avg_trade_pnl": 0.0,
+      "avg_return_bps": 0.0,
+      "max_drawdown_usd": 0.0,
+      "total_volume_btc": 0.0,
+      "csv_file": "strategies/Momentum_Expansion.csv"
+    },
+    "Convexity_Cascade": {
+      "trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate_pct": 0.0,
+      "gross_pnl_usd": 0.0,
+      "total_fees_usd": 0.0,
+      "net_pnl_usd": 0.0,
+      "profit_factor": 0.0,
+      "avg_trade_pnl": 0.0,
+      "avg_return_bps": 0.0,
+      "max_drawdown_usd": 0.0,
+      "total_volume_btc": 0.0,
+      "csv_file": "strategies/Convexity_Cascade.csv"
+    }
+  },
+  "files": {
+    "master_csv": "all_trades.csv",
+    "audit_jsonl": "trades_audit.jsonl",
+    "session_report": "session_audit_report.md",
+    "live_orders_csv": null,
+    "live_exchange_fills_csv": null
+  }
+}

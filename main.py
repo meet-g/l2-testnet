@@ -7,7 +7,16 @@ import os
 import signal
 import sys
 import time
-from typing import Optional
+
+# Configure OpenMP & BLAS threading runtimes to eliminate CPU spin-waiting loops
+os.environ.setdefault("OMP_WAIT_POLICY", "PASSIVE")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
+os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+
+from typing import Any, Dict, Optional
 
 if sys.platform == "win32":
     try:
@@ -42,11 +51,17 @@ class L2EngineRunner:
         order_size_btc: float = 0.0005,
         enable_audit: Optional[bool] = None,
         session_id: Optional[str] = None,
+        web_mode: bool = False,
+        web_port: int = 8000,
+        open_browser: bool = False,
     ):
         self.config = config or AppConfig()
         self.record_data = record_data
         self.live_orders = live_orders
         self.enable_audit = (live_orders or record_data) if enable_audit is None else enable_audit
+        self.web_mode = web_mode
+        self.web_port = web_port
+        self.open_browser = open_browser
         self.console = Console()
 
         self.book = OrderBook(coin=self.config.market.coin)
@@ -110,6 +125,11 @@ class L2EngineRunner:
             )
 
         self.dashboard = TerminalDashboard(console=self.console)
+        self.web_server = None
+        if self.web_mode:
+            from ui.web_server import DashboardWebServer
+            self.web_server = DashboardWebServer(runner=self, port=self.web_port)
+        self.latest_display_signals: Dict[str, Any] = {}
         self.is_running = False
 
     def __enter__(self):
@@ -120,6 +140,8 @@ class L2EngineRunner:
 
     def close(self) -> None:
         """Closes all runner resources including auditor and data recorder."""
+        if self.web_server and self.web_server.server:
+            self.web_server.server.should_exit = True
         if self.auditor:
             self.auditor.close_session()
         if self.recorder:
@@ -165,6 +187,7 @@ class L2EngineRunner:
                 # Compute composite alpha
                 res = self.alpha_model.compute(self.book, self.trades, now_ms)
                 sub_sigs = res.metadata.get("sub_signals", {})
+                self.latest_display_signals = {**sub_sigs, "Composite": res}
 
                 # Extract score dictionary
                 scores = {name: sig.score for name, sig in sub_sigs.items()}
@@ -208,6 +231,31 @@ class L2EngineRunner:
         eval_task = asyncio.create_task(self._evaluation_loop())
         start_time = time.time()
         reconnect_delay = 1.0
+
+        stop_event = asyncio.Event()
+
+        def _sig_handler(s, f):
+            self.is_running = False
+            stop_event.set()
+
+        orig_sigint = None
+        orig_sigterm = None
+        try:
+            orig_sigint = signal.signal(signal.SIGINT, _sig_handler)
+            orig_sigterm = signal.signal(signal.SIGTERM, _sig_handler)
+        except Exception:
+            pass
+
+        if self.web_server:
+            await self.web_server.start()
+            dashboard_url = f"http://localhost:{self.web_port}"
+            self.console.print(f"[bold green]✓ Web Dashboard running on: [bold cyan]{dashboard_url}[/bold cyan][/bold green]")
+            if self.open_browser:
+                try:
+                    import webbrowser
+                    webbrowser.open(dashboard_url)
+                except Exception:
+                    pass
 
         async def _ping_heartbeat(ws):
             """Hyperliquid application-level JSON ping heartbeat sent every 20 seconds."""
@@ -272,6 +320,9 @@ class L2EngineRunner:
 
                                 try:
                                     while self.is_running:
+                                        if stop_event.is_set() or (self.web_server and self.web_server.server and self.web_server.server.should_exit):
+                                            self.is_running = False
+                                            break
                                         if duration_secs and (time.time() - start_time) >= duration_secs:
                                             break
                                         try:
@@ -280,12 +331,7 @@ class L2EngineRunner:
                                         except asyncio.TimeoutError:
                                             pass
 
-                                        display_signals = {}
-                                        if self.book.is_valid:
-                                            res = self.alpha_model.compute(self.book, self.trades)
-                                            display_signals = res.metadata.get("sub_signals", {})
-                                            display_signals["Composite"] = res
-
+                                        display_signals = self.latest_display_signals
                                         live.update(
                                             self.dashboard.render(
                                                 self.book,
@@ -295,6 +341,14 @@ class L2EngineRunner:
                                                 network=network_name,
                                             )
                                         )
+                                        if self.web_server and self.book.is_valid and self.web_server.broadcaster.should_broadcast(time.time()):
+                                            await self.web_server.emit_telemetry(
+                                                self.book,
+                                                self.trades,
+                                                display_signals,
+                                                self.evaluator,
+                                                network=network_name,
+                                            )
                                 finally:
                                     ping_task.cancel()
 
@@ -348,6 +402,9 @@ class L2EngineRunner:
                             ping_task = asyncio.create_task(_ping_heartbeat(ws))
                             try:
                                 while self.is_running:
+                                    if stop_event.is_set() or (self.web_server and self.web_server.server and self.web_server.server.should_exit):
+                                        self.is_running = False
+                                        break
                                     if duration_secs and (time.time() - start_time) >= duration_secs:
                                         break
                                     try:
@@ -355,6 +412,15 @@ class L2EngineRunner:
                                         await self._handle_message(msg)
                                     except asyncio.TimeoutError:
                                         pass
+
+                                    if self.web_server and self.book.is_valid and self.web_server.broadcaster.should_broadcast(time.time()):
+                                        await self.web_server.emit_telemetry(
+                                            self.book,
+                                            self.trades,
+                                            self.latest_display_signals,
+                                            self.evaluator,
+                                            network=network_name,
+                                        )
                             finally:
                                 ping_task.cancel()
 
@@ -373,6 +439,22 @@ class L2EngineRunner:
         finally:
             self.is_running = False
             eval_task.cancel()
+            try:
+                await eval_task
+            except (asyncio.CancelledError, Exception):
+                pass
+            if orig_sigint is not None:
+                try:
+                    signal.signal(signal.SIGINT, orig_sigint)
+                except Exception:
+                    pass
+            if orig_sigterm is not None:
+                try:
+                    signal.signal(signal.SIGTERM, orig_sigterm)
+                except Exception:
+                    pass
+            if self.web_server:
+                await self.web_server.stop()
             if self.live_executor:
                 net = self.config.hyperliquid.network_name
                 self.console.print(f"\n[bold yellow][LiveExecutor] Shutting down: cancelling all open {net} orders...[/bold yellow]")
@@ -1452,6 +1534,9 @@ def main():
     parser.add_argument("--repair", action="store_true", help="Repair and backfill stalled audit manifests from trade CSVs")
     parser.add_argument("--include-empty", action="store_true", help="Include 0-trade sessions in audit listing")
     parser.add_argument("--no-audit", action="store_true", help="Disable audit recording in live/replay")
+    parser.add_argument("--web", action="store_true", help="Launch lightweight hardware-accelerated Web Dashboard (FastAPI + WebSocket)")
+    parser.add_argument("--port", type=int, default=8000, help="Web dashboard port (default: 8000)")
+    parser.add_argument("--open-browser", action="store_true", help="Automatically open web dashboard in default browser")
     args = parser.parse_args()
 
     cfg = AppConfig()
@@ -1522,35 +1607,64 @@ def main():
             net = cfg.hyperliquid.network_name.upper()
             active_live = cfg.strategies.live_execution.active_strategy
             console.print(f"\n[bold red blink]⚠ LIVE {net} ORDER EXECUTION ENABLED! Strategy: {active_live}[/bold red blink]\n")
+        show_ui = not args.no_ui and not args.web
         runner = L2EngineRunner(
             config=cfg,
             record_data=True,
             live_orders=args.live_orders,
             order_size_btc=args.order_size,
             enable_audit=not args.no_audit,
+            web_mode=args.web,
+            web_port=args.port,
+            open_browser=args.open_browser,
         )
         try:
-            asyncio.run(runner.run_live(duration_secs=args.duration if args.duration > 0 else None, show_ui=not args.no_ui))
-        except KeyboardInterrupt:
+            asyncio.run(runner.run_live(duration_secs=args.duration if args.duration > 0 else None, show_ui=show_ui))
+        except (KeyboardInterrupt, asyncio.CancelledError):
             pass
         finally:
+            runner.close()
             runner.print_summary_report()
+            sys.exit(0)
 
     elif args.mode == "benchmark":
         duration = args.duration if args.duration > 0 else 30
         console.print(f"[bold yellow]Running live benchmark on {cfg.market.coin} ({cfg.hyperliquid.network_name}) for {duration} seconds...[/bold yellow]")
-        runner = L2EngineRunner(config=cfg, record_data=True, enable_audit=not args.no_audit)
+        show_ui = not args.no_ui and not args.web
+        runner = L2EngineRunner(
+            config=cfg,
+            record_data=True,
+            enable_audit=not args.no_audit,
+            web_mode=args.web,
+            web_port=args.port,
+            open_browser=args.open_browser,
+        )
         try:
-            asyncio.run(runner.run_live(duration_secs=duration, show_ui=not args.no_ui))
-        except KeyboardInterrupt:
+            asyncio.run(runner.run_live(duration_secs=duration, show_ui=show_ui))
+        except (KeyboardInterrupt, asyncio.CancelledError):
             pass
         finally:
+            runner.close()
             runner.print_summary_report()
+            sys.exit(0)
 
     elif args.mode == "replay":
         if not args.replay_file:
             print("Please specify --replay-file")
             sys.exit(1)
+        # Auto-detect coin from file path if not explicitly overridden
+        fpath_lower = args.replay_file.lower().replace("\\", "/")
+        for c in ["btc", "hype", "sol", "eth"]:
+            if f"hl_{c}_" in fpath_lower or f"/{c}/" in fpath_lower:
+                cfg.market.coin = c.upper()
+                if c == "hype" and args.size == 0.1:
+                    cfg.backtest.order_size_btc = 95.0
+                elif c == "sol" and args.size == 0.1:
+                    cfg.backtest.order_size_btc = 50.0
+                elif c == "eth" and args.size == 0.1:
+                    cfg.backtest.order_size_btc = 3.0
+                break
+
         # Offline replay
         runner = L2EngineRunner(config=cfg, record_data=False, enable_audit=not args.no_audit)
         replay = L2ReplayEngine(args.replay_file, speed_multiplier=args.speed)

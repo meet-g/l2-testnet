@@ -1,9 +1,10 @@
 """Order book representation, tracking, and microstructure metric calculations."""
 
+from collections import deque
 from dataclasses import dataclass, field
 import math
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Deque, Dict, List, Optional, Tuple
 
 
 @dataclass
@@ -42,7 +43,7 @@ class OrderBook:
         self.bids: List[L2Level] = []
         self.asks: List[L2Level] = []
         self.last_update_time_ms: int = 0
-        self.history: List[BookSnapshot] = []
+        self.history: Deque[BookSnapshot] = deque(maxlen=max_history)
         self.update_count: int = 0
 
         # Macro / Aggregated depth book (e.g. from nSigFigs=4 or deeper runtime subscription)
@@ -133,8 +134,6 @@ class OrderBook:
         # Store in rolling history for delta / VOI calculations
         snapshot = BookSnapshot(timestamp_ms=timestamp, bids=parsed_bids, asks=parsed_asks)
         self.history.append(snapshot)
-        if len(self.history) > self.max_history:
-            self.history.pop(0)
 
     @property
     def is_valid(self) -> bool:

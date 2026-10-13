@@ -25,6 +25,7 @@ class L2DataRecorder:
         os.makedirs(self.output_dir, exist_ok=True)
 
         self.current_hour_str = ""
+        self._next_rotate_ts = 0.0
         self.file_handle = None
         self.filepath = ""
         self.record_count = 0
@@ -44,13 +45,22 @@ class L2DataRecorder:
             return os.path.join(self.output_dir, f"hl_{self.coin.lower()}_l2_{session_str}.jsonl")
 
     def _rotate_if_needed(self) -> None:
-        now_hour = time.strftime("%Y%m%d_%H")
-        if self.rotate_hourly and now_hour != self.current_hour_str:
-            self.close()
-            self.current_hour_str = now_hour
-            self.filepath = self._get_filename_for_now()
-            self.file_handle = open(self.filepath, "a", encoding="utf-8", buffering=64 * 1024)
-            self.record_count = 0
+        now_sec = time.time()
+        if not self.rotate_hourly:
+            if not self.file_handle:
+                self.filepath = self._get_filename_for_now()
+                self.file_handle = open(self.filepath, "a", encoding="utf-8", buffering=64 * 1024)
+            return
+
+        if now_sec >= self._next_rotate_ts:
+            now_hour = time.strftime("%Y%m%d_%H")
+            if now_hour != self.current_hour_str or not self.file_handle:
+                self.close()
+                self.current_hour_str = now_hour
+                self.filepath = self._get_filename_for_now()
+                self.file_handle = open(self.filepath, "a", encoding="utf-8", buffering=64 * 1024)
+                self.record_count = 0
+                self._next_rotate_ts = ((int(now_sec) // 3600) + 1) * 3600
 
     def record_event(self, channel: str, data: dict) -> None:
         """Appends an incoming WS event with local receipt timestamp."""

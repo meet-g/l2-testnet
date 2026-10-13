@@ -75,7 +75,7 @@ class AdaptiveAlphaSignal(BaseSignal):
         lgb_bps = 0.0
         if self.lgb_booster is not None:
             try:
-                lgb_bps = float(self.lgb_booster.predict(feats.reshape(1, -1))[0])
+                lgb_bps = float(self.lgb_booster.predict(feats.reshape(1, -1), num_threads=1)[0])
             except Exception:
                 lgb_bps = 0.0
 
