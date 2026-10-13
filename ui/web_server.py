@@ -29,7 +29,8 @@ class StrategyToggleRequest(BaseModel):
 
 
 class OrderSizeRequest(BaseModel):
-    order_size_btc: float
+    order_size_btc: Optional[float] = None
+    order_size: Optional[float] = None
 
 
 class TelemetryBroadcaster:
@@ -246,11 +247,15 @@ def create_web_app(runner_ref: Any, broadcaster: TelemetryBroadcaster) -> FastAP
         if not runner:
             raise HTTPException(status_code=503, detail="Engine runner unavailable")
 
-        new_size = max(0.0001, req.order_size_btc)
+        raw_size = req.order_size if req.order_size is not None else req.order_size_btc
+        if raw_size is None:
+            raise HTTPException(status_code=400, detail="Missing order_size or order_size_btc")
+
+        new_size = max(0.0001, float(raw_size))
         if hasattr(runner, "live_executor") and runner.live_executor:
             runner.live_executor.default_order_size_btc = new_size
 
-        return {"status": "ok", "order_size_btc": new_size}
+        return {"status": "ok", "order_size": new_size, "order_size_btc": new_size}
 
     @app.websocket("/ws/telemetry")
     async def websocket_telemetry_endpoint(ws: WebSocket):
@@ -339,7 +344,12 @@ class DashboardWebServer:
             return
 
         now_ms = int(now * 1000)
-        coin = getattr(book, "coin", "BTC")
+        coin = str(
+            getattr(book, "coin", None)
+            or getattr(trades, "coin", None)
+            or (getattr(self.runner, "config", None) and getattr(self.runner.config.market, "coin", None))
+            or "BTC"
+        ).upper()
 
         # 1. Market & Depth Snapshot (Top 10 levels)
         bids_data = [[float(l.px), float(l.sz), int(l.n)] for l in getattr(book, "bids", [])[:10]]
@@ -434,6 +444,8 @@ class DashboardWebServer:
                     "strategy": t.strategy_name,
                     "side": t.side,
                     "size_btc": round(float(t.size_btc), 4),
+                    "size": round(float(t.size_btc), 4),
+                    "coin": coin,
                     "entry_price": round(float(t.entry_price), 2),
                     "exit_price": round(float(t.exit_price), 2),
                     "net_pnl": round(float(t.net_pnl_usd), 2),

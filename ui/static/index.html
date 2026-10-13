@@ -66,7 +66,7 @@
         <h1 class="font-bold text-sm sm:text-base tracking-wider uppercase text-cyan-400">Hyperliquid L2 Engine</h1>
       </div>
       <span id="badge-network" class="px-2 py-0.5 text-xs font-semibold rounded bg-cyan-950 text-cyan-300 border border-cyan-800">TESTNET</span>
-      <span id="badge-coin" class="px-2 py-0.5 text-xs font-semibold rounded bg-slate-800 text-yellow-400 border border-slate-700">BTC</span>
+      <span id="badge-coin" class="px-2 py-0.5 text-xs font-semibold rounded bg-slate-800 text-yellow-400 border border-slate-700">--</span>
       <span id="badge-mode" class="px-2 py-0.5 text-xs font-semibold rounded bg-purple-950 text-purple-300 border border-purple-800">PAPER</span>
     </div>
 
@@ -221,7 +221,7 @@
         <!-- Table Header -->
         <div class="grid grid-cols-12 text-[11px] font-mono text-slate-400 border-b border-dark-border/80 pb-1 mb-1">
           <span class="col-span-4 text-left">Price (USD)</span>
-          <span class="col-span-4 text-right">Size (BTC)</span>
+          <span id="th-depth-size" class="col-span-4 text-right">Size</span>
           <span class="col-span-4 text-right">Orders (n)</span>
         </div>
 
@@ -278,7 +278,7 @@
               <th class="py-1.5 px-2">Exit Time</th>
               <th class="py-1.5 px-2">Strategy</th>
               <th class="py-1.5 px-2">Side</th>
-              <th class="py-1.5 px-2 text-right">Size (BTC)</th>
+              <th id="th-trades-size" class="py-1.5 px-2 text-right">Size</th>
               <th class="py-1.5 px-2 text-right">Entry Px</th>
               <th class="py-1.5 px-2 text-right">Exit Px</th>
               <th class="py-1.5 px-2 text-center">Duration</th>
@@ -324,6 +324,7 @@
     let lastMidPrice = null;
     let maxDepthVolume = 1.0;
     let cachedTrades = [];
+    let currentCoin = 'BTC';
 
     // Initialize TradingView Lightweight Charts
     function initCharts() {
@@ -448,27 +449,41 @@
       const secTime = Math.floor((data.timestamp || Date.now()) / 1000);
 
       // 1. Navigation & Badges
+      if (m.coin) {
+        currentCoin = m.coin.toUpperCase();
+      }
       if (m.network) document.getElementById('badge-network').innerText = m.network.toUpperCase();
-      if (m.coin) document.getElementById('badge-coin').innerText = m.coin.toUpperCase();
+      document.getElementById('badge-coin').innerText = currentCoin;
       document.getElementById('badge-mode').innerText = data.is_live_orders ? 'LIVE TESTNET' : 'PAPER SIM';
       document.getElementById('badge-mode').className = data.is_live_orders 
         ? 'px-2 py-0.5 text-xs font-semibold rounded bg-rose-950 text-rose-300 border border-rose-800'
         : 'px-2 py-0.5 text-xs font-semibold rounded bg-purple-950 text-purple-300 border border-purple-800';
 
-      const midStr = `$${(m.mid_price || 0).toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 2})}`;
+      const midStr = `$${(m.mid_price || 0).toLocaleString(undefined, {minimumFractionDigits: (m.mid_price < 100 ? 2 : 1), maximumFractionDigits: (m.mid_price < 100 ? 3 : 2)})}`;
       document.getElementById('nav-mid').innerText = midStr;
       document.getElementById('nav-spread').innerText = `${(m.spread_bps || 0).toFixed(2)}b`;
-      document.getElementById('nav-cvd').innerText = `${(m.cvd >= 0 ? '+' : '')}${(m.cvd || 0).toFixed(2)} BTC`;
+      document.getElementById('nav-cvd').innerText = `${(m.cvd >= 0 ? '+' : '')}${(m.cvd || 0).toFixed(2)} ${currentCoin}`;
       document.getElementById('nav-cvd').className = m.cvd >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold';
       document.getElementById('nav-vpin').innerText = m.vpin !== null ? m.vpin.toFixed(2) : '--';
       document.getElementById('nav-basis').innerText = `${(m.basis_bps >= 0 ? '+' : '')}${(m.basis_bps || 0).toFixed(1)}b`;
 
+      // Update table headers to match active coin
+      const thDepthSize = document.getElementById('th-depth-size');
+      if (thDepthSize) thDepthSize.innerText = `Size (${currentCoin})`;
+      const thTradesSize = document.getElementById('th-trades-size');
+      if (thTradesSize) thTradesSize.innerText = `Size (${currentCoin})`;
+
       document.getElementById('stat-updates').innerText = (m.updates || 0).toLocaleString();
-      document.getElementById('chart-best-bid').innerText = `Bid: $${(m.best_bid || 0).toLocaleString()}`;
-      document.getElementById('chart-best-ask').innerText = `Ask: $${(m.best_ask || 0).toLocaleString()}`;
+      document.getElementById('chart-best-bid').innerText = `Bid: $${(m.best_bid || 0).toLocaleString(undefined, {minimumFractionDigits: (m.mid_price < 100 ? 2 : 1), maximumFractionDigits: (m.mid_price < 100 ? 3 : 2)})}`;
+      document.getElementById('chart-best-ask').innerText = `Ask: $${(m.best_ask || 0).toLocaleString(undefined, {minimumFractionDigits: (m.mid_price < 100 ? 2 : 1), maximumFractionDigits: (m.mid_price < 100 ? 3 : 2)})}`;
 
       // Update Price Chart
       if (m.mid_price > 0 && priceSeries) {
+        if (m.mid_price < 100) {
+          priceSeries.applyOptions({
+            priceFormat: { type: 'price', precision: 3, minMove: 0.001 }
+          });
+        }
         priceSeries.update({ time: secTime, value: m.mid_price });
         lastMidPrice = m.mid_price;
       }
@@ -632,15 +647,17 @@
 
         if (inPos) {
           const sideColor = pos.side === 'LONG' ? 'text-emerald-400 bg-emerald-950/80 border-emerald-800' : 'text-rose-400 bg-rose-950/80 border-rose-800';
-          badgeStatus = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold border ${sideColor} live-pulse">${pos.side} ${pos.size_btc} BTC</span>`;
+          badgeStatus = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold border ${sideColor} live-pulse">${pos.side} ${pos.size_btc} ${currentCoin}</span>`;
           const pnlColor = pos.unrealized_usd >= 0 ? 'text-emerald-400' : 'text-rose-400';
           const pnlBpsColor = pos.unrealized_bps >= 0 ? 'text-emerald-400' : 'text-rose-400';
+          const entryPxStr = `$${pos.entry_price.toLocaleString(undefined, {minimumFractionDigits: (pos.entry_price < 100 ? 2 : 1), maximumFractionDigits: (pos.entry_price < 100 ? 3 : 2)})}`;
+          const stopPxStr = `$${pos.stop_price.toLocaleString(undefined, {minimumFractionDigits: (pos.stop_price < 100 ? 2 : 1), maximumFractionDigits: (pos.stop_price < 100 ? 3 : 2)})}`;
           positionInfo = `
             <div class="mt-2 pt-2 border-t border-dark-border/60 grid grid-cols-2 gap-1 text-[11px] font-mono">
-              <div><span class="text-slate-500">Entry:</span> <span class="text-slate-300">$${pos.entry_price.toLocaleString()}</span></div>
+              <div><span class="text-slate-500">Entry:</span> <span class="text-slate-300">${entryPxStr}</span></div>
               <div><span class="text-slate-500">Unrealized:</span> <span class="${pnlColor} font-bold">${pos.unrealized_usd >= 0 ? '+' : ''}$${pos.unrealized_usd.toFixed(2)} (${pos.unrealized_bps.toFixed(1)}b)</span></div>
               <div><span class="text-slate-500">Hold:</span> <span class="text-slate-300">${pos.hold_secs.toFixed(1)}s</span></div>
-              <div><span class="text-slate-500">Stop Px:</span> <span class="text-yellow-400">$${pos.stop_price.toLocaleString()}</span></div>
+              <div><span class="text-slate-500">Stop Px:</span> <span class="text-yellow-400">${stopPxStr}</span></div>
             </div>
           `;
         }
@@ -741,7 +758,7 @@
         alert("No trades to export yet.");
         return;
       }
-      let csv = "exit_time,strategy,side,size_btc,entry_price,exit_price,duration_s,exit_reason,net_pnl_usd,return_bps\n";
+      let csv = `exit_time,strategy,side,size_${currentCoin.toLowerCase()},entry_price,exit_price,duration_s,exit_reason,net_pnl_usd,return_bps\n`;
       for (const t of cachedTrades) {
         csv += `${t.exit_time},${t.strategy},${t.side},${t.size_btc},${t.entry_price},${t.exit_price},${t.duration_s},${t.exit_reason},${t.net_pnl},${t.return_bps}\n`;
       }
