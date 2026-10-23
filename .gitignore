@@ -50,3 +50,10 @@ logs/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Local scratch files & raw session audit dumps
+scratch/
+audits/session_*/
+*.har
+breakoutprop/response_debug.html
+

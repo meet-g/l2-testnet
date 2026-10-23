@@ -27,7 +27,7 @@ from signals.vpin import VPINSignal
 
 class ConvexityCascadeSignal(BaseSignal):
     """Detects acute order book convexity imbalances and liquidity hole vacuums
-    coinciding with order count dispersion and trade flow momentum.
+    coinciding with order count dispersion, micro-price drift, and trade flow momentum.
     """
 
     def __init__(
@@ -36,14 +36,14 @@ class ConvexityCascadeSignal(BaseSignal):
         gamma_qr: float = 0.40,
         cvd_window_secs: float = 15.0,
         cvd_scale_btc: float = 2.5,
-        hole_min_depth_btc: float = 6.0,
+        hole_min_depth_btc: float = 5.0,
         hole_max_thin_btc: float = 1.0,
-        w_touch: float = 0.30,
-        w_d5: float = 0.25,
-        w_slope: float = 0.15,
-        w_n: float = 0.10,
-        w_cvd: float = 0.20,
-        w_hole_bonus: float = 0.20,
+        w_touch: float = 0.35,
+        w_d5: float = 0.30,
+        w_slope: float = 0.20,
+        w_n: float = 0.15,
+        w_hole_bonus: float = 0.15,
+        w_micro: float = 0.15,
         absorption_hurdle: float = 0.25,
     ):
         super().__init__(name)
@@ -57,8 +57,8 @@ class ConvexityCascadeSignal(BaseSignal):
         self.w_d5 = w_d5
         self.w_slope = w_slope
         self.w_n = w_n
-        self.w_cvd = w_cvd
         self.w_hole_bonus = w_hole_bonus
+        self.w_micro = w_micro
         self.absorption_hurdle = absorption_hurdle
 
         self.vpin_signal = VPINSignal()
@@ -85,13 +85,18 @@ class ConvexityCascadeSignal(BaseSignal):
             return SignalResult(name=self.name, score=0.0, raw_value=0.0, confidence=0.0, timestamp_ms=now_ms)
 
         mid = book.mid_price
+        scale = getattr(book, "notional_scale", 1.0)
+        is_btc = (book.coin.upper() == "BTC")
+        depth_scale = 1.0 if is_btc else 0.15
+        eff_scale = scale * depth_scale
 
         # ---------------------------------------------------------------------
-        # 1. Touch Queue Depletion Ratio
+        # 1. Touch Queue Depletion Ratio (Scaled properly to asset notional)
         # ---------------------------------------------------------------------
         q_b1 = bids[0].sz
         q_a1 = asks[0].sz
-        qr = math.log(max(q_b1, 0.005) / max(q_a1, 0.005))
+        min_sz = 0.005 * scale
+        qr = math.log(max(q_b1, min_sz) / max(q_a1, min_sz))
         s_touch = math.tanh(self.gamma_qr * qr)
 
         # ---------------------------------------------------------------------
@@ -121,9 +126,15 @@ class ConvexityCascadeSignal(BaseSignal):
         n5_a = sum(asks[j].n for j in range(k_levels))
         s_n = (n5_b - n5_a) / max(n5_b + n5_a, 1)
 
-        scale = getattr(book, "notional_scale", 1.0)
-        hole_ask = (d5_a < self.hole_max_thin_btc * scale and d5_b >= self.hole_min_depth_btc * scale)
-        hole_bid = (d5_b < self.hole_max_thin_btc * scale and d5_a >= self.hole_min_depth_btc * scale)
+        # ---------------------------------------------------------------------
+        # 5. Liquidity Hole Vacuum (Relative Depth Asymmetry & Opposing Thinness)
+        # ---------------------------------------------------------------------
+        ratio_b = d5_b / max(denom_d5, 1e-6)
+        ratio_a = d5_a / max(denom_d5, 1e-6)
+        min_depth = self.hole_min_depth_btc if is_btc else 0.50 * scale
+        thin_thresh = 1.0 if is_btc else 0.35 * scale
+        hole_ask = (ratio_b >= 0.72 and d5_b >= min_depth and d5_a < thin_thresh)
+        hole_bid = (ratio_a >= 0.72 and d5_a >= min_depth and d5_b < thin_thresh)
         s_hole = 1.0 if hole_ask else (-1.0 if hole_bid else 0.0)
 
         # ---------------------------------------------------------------------
@@ -131,8 +142,8 @@ class ConvexityCascadeSignal(BaseSignal):
         # ---------------------------------------------------------------------
         cvd_fast, _, _ = trades.get_cvd_in_window(self.cvd_window_secs)
         cvd_slow, _, _ = trades.get_cvd_in_window(60.0)
-        s_cvd_fast = math.tanh(cvd_fast / max(self.cvd_scale_btc * scale, 0.1 * scale))
-        s_cvd_slow = math.tanh(cvd_slow / max(4.0 * scale, 0.5 * scale))
+        s_cvd_fast = math.tanh(cvd_fast / max(self.cvd_scale_btc * eff_scale, 0.1 * eff_scale))
+        s_cvd_slow = math.tanh(cvd_slow / max(4.0 * eff_scale, 0.5 * eff_scale))
         s_cvd = 0.65 * s_cvd_fast + 0.35 * s_cvd_slow
 
         # ---------------------------------------------------------------------
@@ -143,11 +154,13 @@ class ConvexityCascadeSignal(BaseSignal):
         s_micro = math.tanh(mp_drift_bps / 0.5)
 
         # ---------------------------------------------------------------------
-        # 8. VPIN Toxicity Indicator & Depth Fragility Tracking
+        # 8. Directional VPIN Toxicity & Hedge Risk Alert
         # ---------------------------------------------------------------------
         vpin_res = self.vpin_signal.compute(book, trades, now_ms)
-        is_toxic = vpin_res.metadata.get("is_toxic", False)
+        vpin_score = vpin_res.score  # Directional signed toxicity [-1.0, +1.0]
+        vpin_raw = vpin_res.raw_value  # Absolute volume imbalance [0.0, 1.0]
 
+        # Depth Fragility Tracking: Only alert on genuine whale wall cancellations (scale not eff_scale)
         self.depth_history.append((now_ms, d5_b, d5_a))
         wall_drop_b = False
         wall_drop_a = False
@@ -176,6 +189,13 @@ class ConvexityCascadeSignal(BaseSignal):
         is_bull_trap = (s_cvd > 0.15 and s_d5 < -self.absorption_hurdle)
         is_bear_trap = (s_cvd < -0.15 and s_d5 > self.absorption_hurdle)
 
+        # Anti-Whale Spoofing Check:
+        # If depth is positive but order count is strongly negative (whale wall trap)
+        is_spoof_trap = (s_d5 > 0.35 and s_n < -0.15) or (s_d5 < -0.35 and s_n > 0.15)
+
+        # Climax Exhaustion Check:
+        is_exhaustion_climax = (trend_score > 0.85 and s_cvd > 0.70) or (trend_score < -0.85 and s_cvd < -0.70)
+
         book_score = (
             self.w_touch * s_touch
             + self.w_d5 * s_d5
@@ -183,15 +203,18 @@ class ConvexityCascadeSignal(BaseSignal):
             + self.w_n * s_n
         )
         if s_hole != 0.0:
-            book_score += self.w_hole_bonus * s_hole
+            book_score = max(-1.0, min(1.0, book_score + self.w_hole_bonus * s_hole))
+
+        if is_spoof_trap:
+            book_score *= 0.3  # Heavily discount book score on whale spoofing
 
         has_active_flow = abs(s_cvd) >= 0.18
-        trend_aligned = (s_cvd > 0 and trend_score >= -0.02) or (s_cvd < 0 and trend_score <= 0.02)
+        # Sensible trend tolerance (-0.10 instead of -0.02)
+        trend_aligned = (s_cvd > 0 and trend_score >= -0.10) or (s_cvd < 0 and trend_score <= 0.10)
         direction_agree = (book_score * s_cvd > 0) and has_active_flow and trend_aligned
 
         # Counter-trend suppression: if CVD impulse fights 2-min trend, suppress entry
         strong_counter_trend = (s_cvd > 0.12 and trend_score < -0.10) or (s_cvd < -0.12 and trend_score > 0.10)
-
 
         if is_bull_trap:
             raw_alpha = -0.35
@@ -201,28 +224,44 @@ class ConvexityCascadeSignal(BaseSignal):
             raw_alpha = 0.35
             regime_flag = "BEAR_ABSORPTION_TRAP"
             confidence = 0.70
+        elif is_exhaustion_climax:
+            raw_alpha = max(-0.55, min(0.55, 0.65 * book_score))
+            confidence = 0.35
+            regime_flag = "EXHAUSTION_CLIMAX_DAMPENED"
         elif strong_counter_trend:
             raw_alpha = max(-0.25, min(0.25, 0.15 * book_score))
             confidence = 0.15
             regime_flag = "COUNTER_TREND_SUPPRESSED"
-        elif direction_agree:
-            # Microprice drift confirmation: agree with flow direction for higher conviction
-            micro_aligned = (s_micro * s_cvd > 0)
-            micro_bonus = 0.10 * s_micro if micro_aligned else 0.0
-            raw_alpha = 0.45 * book_score + 0.30 * s_cvd + 0.15 * trend_score + 0.10 * s_micro
-            # Boost confidence when microprice confirms flow direction
-            confidence = 0.35 * abs(book_score) + 0.30 * abs(s_cvd) + 0.20 * abs(trend_score) + 0.15 * abs(s_micro)
+        elif direction_agree and not is_spoof_trap:
+            raw_alpha = 0.40 * book_score + 0.30 * s_cvd + 0.15 * s_micro + 0.15 * trend_score
+            confidence = 0.35 * abs(book_score) + 0.30 * abs(s_cvd) + 0.20 * abs(s_micro) + 0.15 * abs(trend_score)
             regime_flag = "CONVEXITY_CASCADE"
         else:
             raw_alpha = max(-0.40, min(0.40, 0.25 * (book_score + s_cvd)))
             confidence = 0.20
             regime_flag = "WEAK_FLOW_DAMPENED"
 
-        # Dynamic Toxicity Shield:
-        if is_toxic:
-            raw_alpha = max(-0.30, min(0.30, raw_alpha * 0.15))
+        # ---------------------------------------------------------------------
+        # 10. Directional Toxicity Shield & Defensive Hedge Alert
+        # ---------------------------------------------------------------------
+        # Protect passive maker entries from informed adverse selection
+        if raw_alpha > 0 and vpin_score < -0.20:
+            adverse_drag = min(1.0, abs(vpin_score) / 0.50)
+            raw_alpha *= (1.0 - 0.70 * adverse_drag)
+            if vpin_score < -0.45:
+                raw_alpha = min(raw_alpha, 0.0)
+        elif raw_alpha < 0 and vpin_score > 0.20:
+            adverse_drag = min(1.0, abs(vpin_score) / 0.50)
+            raw_alpha *= (1.0 - 0.70 * adverse_drag)
+            if vpin_score > 0.45:
+                raw_alpha = max(raw_alpha, 0.0)
 
-        # Depth Fragility Shield: if resting wall was rapidly pulled (spoof decay), dampen alpha
+        # Extreme Choppy Toxicity Gate: When unsigned VPIN is extreme without clear direction
+        toxic_ceiling = 0.88 if is_btc else 0.75
+        if vpin_raw >= toxic_ceiling and abs(vpin_score) < 0.25:
+            raw_alpha *= 0.65
+
+        # Depth Fragility Shield: if resting whale wall was rapidly pulled, dampen alpha
         if (raw_alpha > 0 and wall_drop_b) or (raw_alpha < 0 and wall_drop_a):
             raw_alpha = max(-0.30, min(0.30, raw_alpha * 0.20))
 
@@ -243,12 +282,14 @@ class ConvexityCascadeSignal(BaseSignal):
                 "s_cvd": s_cvd,
                 "s_micro": s_micro,
                 "mp_drift_bps": mp_drift_bps,
+                "vpin_score": vpin_score,
+                "vpin_raw": vpin_raw,
                 "regime_flag": regime_flag,
                 "queue_ratio": math.exp(qr) if abs(qr) < 10 else (999.0 if qr > 0 else 0.001),
-                "d5_bid_btc": d5_b,
-                "d5_ask_btc": d5_a,
+                "d5_bid": d5_b,
+                "d5_ask": d5_a,
                 "n5_bid": n5_b,
                 "n5_ask": n5_a,
-                "cvd_fast_btc": cvd_fast,
+                "cvd_fast": cvd_fast,
             },
         )

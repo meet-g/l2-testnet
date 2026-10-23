@@ -1,0 +1,45 @@
+{
+  "session_range": "20261014_2000 - 20261020_1700",
+  "files_count": 142,
+  "runtime_s": 338.4100639820099,
+  "strategies": {
+    "Convexity_Cascade": {
+      "trades": 6,
+      "wins": 4,
+      "losses": 2,
+      "stops": 0,
+      "hedges": 1,
+      "tp": 2,
+      "trailing": 2,
+      "gross_pnl": 54.65268985669873,
+      "fees": 16.57477771081689,
+      "net_pnl": 38.07791214588184
+    },
+    "Hedged_Convexity": {
+      "trades": 125,
+      "wins": 77,
+      "losses": 48,
+      "stops": 11,
+      "hedges": 33,
+      "tp": 11,
+      "trailing": 65,
+      "gross_pnl": 353.3469005902067,
+      "fees": 348.09497007951995,
+      "net_pnl": 5.251930510686701
+    },
+    "Momentum_Expansion": {
+      "trades": 393,
+      "wins": 236,
+      "losses": 157,
+      "stops": 1,
+      "hedges": 134,
+      "tp": 27,
+      "trailing": 208,
+      "gross_pnl": 1220.71021544913,
+      "fees": 1017.4997579368398,
+      "net_pnl": 203.21045751229028
+    }
+  },
+  "total_trades": 524,
+  "combined_net_pnl": 246.5403001688588
+}

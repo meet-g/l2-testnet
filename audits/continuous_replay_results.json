@@ -1,0 +1,91 @@
+{
+  "session_window": "2026-10-14 20:15:33 to 2026-10-20 17:16:42",
+  "files_count": 142,
+  "total_events": 1029203,
+  "elapsed_seconds": 446.35022139549255,
+  "baseline": {
+    "Convexity_Cascade": {
+      "trades": 293,
+      "wins": 167,
+      "losses": 126,
+      "win_rate_pct": 57.0,
+      "gross_pnl_usd": 691.07,
+      "fees_usd": 725.48,
+      "net_pnl_usd": -34.41,
+      "profit_factor": 0.96
+    },
+    "Hedged_Convexity": {
+      "trades": 92,
+      "wins": 60,
+      "losses": 32,
+      "win_rate_pct": 65.2,
+      "gross_pnl_usd": 352.4,
+      "fees_usd": 246.06,
+      "net_pnl_usd": 106.34,
+      "profit_factor": 1.43
+    },
+    "Momentum_Expansion": {
+      "trades": 361,
+      "wins": 213,
+      "losses": 148,
+      "win_rate_pct": 59.0,
+      "gross_pnl_usd": 1059.38,
+      "fees_usd": 858.13,
+      "net_pnl_usd": 201.25,
+      "profit_factor": 1.21
+    }
+  },
+  "replay_results": {
+    "Hedged_Convexity": {
+      "trades": 101,
+      "wins": 66,
+      "losses": 35,
+      "win_rate_pct": 65.34653465346535,
+      "gross_pnl_usd": 372.6373208042016,
+      "fees_usd": 266.47336525033535,
+      "net_pnl_usd": 106.16395555386632,
+      "profit_factor": 3.182772585209721,
+      "exits": {
+        "TAKE_PROFIT": 12,
+        "TRAILING_STOP": 54,
+        "DEFENSIVE_MAKER_HEDGE": 27,
+        "STOP_LOSS": 5,
+        "SESSION_SHUTDOWN": 0
+      }
+    },
+    "Convexity_Cascade": {
+      "trades": 176,
+      "wins": 105,
+      "losses": 71,
+      "win_rate_pct": 59.65909090909091,
+      "gross_pnl_usd": 704.8941978966293,
+      "fees_usd": 439.8785463796124,
+      "net_pnl_usd": 265.01565151701715,
+      "profit_factor": 3.397806957969846,
+      "exits": {
+        "TAKE_PROFIT": 18,
+        "TRAILING_STOP": 85,
+        "DEFENSIVE_MAKER_HEDGE": 57,
+        "STOP_LOSS": 1,
+        "SESSION_SHUTDOWN": 0
+      }
+    },
+    "Momentum_Expansion": {
+      "trades": 351,
+      "wins": 201,
+      "losses": 150,
+      "win_rate_pct": 57.26495726495726,
+      "gross_pnl_usd": 951.9509656764346,
+      "fees_usd": 821.1511074871752,
+      "net_pnl_usd": 130.79985818925942,
+      "profit_factor": 2.7191921900043146,
+      "exits": {
+        "TAKE_PROFIT": 28,
+        "TRAILING_STOP": 173,
+        "DEFENSIVE_MAKER_HEDGE": 131,
+        "STOP_LOSS": 1,
+        "SESSION_SHUTDOWN": 0
+      }
+    }
+  }
+}

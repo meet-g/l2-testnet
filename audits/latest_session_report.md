@@ -1,12 +1,12 @@
-# Trading Session Audit Report: `session_20261013_184847_257_763e`
+# Trading Session Audit Report: `session_20261022_182145_475_99bf`
 
-- **Session ID**: `session_20261013_184847_257_763e`
-- **Target Asset**: `BTC-PERP`
+- **Session ID**: `session_20261022_182145_475_99bf`
+- **Target Asset**: `HYPE-PERP`
 - **Network**: Hyperliquid `Mainnet`
 - **Execution Mode**: PAPER TRADING SIMULATION
-- **Session Start**: 2026-10-13T18:48:47
-- **Session End**: 2026-10-13 18:49:14
-- **Duration**: 0m 26s (26.8s)
+- **Session Start**: 2026-10-22T18:21:45
+- **Session End**: 2026-10-23 16:31:21
+- **Duration**: 1329m 36s (79776.1s)
 - **Master CSV**: [`all_trades.csv`](all_trades.csv)
 - **Detailed Event Stream**: [`trades_audit.jsonl`](trades_audit.jsonl)
 
@@ -14,11 +14,11 @@
 
 ## 1. Executive Strategy Performance Audit
 
-| Strategy | Trades | Win Rate | Volume (BTC) | Net Fees/Reb ($) | Net PnL ($) | Return (bps) | Profit Factor | Strategy Audit File |
+| Strategy | Trades | Win Rate | Volume (HYPE) | Net Fees/Reb ($) | Net PnL ($) | Return (bps) | Profit Factor | Strategy Audit File |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| **Convexity_Cascade** | 0 | 0.0% | 0.0000 | +$0.00 | **+$0.00** | +0.0 bps | 0.00 | [`Convexity_Cascade.csv`](strategies/Convexity_Cascade.csv) |
-| **Hedged_Convexity** | 1 | 0.0% | 0.1000 | -$4.99 | **$-3.11** | -3.7 bps | 0.00 | [`Hedged_Convexity.csv`](strategies/Hedged_Convexity.csv) |
-| **Momentum_Expansion** | 0 | 0.0% | 0.0000 | +$0.00 | **+$0.00** | +0.0 bps | 0.00 | [`Momentum_Expansion.csv`](strategies/Momentum_Expansion.csv) |
+| **Convexity_Cascade** | 27 | 63.0% | 2840.5900 | -$66.30 | **+$17.69** | +0.7 bps | 1.29 | [`Convexity_Cascade.csv`](strategies/Convexity_Cascade.csv) |
+| **Hedged_Convexity** | 14 | 71.4% | 1531.0500 | -$40.80 | **+$27.10** | +2.3 bps | 1.62 | [`Hedged_Convexity.csv`](strategies/Hedged_Convexity.csv) |
+| **Momentum_Expansion** | 36 | 52.8% | 3883.6200 | -$90.53 | **$-31.55** | -1.2 bps | 0.70 | [`Momentum_Expansion.csv`](strategies/Momentum_Expansion.csv) |
 
 ---
 
@@ -26,24 +26,102 @@
 
 ### Strategy: `Convexity_Cascade`
 
-- **Total Executed Trades**: 0 | **Wins**: 0 | **Losses**: 0 | **Win Rate**: 0.0% | **Net PnL**: $+0.00
+- **Total Executed Trades**: 27 | **Wins**: 17 | **Losses**: 10 | **Win Rate**: 63.0% | **Net PnL**: $+17.69
 - **Audit CSV**: [`strategies/Convexity_Cascade.csv`](strategies/Convexity_Cascade.csv)
 
-_No trades were opened/closed for Convexity_Cascade during this session._
+| # | Trade ID | Side | Size (HYPE) | Entry Time | Entry Px | Exit Time | Exit Px | Hold (s) | Exit Reason | Fees ($) | Net PnL ($) | Return (bps) |
+| :-: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- | :---: | :---: | :---: |
+| 1 | `CC-0002` | SHORT | 110.1600 | 18:40:38 | $77.2 | 18:41:37 | $77.2 | 58.7s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$6.85** | -8.1 bps |
+| 2 | `CC-0005` | LONG | 109.9600 | 19:19:51 | $77.3 | 19:20:12 | $77.3 | 21.2s | `TRAILING_STOP` | -$2.55 | **+$1.26** | +1.5 bps |
+| 3 | `CC-0007` | LONG | 109.6800 | 20:14:01 | $77.5 | 20:14:22 | $77.5 | 21.6s | `TRAILING_STOP` | -$2.55 | **+$1.30** | +1.5 bps |
+| 4 | `CC-0008` | LONG | 109.2400 | 20:29:05 | $77.8 | 20:29:37 | $77.8 | 32.1s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$8.67** | -10.2 bps |
+| 5 | `CC-0009` | SHORT | 109.9400 | 20:46:14 | $77.3 | 20:47:14 | $77.2 | 59.3s | `TRAILING_STOP` | -$2.55 | **+$10.50** | +12.4 bps |
+| 6 | `CC-0011` | SHORT | 109.7500 | 21:00:24 | $77.5 | 21:01:02 | $77.4 | 38.0s | `TRAILING_STOP` | -$2.55 | **+$4.49** | +5.3 bps |
+| 7 | `CC-0019` | SHORT | 110.1500 | 23:42:33 | $77.2 | 23:44:43 | $77.1 | 129.2s | `TRAILING_STOP` | -$2.55 | **+$2.87** | +3.4 bps |
+| 8 | `CC-0022` | SHORT | 110.0500 | 00:08:22 | $77.2 | 00:09:05 | $77.2 | 43.3s | `TRAILING_STOP` | -$2.55 | **+$0.55** | +0.7 bps |
+| 9 | `CC-0025` | LONG | 109.8100 | 01:18:01 | $77.4 | 01:18:43 | $77.4 | 42.5s | `PROFIT_DECAY_EXIT` | -$2.55 | **-$3.32** | -3.9 bps |
+| 10 | `CC-0029` | LONG | 109.4600 | 02:27:38 | $77.6 | 02:28:42 | $77.7 | 64.7s | `TRAILING_STOP` | -$2.55 | **+$4.68** | +5.5 bps |
+| 11 | `CC-0032` | SHORT | 109.6900 | 03:00:13 | $77.5 | 03:01:22 | $77.5 | 69.5s | `TRAILING_STOP` | -$2.55 | **+$0.87** | +1.0 bps |
+| 12 | `CC-0036` | LONG | 109.0600 | 06:32:02 | $77.9 | 06:33:15 | $78.0 | 73.6s | `TRAILING_STOP` | -$2.55 | **+$5.63** | +6.6 bps |
+| 13 | `CC-0037` | LONG | 108.3200 | 08:48:13 | $78.5 | 08:48:41 | $78.5 | 27.3s | `PROFIT_DECAY_EXIT` | -$2.55 | **-$4.07** | -4.8 bps |
+| 14 | `CC-0038` | SHORT | 108.2600 | 09:37:50 | $78.5 | 09:38:34 | $78.6 | 43.5s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$7.53** | -8.9 bps |
+| 15 | `CC-0043` | SHORT | 109.0000 | 10:27:15 | $78.0 | 10:28:08 | $78.0 | 52.7s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$6.26** | -7.4 bps |
+| 16 | `CC-0044` | SHORT | 108.9700 | 10:37:22 | $78.0 | 10:38:19 | $77.9 | 56.9s | `TRAILING_STOP` | -$2.55 | **+$4.10** | +4.8 bps |
+| 17 | `CC-0045` | SHORT | 109.0500 | 11:01:12 | $77.9 | 11:02:03 | $77.8 | 51.1s | `TRAILING_STOP` | -$2.55 | **+$11.20** | +13.2 bps |
+| 18 | `CC-0050` | SHORT | 109.2700 | 12:42:40 | $77.8 | 12:42:51 | $77.8 | 11.0s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$7.69** | -9.0 bps |
+| 19 | `CC-0052` | LONG | 109.0000 | 13:33:18 | $78.0 | 13:34:06 | $77.9 | 48.2s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$6.47** | -7.6 bps |
+| 20 | `CC-0057` | LONG | 108.6500 | 14:44:52 | $78.2 | 14:45:03 | $78.2 | 11.3s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$6.24** | -7.3 bps |
+| 21 | `CC-0058` | LONG | 108.8800 | 14:52:22 | $78.1 | 14:52:39 | $78.1 | 16.2s | `TRAILING_STOP` | -$2.55 | **+$0.71** | +0.8 bps |
+| 22 | `CC-0061` | LONG | 108.6400 | 14:59:27 | $78.2 | 15:00:21 | $78.3 | 54.0s | `TRAILING_STOP` | -$2.55 | **+$7.54** | +8.9 bps |
+| 23 | `CC-0063` | LONG | 54.2200 | 15:01:52 | $78.4 | 15:02:24 | $78.4 | 31.6s | `TRAILING_STOP` | -$1.28 | **+$0.51** | +1.2 bps |
+| 24 | `CC-0064` | SHORT | 54.9300 | 15:18:03 | $77.4 | 15:18:22 | $77.4 | 18.2s | `DEFENSIVE_MAKER_HEDGE` | -$1.28 | **-$3.25** | -7.7 bps |
+| 25 | `CC-0069` | LONG | 109.1200 | 15:31:33 | $77.9 | 15:31:54 | $78.1 | 21.5s | `TAKE_PROFIT` | -$2.55 | **+$14.69** | +17.3 bps |
+| 26 | `CC-0073` | LONG | 108.3400 | 15:53:33 | $78.5 | 15:53:48 | $78.5 | 15.2s | `TRAILING_STOP` | -$2.55 | **+$0.52** | +0.6 bps |
+| 27 | `CC-0074` | LONG | 108.9900 | 16:11:21 | $78.0 | 16:11:59 | $78.1 | 37.8s | `TRAILING_STOP` | -$2.55 | **+$6.60** | +7.8 bps |
 
 ### Strategy: `Hedged_Convexity`
 
-- **Total Executed Trades**: 1 | **Wins**: 0 | **Losses**: 1 | **Win Rate**: 0.0% | **Net PnL**: $-3.11
+- **Total Executed Trades**: 14 | **Wins**: 10 | **Losses**: 4 | **Win Rate**: 71.4% | **Net PnL**: $+27.10
 - **Audit CSV**: [`strategies/Hedged_Convexity.csv`](strategies/Hedged_Convexity.csv)
 
-| # | Trade ID | Side | Size (BTC) | Entry Time | Entry Px | Exit Time | Exit Px | Hold (s) | Exit Reason | Fees ($) | Net PnL ($) | Return (bps) |
+| # | Trade ID | Side | Size (HYPE) | Entry Time | Entry Px | Exit Time | Exit Px | Hold (s) | Exit Reason | Fees ($) | Net PnL ($) | Return (bps) |
 | :-: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- | :---: | :---: | :---: |
-| 1 | `HC-0001` | SHORT | 0.1000 | 18:48:48 | $83,164.0 | 18:49:14 | $83,145.2 | 25.8s | `SESSION_SHUTDOWN` | -$4.99 | **-$3.11** | -3.7 bps |
+| 1 | `HC-0016` | SHORT | 110.3600 | 21:38:24 | $77.0 | 21:38:41 | $77.0 | 16.1s | `TRAILING_STOP` | -$2.55 | **+$0.43** | +0.5 bps |
+| 2 | `HC-0017` | SHORT | 110.4500 | 21:38:57 | $77.0 | 21:39:50 | $76.9 | 53.9s | `TRAILING_STOP` | -$2.55 | **+$7.74** | +9.1 bps |
+| 3 | `HC-0018` | LONG | 109.4700 | 22:08:22 | $77.6 | 22:08:43 | $77.8 | 21.5s | `TAKE_PROFIT` | -$2.55 | **+$13.32** | +15.7 bps |
+| 4 | `HC-0042` | SHORT | 108.8500 | 10:26:31 | $78.1 | 10:27:09 | $78.0 | 37.8s | `TRAILING_STOP` | -$2.55 | **+$7.02** | +8.3 bps |
+| 5 | `HC-0048` | SHORT | 109.7500 | 11:56:15 | $77.4 | 11:56:26 | $77.3 | 10.8s | `TRAILING_STOP` | -$2.55 | **+$8.65** | +10.2 bps |
+| 6 | `HC-0055` | LONG | 109.3500 | 13:56:59 | $77.7 | 13:57:59 | $77.7 | 59.2s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$6.70** | -7.9 bps |
+| 7 | `HC-0062` | LONG | 108.4300 | 15:01:52 | $78.4 | 15:02:24 | $78.4 | 31.7s | `TRAILING_STOP` | -$2.55 | **+$1.44** | +1.7 bps |
+| 8 | `HC-0065` | SHORT | 109.8700 | 15:18:03 | $77.4 | 15:18:26 | $77.5 | 22.3s | `STOP_LOSS` | -$5.10 | **-$14.72** | -17.3 bps |
+| 9 | `HC-0066` | SHORT | 110.0800 | 15:19:26 | $77.2 | 15:19:42 | $77.2 | 15.7s | `TRAILING_STOP` | -$2.55 | **+$0.65** | +0.8 bps |
+| 10 | `HC-0067` | LONG | 109.4600 | 15:24:15 | $77.6 | 15:24:47 | $77.8 | 32.2s | `TRAILING_STOP` | -$2.55 | **+$9.59** | +11.3 bps |
+| 11 | `HC-0068` | LONG | 109.3600 | 15:29:45 | $77.7 | 15:30:06 | $77.8 | 21.0s | `TRAILING_STOP` | -$2.55 | **+$7.78** | +9.1 bps |
+| 12 | `HC-0070` | LONG | 108.7200 | 15:37:01 | $78.2 | 15:37:12 | $78.1 | 11.0s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$8.96** | -10.5 bps |
+| 13 | `HC-0071` | LONG | 108.5500 | 15:47:53 | $78.3 | 15:48:36 | $78.5 | 43.0s | `TAKE_PROFIT` | -$2.55 | **+$14.27** | +16.8 bps |
+| 14 | `HC-0072` | LONG | 108.3500 | 15:48:36 | $78.5 | 15:49:24 | $78.4 | 48.4s | `STOP_LOSS` | -$5.10 | **-$13.39** | -15.8 bps |
 
 ### Strategy: `Momentum_Expansion`
 
-- **Total Executed Trades**: 0 | **Wins**: 0 | **Losses**: 0 | **Win Rate**: 0.0% | **Net PnL**: $+0.00
+- **Total Executed Trades**: 36 | **Wins**: 19 | **Losses**: 17 | **Win Rate**: 52.8% | **Net PnL**: $-31.55
 - **Audit CSV**: [`strategies/Momentum_Expansion.csv`](strategies/Momentum_Expansion.csv)
 
-_No trades were opened/closed for Momentum_Expansion during this session._
+| # | Trade ID | Side | Size (HYPE) | Entry Time | Entry Px | Exit Time | Exit Px | Hold (s) | Exit Reason | Fees ($) | Net PnL ($) | Return (bps) |
+| :-: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- | :---: | :---: | :---: |
+| 1 | `ME-0001` | LONG | 110.0100 | 18:34:06 | $77.3 | 18:35:11 | $77.3 | 64.7s | `TRAILING_STOP` | -$2.55 | **+$2.95** | +3.5 bps |
+| 2 | `ME-0003` | LONG | 110.0200 | 18:47:10 | $77.3 | 18:47:31 | $77.3 | 20.8s | `TRAILING_STOP` | -$2.55 | **+$0.42** | +0.5 bps |
+| 3 | `ME-0004` | LONG | 110.0600 | 18:47:53 | $77.2 | 18:49:14 | $77.3 | 80.8s | `TRAILING_STOP` | -$2.55 | **+$1.20** | +1.4 bps |
+| 4 | `ME-0006` | LONG | 109.7600 | 19:42:11 | $77.4 | 19:42:49 | $77.4 | 37.9s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$7.27** | -8.6 bps |
+| 5 | `ME-0010` | LONG | 109.5600 | 20:54:17 | $77.6 | 20:54:41 | $77.6 | 23.4s | `TRAILING_STOP` | -$2.55 | **+$1.28** | +1.5 bps |
+| 6 | `ME-0012` | LONG | 109.6500 | 21:01:50 | $77.5 | 21:02:01 | $77.6 | 11.6s | `TRAILING_STOP` | -$2.55 | **+$1.40** | +1.6 bps |
+| 7 | `ME-0013` | LONG | 109.7500 | 21:16:45 | $77.4 | 21:17:06 | $77.4 | 20.9s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$7.05** | -8.3 bps |
+| 8 | `ME-0014` | SHORT | 109.8800 | 21:19:11 | $77.4 | 21:19:21 | $77.4 | 10.3s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$9.69** | -11.4 bps |
+| 9 | `ME-0015` | SHORT | 109.7000 | 21:27:38 | $77.5 | 21:28:06 | $77.5 | 27.1s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$7.05** | -8.3 bps |
+| 10 | `ME-0020` | LONG | 110.1000 | 23:45:37 | $77.2 | 23:46:52 | $77.2 | 75.7s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$6.18** | -7.3 bps |
+| 11 | `ME-0021` | SHORT | 110.3300 | 23:53:58 | $77.0 | 23:54:30 | $77.1 | 31.2s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$6.19** | -7.3 bps |
+| 12 | `ME-0023` | SHORT | 110.2500 | 00:18:46 | $77.1 | 00:19:13 | $77.1 | 26.6s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$6.63** | -7.8 bps |
+| 13 | `ME-0024` | LONG | 109.9400 | 01:14:20 | $77.3 | 01:15:15 | $77.4 | 54.8s | `TRAILING_STOP` | -$2.55 | **+$9.60** | +11.3 bps |
+| 14 | `ME-0026` | LONG | 109.7200 | 01:30:33 | $77.5 | 01:31:11 | $77.5 | 37.4s | `TRAILING_STOP` | -$2.55 | **+$1.51** | +1.8 bps |
+| 15 | `ME-0027` | LONG | 109.7400 | 01:42:49 | $77.5 | 01:44:21 | $77.5 | 92.8s | `TRAILING_STOP` | -$2.55 | **+$6.23** | +7.3 bps |
+| 16 | `ME-0028` | LONG | 109.8400 | 02:19:05 | $77.4 | 02:20:00 | $77.4 | 54.7s | `TRAILING_STOP` | -$2.55 | **+$3.27** | +3.8 bps |
+| 17 | `ME-0030` | LONG | 109.3200 | 02:43:04 | $77.8 | 02:45:51 | $77.8 | 167.0s | `TRAILING_STOP` | -$2.55 | **+$4.77** | +5.6 bps |
+| 18 | `ME-0031` | SHORT | 109.2800 | 02:52:22 | $77.8 | 02:53:45 | $77.7 | 83.5s | `TRAILING_STOP` | -$2.55 | **+$1.82** | +2.1 bps |
+| 19 | `ME-0033` | LONG | 109.2200 | 05:53:34 | $77.8 | 05:54:29 | $77.8 | 55.0s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$6.04** | -7.1 bps |
+| 20 | `ME-0034` | SHORT | 109.2900 | 05:56:33 | $77.8 | 05:57:55 | $77.7 | 82.5s | `TRAILING_STOP` | -$2.55 | **+$5.76** | +6.8 bps |
+| 21 | `ME-0035` | SHORT | 109.3000 | 06:06:21 | $77.8 | 06:06:42 | $77.8 | 20.3s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$6.16** | -7.2 bps |
+| 22 | `ME-0039` | SHORT | 54.1300 | 09:37:50 | $78.5 | 09:38:34 | $78.6 | 43.5s | `DEFENSIVE_MAKER_HEDGE` | -$1.28 | **-$3.77** | -8.9 bps |
+| 23 | `ME-0040` | SHORT | 108.1900 | 10:00:21 | $78.6 | 10:01:42 | $78.5 | 81.2s | `TRAILING_STOP` | -$2.55 | **+$8.25** | +9.7 bps |
+| 24 | `ME-0041` | SHORT | 108.3800 | 10:23:31 | $78.4 | 10:23:54 | $78.3 | 23.7s | `TAKE_PROFIT` | -$2.55 | **+$14.90** | +17.5 bps |
+| 25 | `ME-0046` | SHORT | 108.9000 | 11:11:23 | $78.1 | 11:13:03 | $78.1 | 99.7s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$6.47** | -7.6 bps |
+| 26 | `ME-0047` | SHORT | 109.1800 | 11:52:53 | $77.9 | 11:54:05 | $77.8 | 72.6s | `TRAILING_STOP` | -$2.55 | **+$1.27** | +1.5 bps |
+| 27 | `ME-0049` | SHORT | 109.3100 | 12:37:13 | $77.8 | 12:40:04 | $77.8 | 170.9s | `PROFIT_DECAY_EXIT` | -$2.55 | **-$2.77** | -3.3 bps |
+| 28 | `ME-0051` | LONG | 109.0300 | 13:31:13 | $78.0 | 13:31:36 | $77.9 | 22.9s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$6.15** | -7.2 bps |
+| 29 | `ME-0053` | SHORT | 109.0600 | 13:34:06 | $77.9 | 13:35:00 | $77.9 | 53.8s | `TRAILING_STOP` | -$2.55 | **+$2.24** | +2.6 bps |
+| 30 | `ME-0054` | SHORT | 109.2900 | 13:35:34 | $77.8 | 13:36:04 | $77.8 | 30.9s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$6.81** | -8.0 bps |
+| 31 | `ME-0056` | LONG | 109.5300 | 14:12:33 | $77.6 | 14:13:10 | $77.6 | 37.0s | `TRAILING_STOP` | -$2.55 | **+$0.42** | +0.5 bps |
+| 32 | `ME-0059` | LONG | 108.9200 | 14:57:11 | $78.0 | 14:57:24 | $78.1 | 12.8s | `TRAILING_STOP` | -$2.55 | **+$3.70** | +4.4 bps |
+| 33 | `ME-0060` | LONG | 108.7500 | 14:58:11 | $78.2 | 14:58:33 | $78.2 | 22.2s | `TRAILING_STOP` | -$2.55 | **+$1.84** | +2.2 bps |
+| 34 | `ME-0075` | LONG | 108.9700 | 16:13:20 | $78.0 | 16:13:46 | $78.0 | 26.5s | `PROFIT_DECAY_EXIT` | -$2.55 | **-$2.33** | -2.7 bps |
+| 35 | `ME-0076` | LONG | 108.7700 | 16:16:17 | $78.1 | 16:16:31 | $78.1 | 14.2s | `DEFENSIVE_MAKER_HEDGE` | -$2.55 | **-$11.79** | -13.9 bps |
+| 36 | `ME-0077` | LONG | 108.4900 | 16:27:02 | $78.3 | 16:27:13 | $78.4 | 10.9s | `PROFIT_DECAY_EXIT` | -$2.55 | **-$2.01** | -2.4 bps |
 

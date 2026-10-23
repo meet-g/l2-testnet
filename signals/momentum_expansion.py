@@ -35,6 +35,8 @@ class MomentumExpansionSignal(BaseSignal):
         w_trend: float = 0.15,
         decay_lambda: float = 0.12,
         absorption_hurdle: float = 0.15,
+        flow_hurdle: float = 0.35,
+        min_trade_vol_window: float = 8.0,
     ):
         super().__init__(name)
         self.cvd_fast_secs = cvd_fast_secs
@@ -49,6 +51,8 @@ class MomentumExpansionSignal(BaseSignal):
         self.w_trend = w_trend
         self.decay_lambda = decay_lambda
         self.absorption_hurdle = absorption_hurdle
+        self.flow_hurdle = flow_hurdle
+        self.min_trade_vol_window = min_trade_vol_window
 
         self.qdap = QDAPSignal()
         self.vpin = VPINSignal()
@@ -80,14 +84,17 @@ class MomentumExpansionSignal(BaseSignal):
         n_asks = len(asks)
 
         scale = getattr(book, "notional_scale", 1.0)
+        is_btc = (book.coin.upper() == "BTC")
+        depth_scale = 1.0 if is_btc else 0.15
+        eff_scale = scale * depth_scale
 
         # ---------------------------------------------------------------------
         # 1. Multi-Tier Order Book Depth & Density (Levels 1-25)
         # ---------------------------------------------------------------------
         # A. Touch Queue Exhaustion: log(Q_b1 / Q_a1)
-        b_sz_1 = bids[0].sz if n_bids > 0 else 0.01 * scale
-        a_sz_1 = asks[0].sz if n_asks > 0 else 0.01 * scale
-        qr = math.log(max(b_sz_1, 0.005 * scale) / max(a_sz_1, 0.005 * scale))
+        b_sz_1 = bids[0].sz if n_bids > 0 else 0.01 * eff_scale
+        a_sz_1 = asks[0].sz if n_asks > 0 else 0.01 * eff_scale
+        qr = math.log(max(b_sz_1, 0.005 * eff_scale) / max(a_sz_1, 0.005 * eff_scale))
         touch_exhaustion = math.tanh(0.40 * qr)
 
         # B. Multi-Level Decayed Depth Imbalance (Up to 25 levels)
@@ -121,16 +128,19 @@ class MomentumExpansionSignal(BaseSignal):
         if len(self.depth_history) >= 10:
             past_b = self.depth_history[0][1]
             past_a = self.depth_history[0][2]
-            if past_b > 2.0 * scale and d5_b < past_b * 0.45:
+            if past_b > 2.0 * eff_scale and d5_b < past_b * 0.45:
                 wall_drop_b = True
-            if past_a > 2.0 * scale and d5_a < past_a * 0.45:
+            if past_a > 2.0 * eff_scale and d5_a < past_a * 0.45:
                 wall_drop_a = True
 
         s_hole = 0.0
-        if b_sz_1 >= 6.0 * scale and (d5_b - b_sz_1) < 1.0 * scale:
-            s_hole -= 0.25  # Reduced from 0.50 to prevent book_score distortion
-        if a_sz_1 >= 6.0 * scale and (d5_a - a_sz_1) < 1.0 * scale:
-            s_hole += 0.25  # Reduced from 0.50 to prevent book_score distortion
+        if b_sz_1 >= 2.0 * eff_scale and (d5_b - b_sz_1) < 0.8 * eff_scale:
+            s_hole -= 0.20
+        if a_sz_1 >= 2.0 * eff_scale and (d5_a - a_sz_1) < 0.8 * eff_scale:
+            s_hole += 0.20
+
+        # Anti-Whale Spoofing Check:
+        is_spoof_trap = (wobi_score > 0.35 and n_imb_score < -0.15) or (wobi_score < -0.35 and n_imb_score > 0.15)
 
         # Composite Book Structure Score (Empirical IC > +0.30)
         if book.has_macro_book:
@@ -148,17 +158,21 @@ class MomentumExpansionSignal(BaseSignal):
                 + 0.25 * n_imb_score
                 + s_hole
             )
+        if is_spoof_trap:
+            book_score *= 0.3
+
         # Clamp book_score to prevent s_hole from distorting the composite beyond [-1, 1]
         book_score = max(-1.0, min(1.0, book_score))
 
         # ---------------------------------------------------------------------
         # 2. Dual-Horizon Taker Order Flow Momentum & Acceleration (CVD Delta)
         # ---------------------------------------------------------------------
-        cvd_fast, _, _ = trades.get_cvd_in_window(self.cvd_fast_secs)
-        cvd_slow, _, _ = trades.get_cvd_in_window(self.cvd_slow_secs)
+        cvd_fast, buy_fast, sell_fast = trades.get_cvd_in_window(self.cvd_fast_secs)
+        cvd_slow, buy_slow, sell_slow = trades.get_cvd_in_window(self.cvd_slow_secs)
+        tot_vol_slow = buy_slow + sell_slow
 
-        flow_fast = math.tanh(cvd_fast / max(self.cvd_fast_scale_btc * scale, 0.1 * scale))
-        flow_slow = math.tanh(cvd_slow / max(self.cvd_slow_scale_btc * scale, 0.5 * scale))
+        flow_fast = math.tanh(cvd_fast / max(self.cvd_fast_scale_btc * eff_scale, 0.1 * eff_scale))
+        flow_slow = math.tanh(cvd_slow / max(self.cvd_slow_scale_btc * eff_scale, 0.5 * eff_scale))
 
         # Composite flow: 65% fast impulse + 35% sustained trend
         flow_score = 0.65 * flow_fast + 0.35 * flow_slow
@@ -167,7 +181,11 @@ class MomentumExpansionSignal(BaseSignal):
         # 3. Medium-Term Trend Alignment (2-minute price drift)
         # ---------------------------------------------------------------------
         trend_cutoff = now_ms - int(self.trend_window_secs * 1000)
-        past_price = next((p for t, p in self.price_history if t >= trend_cutoff), self.price_history[0][1])
+        past_price = self.price_history[0][1]
+        for t, p in self.price_history:
+            if t >= trend_cutoff:
+                past_price = p
+                break
         if past_price > 0:
             trend_bps = ((mid_price - past_price) / past_price) * 10_000.0
             trend_score = math.tanh(trend_bps / max(self.trend_scale_bps, 1.0))
@@ -177,16 +195,17 @@ class MomentumExpansionSignal(BaseSignal):
         # ---------------------------------------------------------------------
         # 4. Active Absorption Trap Shield & Confluence Gating
         # ---------------------------------------------------------------------
-        # Phenomenon verified across 2026-08-12 dataset:
-        # Aggressive buyers hitting resting ask walls (WOBI < -0.15) reverse DOWN 56.2% of the time (-0.98 bps).
-        # Aggressive sellers hitting resting bid walls (WOBI > +0.15) bounce UP 54.4% of the time (+0.54 bps).
         is_bull_trap = (flow_score > 0.12 and book_score < -self.absorption_hurdle)
         is_bear_trap = (flow_score < -0.12 and book_score > self.absorption_hurdle)
 
+        # Climax Exhaustion Check:
+        is_exhaustion_climax = (trend_score > 0.85 and flow_score > 0.70) or (trend_score < -0.85 and flow_score < -0.70)
+
         # Strict Confluence check: active taker volume must be present and aligned with book pressure and trend
-        has_active_flow = abs(flow_score) >= 0.18
+        has_active_flow = abs(flow_score) >= self.flow_hurdle
+        has_min_volume = (tot_vol_slow >= self.min_trade_vol_window * eff_scale) if self.min_trade_vol_window > 0 else True
         trend_aligned = (flow_score > 0 and trend_score >= -0.02) or (flow_score < 0 and trend_score <= 0.02)
-        direction_agree = (book_score * flow_score > 0) and has_active_flow and trend_aligned
+        direction_agree = (book_score * flow_score > 0) and has_active_flow and has_min_volume and trend_aligned
         # Counter-trend suppression: suppress momentum entries against macro trend
         strong_counter_trend = (flow_score > 0.12 and trend_score < -0.10) or (flow_score < -0.12 and trend_score > 0.10)
 
@@ -202,11 +221,15 @@ class MomentumExpansionSignal(BaseSignal):
             raw_score = 0.35
             confidence = 0.70
             absorption_flag = "BEAR_ABSORPTION_TRAP"
+        elif is_exhaustion_climax:
+            raw_score = max(-0.30, min(0.30, 0.20 * book_score))
+            confidence = 0.20
+            absorption_flag = "EXHAUSTION_CLIMAX_SUPPRESSED"
         elif strong_counter_trend:
             raw_score = max(-0.25, min(0.25, 0.15 * book_score))
             confidence = 0.15
             absorption_flag = "COUNTER_TREND_SUPPRESSED"
-        elif direction_agree:
+        elif direction_agree and not is_spoof_trap:
             # Pure Momentum Confluence: flow and book in full agreement
             raw_score = (
                 self.w_book * book_score
@@ -259,6 +282,9 @@ class MomentumExpansionSignal(BaseSignal):
                 "trend_score": trend_score,
                 "cvd_fast_btc": cvd_fast,
                 "cvd_slow_btc": cvd_slow,
+                "tot_vol_slow": tot_vol_slow,
+                "flow_hurdle": self.flow_hurdle,
+                "min_trade_vol_window": self.min_trade_vol_window,
                 "absorption_flag": absorption_flag,
                 "is_ask_depleted": is_ask_depleted,
                 "is_bid_depleted": is_bid_depleted,

@@ -79,6 +79,7 @@ class TradeManager:
         self.total_volume: float = 0.0
         self.last_trade_time_ms: int = 0
         self.last_price: float = 0.0
+        self._cvd_cache: Dict[float, Tuple[float, float, float]] = {}
 
         # VPIN Volume bucket tracking
         self.completed_buckets: Deque[VolumeBucket] = deque(maxlen=max_vpin_buckets)
@@ -125,6 +126,7 @@ class TradeManager:
         self.last_price = trade.price
         self.total_cvd += trade.signed_size
         self.total_volume += trade.size
+        self._cvd_cache.clear()
 
         # Ingest into VPIN volume buckets
         self._ingest_vpin_volume(trade)
@@ -185,6 +187,9 @@ class TradeManager:
 
     def get_cvd_in_window(self, window_secs: float) -> Tuple[float, float, float]:
         """Calculates (CVD, BuyVol, SellVol) over the last N seconds."""
+        if window_secs in self._cvd_cache:
+            return self._cvd_cache[window_secs]
+
         now_ms = self.last_trade_time_ms or int(time.time() * 1000)
         cutoff_ms = now_ms - int(window_secs * 1000)
 
@@ -195,14 +200,16 @@ class TradeManager:
         for t in reversed(self.trades):
             if t.timestamp_ms < cutoff_ms:
                 break
-            if t.is_buy:
+            if t.side == "B":
                 buy_vol += t.size
                 cvd += t.size
             else:
                 sell_vol += t.size
                 cvd -= t.size
 
-        return cvd, buy_vol, sell_vol
+        res = (cvd, buy_vol, sell_vol)
+        self._cvd_cache[window_secs] = res
+        return res
 
     def get_recent_large_trades(
         self, min_sz_btc: float = 1.0, lookback_secs: float = 10.0
