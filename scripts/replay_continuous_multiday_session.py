@@ -61,7 +61,12 @@ def run_continuous_replay() -> Dict[str, Any]:
     console.print(f"Enabled Strategies: [bold yellow]{', '.join(enabled_strats)}[/bold yellow]")
 
     # Single persistent runner across all 142 files
-    runner = L2EngineRunner(config=cfg, record_data=False, enable_audit=True)
+    runner = L2EngineRunner(config=cfg, record_data=False, enable_audit=False)
+
+    # Ensure calibrated volume gating parameters on MomentumExpansionSignal
+    if hasattr(runner.alpha_model, "signal_mom") and runner.alpha_model.signal_mom:
+        runner.alpha_model.signal_mom.flow_hurdle = 0.35
+        runner.alpha_model.signal_mom.min_trade_vol_window = 8.0
 
     eval_interval_ms = int(1000 / max(cfg.sample_rate_hz, 1))  # 100ms
     last_eval_ms = 0
@@ -219,6 +224,24 @@ def run_continuous_replay() -> Dict[str, Any]:
     tbl.add_column("Replay PF", justify="right")
     tbl.add_column("Exits (TP/Trail/Hedge/Stop)", justify="center")
 
+    tot_b_trd = sum(baseline.get(s, {}).get("trades", 0) for s in enabled_strats)
+    tot_r_trd = sum(results.get(s, {}).get("trades", 0) for s in enabled_strats)
+    tot_b_wins = sum(baseline.get(s, {}).get("wins", 0) for s in enabled_strats)
+    tot_r_wins = sum(results.get(s, {}).get("wins", 0) for s in enabled_strats)
+    tot_b_pnl = sum(baseline.get(s, {}).get("net_pnl_usd", 0.0) for s in enabled_strats)
+    tot_r_pnl = sum(results.get(s, {}).get("net_pnl_usd", 0.0) for s in enabled_strats)
+    tot_b_wr = (tot_b_wins / tot_b_trd * 100.0) if tot_b_trd else 0.0
+    tot_r_wr = (tot_r_wins / tot_r_trd * 100.0) if tot_r_trd else 0.0
+    tot_delta_pnl = tot_r_pnl - tot_b_pnl
+    tot_r_gw = sum(results.get(s, {}).get("gross_pnl_usd", 0.0) for s in enabled_strats)
+    tot_r_fees = sum(results.get(s, {}).get("fees_usd", 0.0) for s in enabled_strats)
+
+    tot_ex = {"TAKE_PROFIT": 0, "TRAILING_STOP": 0, "DEFENSIVE_MAKER_HEDGE": 0, "STOP_LOSS": 0}
+    for s in enabled_strats:
+        for k in tot_ex:
+            tot_ex[k] += results.get(s, {}).get("exits", {}).get(k, 0)
+    tot_exit_str = f"{tot_ex['TAKE_PROFIT']} / {tot_ex['TRAILING_STOP']} / {tot_ex['DEFENSIVE_MAKER_HEDGE']} / {tot_ex['STOP_LOSS']}"
+
     for s_name in enabled_strats:
         b = baseline.get(s_name, {})
         r = results.get(s_name, {})
@@ -251,7 +274,52 @@ def run_continuous_replay() -> Dict[str, Any]:
             exit_str,
         )
 
+    tot_delta_style = "bold green" if tot_delta_pnl > 0 else "bold red"
+    tot_pnl_style = "bold green" if tot_r_pnl > 0 else "bold red"
+    tbl.add_row(
+        "[bold cyan]PORTFOLIO COMBINED[/bold cyan]",
+        f"[bold]{tot_b_trd}[/bold]",
+        f"[bold]{tot_r_trd}[/bold]",
+        f"[bold]{tot_b_wr:.1f}%[/bold]",
+        f"[bold]{tot_r_wr:.1f}%[/bold]",
+        f"[bold]${tot_b_pnl:+.2f}[/bold]",
+        f"[{tot_pnl_style}]${tot_r_pnl:+.2f}[/{tot_pnl_style}]",
+        f"[{tot_delta_style}]${tot_delta_pnl:+.2f}[/{tot_delta_style}]",
+        "—",
+        tot_exit_str,
+    )
+
     console.print(tbl)
+
+    # Co-Entry Analysis
+    all_trades = []
+    for s_name in enabled_strats:
+        st = runner.evaluator.strategies.get(s_name)
+        if st:
+            all_trades.extend(st.trades)
+
+    all_co_trades = [t for t in all_trades if t.size_btc < 75.0]
+    all_iso_trades = [t for t in all_trades if t.size_btc >= 75.0]
+
+    all_trades.sort(key=lambda t: t.exit_time_ms)
+    cum_eq = 0.0
+    peak_eq = 0.0
+    max_dd = 0.0
+    for t in all_trades:
+        cum_eq += t.net_pnl_usd
+        if cum_eq > peak_eq:
+            peak_eq = cum_eq
+        dd = peak_eq - cum_eq
+        if dd > max_dd:
+            max_dd = dd
+
+    console.print(f"\n[bold yellow]Portfolio Risk & Capital Efficiency Metrics:[/bold yellow]")
+    console.print(f"  - Combined Net Profit:        [bold green]${tot_r_pnl:+.2f}[/bold green] (vs Baseline: ${tot_b_pnl:+.2f}, Delta: [{tot_delta_style}]${tot_delta_pnl:+.2f}[/{tot_delta_style}])")
+    console.print(f"  - Peak Combined Equity:       [bold green]${peak_eq:+.2f}[/bold green]")
+    console.print(f"  - Maximum Portfolio Drawdown: [bold red]${max_dd:.2f}[/bold red]")
+    console.print(f"  - Total Defensive Hedges:     [bold yellow]{tot_ex['DEFENSIVE_MAKER_HEDGE']}[/bold yellow] trades ({(tot_ex['DEFENSIVE_MAKER_HEDGE']/max(tot_r_trd,1)*100):.1f}%)")
+    console.print(f"  - Emergency Stop Losses:      [bold red]{tot_ex['STOP_LOSS']}[/bold red] trades ({(tot_ex['STOP_LOSS']/max(tot_r_trd,1)*100):.1f}%)")
+    console.print(f"  - Co-Entry Discounted Trades: [bold cyan]{len(all_co_trades)}[/bold cyan] (Win Rate: {(len([t for t in all_co_trades if t.net_pnl_usd > 0])/max(len(all_co_trades),1)*100):.1f}%, Net: ${sum(t.net_pnl_usd for t in all_co_trades):+.2f})\n")
 
     # Save summary artifact
     out_file = "audits/continuous_replay_results.json"
@@ -260,6 +328,8 @@ def run_continuous_replay() -> Dict[str, Any]:
         "files_count": len(session_files),
         "total_events": total_events,
         "elapsed_seconds": total_time,
+        "portfolio_max_drawdown": max_dd,
+        "peak_equity": peak_eq,
         "baseline": baseline,
         "replay_results": results,
     }
