@@ -50,7 +50,7 @@
       "description": "Multi-minute structural trend expansion entering on order book queue exhaustion, 25-level depth support, and CVD acceleration with absorption trap shielding",
       "signal_key": "MomentumExpansion",
       "execution_type": "HEDGED_MAKER",
-      "entry_threshold": 0.74,
+      "entry_threshold": 0.70,
       "order_size_btc": 0.1,
       "take_profit_bps": 20.0,
       "stop_loss_bps": 8.0,
