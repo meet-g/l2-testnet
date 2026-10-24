@@ -56,4 +56,5 @@ scratch/
 audits/session_*/
 *.har
 breakoutprop/response_debug.html
+.agents/teamwork/
 

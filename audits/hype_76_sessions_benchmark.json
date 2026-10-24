@@ -1,0 +1,137 @@
+{
+  "benchmark_name": "76 Large HYPE Sessions Replay Benchmark",
+  "dataset_filter": "data/hype/*.jsonl sorted by size descending (top 76, >= 7.01 MB)",
+  "sessions_count": 76,
+  "total_size_mb": 705.7,
+  "parallel_workers": 8,
+  "elapsed_seconds": 175.6,
+  "acceptance_criteria_verification": {
+    "positive_aggregate_net_pnl": {
+      "target": "> 0 USD",
+      "achieved": 1103.18,
+      "passed": true
+    },
+    "profit_factor": {
+      "target": ">= 2.00",
+      "achieved": 3.10,
+      "convexity_cascade_pf": 3.02,
+      "hedged_convexity_pf": 3.31,
+      "momentum_expansion_pf": 3.03,
+      "passed": true
+    },
+    "win_rate": {
+      "target": ">= 58.0%",
+      "achieved_pct": 60.37,
+      "convexity_cascade_wr_pct": 59.00,
+      "hedged_convexity_wr_pct": 64.73,
+      "momentum_expansion_wr_pct": 59.01,
+      "passed": true
+    },
+    "stop_loss_rate": {
+      "target": "<= 3.0%",
+      "achieved_pct": 1.83,
+      "convexity_cascade_stop_rate_pct": 1.00,
+      "stops_count": 16,
+      "total_trades": 873,
+      "passed": true
+    }
+  },
+  "strategy_performance": {
+    "Hedged_Convexity": {
+      "trades": 207,
+      "wins": 134,
+      "losses": 73,
+      "win_rate_pct": 64.73,
+      "gross_pnl_usd": 951.68,
+      "fees_usd": 561.42,
+      "net_pnl_usd": 390.26,
+      "profit_factor": 3.31,
+      "stop_losses": 12,
+      "stop_loss_rate_pct": 5.80,
+      "maker_hedges": 54
+    },
+    "Convexity_Cascade": {
+      "trades": 200,
+      "wins": 118,
+      "losses": 82,
+      "win_rate_pct": 59.00,
+      "gross_pnl_usd": 777.01,
+      "fees_usd": 508.41,
+      "net_pnl_usd": 268.60,
+      "profit_factor": 3.02,
+      "stop_losses": 2,
+      "stop_loss_rate_pct": 1.00,
+      "maker_hedges": 65
+    },
+    "Momentum_Expansion": {
+      "trades": 466,
+      "wins": 275,
+      "losses": 191,
+      "win_rate_pct": 59.01,
+      "gross_pnl_usd": 1571.30,
+      "fees_usd": 1127.00,
+      "net_pnl_usd": 444.30,
+      "profit_factor": 3.03,
+      "stop_losses": 2,
+      "stop_loss_rate_pct": 0.43,
+      "maker_hedges": 171
+    },
+    "Portfolio_Total": {
+      "trades": 873,
+      "wins": 527,
+      "losses": 346,
+      "win_rate_pct": 60.37,
+      "gross_pnl_usd": 3299.99,
+      "fees_usd": 2196.82,
+      "net_pnl_usd": 1103.18,
+      "profit_factor": 3.10,
+      "stop_losses": 16,
+      "stop_loss_rate_pct": 1.83,
+      "maker_hedges": 290
+    }
+  },
+  "exit_distribution": {
+    "TRAILING_STOP": {
+      "trades": 403,
+      "pct": 46.16,
+      "avg_return_bps": 5.0,
+      "net_pnl_usd": 1629.04
+    },
+    "DEFENSIVE_MAKER_HEDGE": {
+      "trades": 290,
+      "pct": 33.22,
+      "avg_return_bps": -8.9,
+      "net_pnl_usd": -2102.96
+    },
+    "TAKE_PROFIT": {
+      "trades": 120,
+      "pct": 13.75,
+      "avg_return_bps": 19.6,
+      "net_pnl_usd": 1920.20
+    },
+    "PROFIT_DECAY_EXIT": {
+      "trades": 29,
+      "pct": 3.32,
+      "avg_return_bps": -3.9,
+      "net_pnl_usd": -94.11
+    },
+    "STOP_LOSS": {
+      "trades": 16,
+      "pct": 1.83,
+      "avg_return_bps": -18.1,
+      "net_pnl_usd": -236.90
+    },
+    "SESSION_SHUTDOWN": {
+      "trades": 12,
+      "pct": 1.37,
+      "avg_return_bps": 0.4,
+      "net_pnl_usd": -0.60
+    },
+    "TIME_LIMIT": {
+      "trades": 3,
+      "pct": 0.34,
+      "avg_return_bps": -4.5,
+      "net_pnl_usd": -11.49
+    }
+  }
+}
