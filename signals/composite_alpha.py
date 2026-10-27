@@ -47,6 +47,14 @@ class CompositeAlphaSignal(BaseSignal):
         self.w_vpin = w_vpin
         self.w_qdap = w_qdap
         self.enabled_signals = enabled_signals or {}
+        self._enabled_signals_cache: Dict[str, bool] = {
+            sig: self.enabled_signals.get(sig, True)
+            for sig in [
+                "WOBI", "VOI", "MicroPrice", "VPIN", "Absorption", "Sweep",
+                "AdaptiveML", "QDAP", "MomentumExpansion", "ConvexityCascade",
+                "HedgedConvexity"
+            ]
+        }
 
         # Sub-signal components
         self.signal_wobi = WOBISignal()
@@ -63,7 +71,11 @@ class CompositeAlphaSignal(BaseSignal):
 
     def is_enabled(self, sig_name: str) -> bool:
         """Returns True if the signal is enabled in configuration."""
-        return self.enabled_signals.get(sig_name, True)
+        val = self._enabled_signals_cache.get(sig_name)
+        if val is None:
+            val = self.enabled_signals.get(sig_name, True)
+            self._enabled_signals_cache[sig_name] = val
+        return val
 
     def compute(
         self,
@@ -73,57 +85,69 @@ class CompositeAlphaSignal(BaseSignal):
     ) -> SignalResult:
         now_ms = timestamp_ms or book.last_update_time_ms
 
-        res_wobi = self.signal_wobi.compute(book, trades, now_ms) if self.is_enabled("WOBI") else SignalResult("WOBI", 0.0, 0.0, {"enabled": False})
-        res_voi = self.signal_voi.compute(book, trades, now_ms) if self.is_enabled("VOI") else SignalResult("VOI", 0.0, 0.0, {"enabled": False})
-        res_mp = self.signal_microprice.compute(book, trades, now_ms) if self.is_enabled("MicroPrice") else SignalResult("MicroPrice", 0.0, 0.0, {"enabled": False})
-        res_vpin = self.signal_vpin.compute(book, trades, now_ms) if self.is_enabled("VPIN") else SignalResult("VPIN", 0.0, 0.0, {"enabled": False})
-        res_abs = self.signal_absorption.compute(book, trades, now_ms) if self.is_enabled("Absorption") else SignalResult("Absorption", 0.0, 0.0, {"enabled": False})
-        res_sweep = self.signal_sweep.compute(book, trades, now_ms) if self.is_enabled("Sweep") else SignalResult("Sweep", 0.0, 0.0, {"enabled": False})
-        if self.is_enabled("AdaptiveML"):
+        en_wobi = self.is_enabled("WOBI")
+        en_voi = self.is_enabled("VOI")
+        en_mp = self.is_enabled("MicroPrice")
+        en_vpin = self.is_enabled("VPIN")
+        en_abs = self.is_enabled("Absorption")
+        en_sweep = self.is_enabled("Sweep")
+        en_adaptive = self.is_enabled("AdaptiveML")
+        en_qdap = self.is_enabled("QDAP")
+        en_mom = self.is_enabled("MomentumExpansion")
+        en_convexity = self.is_enabled("ConvexityCascade")
+        en_hedged = self.is_enabled("HedgedConvexity")
+
+        res_wobi = self.signal_wobi.compute(book, trades, now_ms) if en_wobi else SignalResult("WOBI", 0.0, 0.0, {"enabled": False})
+        res_voi = self.signal_voi.compute(book, trades, now_ms) if en_voi else SignalResult("VOI", 0.0, 0.0, {"enabled": False})
+        res_mp = self.signal_microprice.compute(book, trades, now_ms) if en_mp else SignalResult("MicroPrice", 0.0, 0.0, {"enabled": False})
+        res_vpin = self.signal_vpin.compute(book, trades, now_ms) if en_vpin else SignalResult("VPIN", 0.0, 0.0, {"enabled": False})
+        res_abs = self.signal_absorption.compute(book, trades, now_ms) if en_abs else SignalResult("Absorption", 0.0, 0.0, {"enabled": False})
+        res_sweep = self.signal_sweep.compute(book, trades, now_ms) if en_sweep else SignalResult("Sweep", 0.0, 0.0, {"enabled": False})
+        if en_adaptive:
             if self.signal_adaptive is None:
                 self.signal_adaptive = AdaptiveAlphaSignal()
             res_adaptive = self.signal_adaptive.compute(book, trades, now_ms)
         else:
             res_adaptive = SignalResult("AdaptiveML", 0.0, 0.0, {"enabled": False})
-        res_qdap = self.signal_qdap.compute(book, trades, now_ms) if self.is_enabled("QDAP") else SignalResult("QDAP", 0.0, 0.0, {"enabled": False})
-        res_mom = self.signal_mom.compute(book, trades, now_ms) if self.is_enabled("MomentumExpansion") else SignalResult("MomentumExpansion", 0.0, 0.0, {"enabled": False})
-        res_convexity = self.signal_convexity.compute(book, trades, now_ms) if self.is_enabled("ConvexityCascade") else SignalResult("ConvexityCascade", 0.0, 0.0, {"enabled": False})
-        res_hedged = self.signal_hedged.compute(book, trades, now_ms) if self.is_enabled("HedgedConvexity") else SignalResult("HedgedConvexity", 0.0, 0.0, {"enabled": False})
+        res_qdap = self.signal_qdap.compute(book, trades, now_ms) if en_qdap else SignalResult("QDAP", 0.0, 0.0, {"enabled": False})
+        res_mom = self.signal_mom.compute(book, trades, now_ms) if en_mom else SignalResult("MomentumExpansion", 0.0, 0.0, {"enabled": False})
+        res_convexity = self.signal_convexity.compute(book, trades, now_ms) if en_convexity else SignalResult("ConvexityCascade", 0.0, 0.0, {"enabled": False})
+        res_hedged = self.signal_hedged.compute(book, trades, now_ms) if en_hedged else SignalResult("HedgedConvexity", 0.0, 0.0, {"enabled": False})
 
         # Attach enabled state to sub-signal metadata
-        res_wobi.metadata["enabled"] = self.is_enabled("WOBI")
-        res_voi.metadata["enabled"] = self.is_enabled("VOI")
-        res_mp.metadata["enabled"] = self.is_enabled("MicroPrice")
-        res_vpin.metadata["enabled"] = self.is_enabled("VPIN")
-        res_abs.metadata["enabled"] = self.is_enabled("Absorption")
-        res_sweep.metadata["enabled"] = self.is_enabled("Sweep")
-        res_adaptive.metadata["enabled"] = self.is_enabled("AdaptiveML")
-        res_qdap.metadata["enabled"] = self.is_enabled("QDAP")
-        res_mom.metadata["enabled"] = self.is_enabled("MomentumExpansion")
-        res_convexity.metadata["enabled"] = self.is_enabled("ConvexityCascade")
-        res_hedged.metadata["enabled"] = self.is_enabled("HedgedConvexity")
+        res_wobi.metadata["enabled"] = en_wobi
+        res_voi.metadata["enabled"] = en_voi
+        res_mp.metadata["enabled"] = en_mp
+        res_vpin.metadata["enabled"] = en_vpin
+        res_abs.metadata["enabled"] = en_abs
+        res_sweep.metadata["enabled"] = en_sweep
+        res_adaptive.metadata["enabled"] = en_adaptive
+        res_qdap.metadata["enabled"] = en_qdap
+        res_mom.metadata["enabled"] = en_mom
+        res_convexity.metadata["enabled"] = en_convexity
+        res_hedged.metadata["enabled"] = en_hedged
 
         # Detect regime
-        is_toxic = res_vpin.metadata.get("is_toxic", False) and self.is_enabled("VPIN")
+        is_toxic = res_vpin.metadata.get("is_toxic", False) and en_vpin
         regime = "NORMAL"
 
         if is_toxic:
             regime = "TOXIC_EXPANSION"
             # In toxic flow, static book quotes are unreliable
             # Shift weight toward VOI, VPIN direction, and Absorption
-            adj_wobi = 0.10 if self.is_enabled("WOBI") else 0.0
-            adj_voi = 0.30 if self.is_enabled("VOI") else 0.0
-            adj_mp = 0.10 if self.is_enabled("MicroPrice") else 0.0
-            adj_abs = 0.25 if self.is_enabled("Absorption") else 0.0
-            adj_vpin = 0.15 if self.is_enabled("VPIN") else 0.0
-            adj_qdap = 0.10 if self.is_enabled("QDAP") else 0.0
+            adj_wobi = 0.10 if en_wobi else 0.0
+            adj_voi = 0.30 if en_voi else 0.0
+            adj_mp = 0.10 if en_mp else 0.0
+            adj_abs = 0.25 if en_abs else 0.0
+            adj_vpin = 0.15 if en_vpin else 0.0
+            adj_qdap = 0.10 if en_qdap else 0.0
         else:
-            adj_wobi = self.w_wobi if self.is_enabled("WOBI") else 0.0
-            adj_voi = self.w_voi if self.is_enabled("VOI") else 0.0
-            adj_mp = self.w_microprice if self.is_enabled("MicroPrice") else 0.0
-            adj_abs = self.w_absorption if self.is_enabled("Absorption") else 0.0
-            adj_vpin = self.w_vpin if self.is_enabled("VPIN") else 0.0
-            adj_qdap = self.w_qdap if self.is_enabled("QDAP") else 0.0
+            adj_wobi = self.w_wobi if en_wobi else 0.0
+            adj_voi = self.w_voi if en_voi else 0.0
+            adj_mp = self.w_microprice if en_mp else 0.0
+            adj_abs = self.w_absorption if en_abs else 0.0
+            adj_vpin = self.w_vpin if en_vpin else 0.0
+            adj_qdap = self.w_qdap if en_qdap else 0.0
 
         total_weight = adj_wobi + adj_voi + adj_mp + adj_abs + adj_vpin + adj_qdap
 
@@ -140,7 +164,7 @@ class CompositeAlphaSignal(BaseSignal):
             composite_score = 0.0
 
         # Overlay sweep kick if active and enabled
-        if self.is_enabled("Sweep") and abs(res_sweep.score) > 0.3:
+        if en_sweep and abs(res_sweep.score) > 0.3:
             composite_score = 0.7 * composite_score + 0.3 * res_sweep.score
 
         # Bound [-1.0, 1.0]
@@ -148,14 +172,14 @@ class CompositeAlphaSignal(BaseSignal):
 
         # Overall confidence across enabled signals
         enabled_confs = [
-            res.confidence for name, res in [
-                ("WOBI", res_wobi),
-                ("VOI", res_voi),
-                ("MicroPrice", res_mp),
-                ("Absorption", res_abs),
-                ("VPIN", res_vpin),
-                ("QDAP", res_qdap),
-            ] if self.is_enabled(name)
+            res.confidence for enabled, res in [
+                (en_wobi, res_wobi),
+                (en_voi, res_voi),
+                (en_mp, res_mp),
+                (en_abs, res_abs),
+                (en_vpin, res_vpin),
+                (en_qdap, res_qdap),
+            ] if enabled
         ]
         avg_confidence = (sum(enabled_confs) / len(enabled_confs)) if enabled_confs else 0.5
 

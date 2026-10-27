@@ -152,6 +152,8 @@ class EdgeEvaluator:
 
         # Rolling 3-minute price amplitude tracking for Volatility Gating
         self.rolling_prices: Deque[Tuple[int, float]] = deque()
+        self._min_price_deque: Deque[Tuple[int, float]] = deque()
+        self._max_price_deque: Deque[Tuple[int, float]] = deque()
         self.current_volatility_bps: float = 99.0
 
     def record_step(
@@ -166,28 +168,39 @@ class EdgeEvaluator:
         if mid_price <= 0:
             return
 
-        # 1. Buffer observation
-        obs = SignalObservation(
-            timestamp_ms=timestamp_ms,
-            price=mid_price,
-            signals=signals.copy(),
-        )
-        self.observations.append(obs)
-
-        # 2. Update forward returns
-        self._update_forward_returns(timestamp_ms, mid_price)
+        # 1. Buffer observation and update forward returns (bypassed if horizons_seconds is empty)
+        if self.bt_cfg.horizons_seconds:
+            obs = SignalObservation(
+                timestamp_ms=timestamp_ms,
+                price=mid_price,
+                signals=signals.copy(),
+            )
+            self.observations.append(obs)
+            self._update_forward_returns(timestamp_ms, mid_price)
 
         # 3. Update rolling 3-minute price amplitude (volatility in bps)
         self.rolling_prices.append((timestamp_ms, mid_price))
+        while self._min_price_deque and self._min_price_deque[-1][1] >= mid_price:
+            self._min_price_deque.pop()
+        self._min_price_deque.append((timestamp_ms, mid_price))
+
+        while self._max_price_deque and self._max_price_deque[-1][1] <= mid_price:
+            self._max_price_deque.pop()
+        self._max_price_deque.append((timestamp_ms, mid_price))
+
         cutoff_ms = timestamp_ms - 180_000
         while self.rolling_prices and self.rolling_prices[0][0] < cutoff_ms:
             self.rolling_prices.popleft()
+        while self._min_price_deque and self._min_price_deque[0][0] < cutoff_ms:
+            self._min_price_deque.popleft()
+        while self._max_price_deque and self._max_price_deque[0][0] < cutoff_ms:
+            self._max_price_deque.popleft()
 
         if len(self.rolling_prices) >= 15:
             if not hasattr(self, "_last_vol_calc_ms") or (timestamp_ms - self._last_vol_calc_ms) >= 1000:
                 self._last_vol_calc_ms = timestamp_ms
-                p_min = min(p for _, p in self.rolling_prices)
-                p_max = max(p for _, p in self.rolling_prices)
+                p_min = self._min_price_deque[0][1]
+                p_max = self._max_price_deque[0][1]
                 self.current_volatility_bps = ((p_max - p_min) / mid_price) * 10_000.0 if mid_price > 0 else 0.0
         else:
             self.current_volatility_bps = 99.0  # Warmup

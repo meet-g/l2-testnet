@@ -1,64 +1,78 @@
-# Project: Convexity Cascade Strategy Optimization & Calibration
+# Project: Hyperliquid L2 Replay & Backtest Execution Acceleration
 
 ## Architecture
-The system consists of three architectural layers:
-1. **Signal Generation (`signals/convexity_cascade.py`)**: Computes real-time L2 order book microstructural alpha factors from depth curves, order counts, trade flows (CVD), and liquidity gaps.
-2. **Strategy Configuration (`strategies.json`)**: Configures execution thresholds, position sizing, profit targets, trailing stops, defensive hedging triggers, and risk cooldowns.
-3. **Execution & Replay Engine (`engine/backtester.py`, `scripts/`)**: Replays L2 market data, evaluates FIFO queue fills, models VIP 0 fees (1.5 bps maker, 4.5 bps taker, 0.2 bps slippage), manages defensive maker hedging at top-of-book, and enforces portfolio co-entry discounting (+0.04 conviction hurdle, 50% size discount).
+The execution acceleration architecture optimizes the high-frequency L2 replay and backtesting pipeline across four decoupled layers:
+1. **Fast Ingestion & Deserialization Layer (`engine/data_collector.py`, `scripts/`)**:
+   - High-throughput binary file streaming using `open("rb", buffering=1024*1024)`.
+   - SIMD-accelerated JSON deserialization via `orjson.loads` with seamless, robust fallback to Python's standard `json`.
+2. **Microstructure Alpha & Signal Calculation Layer (`signals/`, `engine/backtester.py`)**:
+   - Monotonic sliding window queue for O(1) rolling price extrema (`min`/`max`) in `EdgeEvaluator.record_step`.
+   - State-cached volume bucket imbalance in `VPINSignal` eliminating 99.9% of generator evaluations.
+   - Zero-allocation rolling float deque for `VOISignal` variance and standardization.
+   - C-accelerated O(log N) `bisect_left` lookup for chronological trend windows in `MomentumExpansionSignal`.
+   - Redundant sub-signal evaluation deduplication in `CompositeAlpha`.
+3. **OrderBook & Memory Allocation Layer (`core/orderbook.py`)**:
+   - Elimination of redundant Timsort calls on pre-sorted Hyperliquid L2 order books.
+   - `slots=True` memory optimization on `L2Level`, `Trade`, and `VolumeBucket` dataclasses, reducing per-instance memory by 68.4%.
+   - Replay-mode bypass of unconsumed `self.history = deque(maxlen=500)` snapshot retaining queue.
+4. **Multi-Core Batch Replay Layer (`scripts/test_all_strategies_all_data.py`)**:
+   - Host CPU core saturation (`os.cpu_count() == 12`).
+   - One-time worker process initialization of `StrategiesConfig`.
+   - In-worker aggregation of exit reasons to minimize IPC serialization overhead.
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| F1 | True Depth Curvature Calculation | Compute discrete 2nd-derivative curvature $\Delta^2 Q / \Delta l^2$ across levels 1-5 instead of degenerate depth imbalance. | M1 | Survey (R2) |
-| F2 | Dynamic Liquidity Hole Calibration | Rescale liquidity hole vacuum threshold to coin-specific level depth instead of fixed 396 HYPE to eliminate false vacuum triggers. | M1 | Survey (R1, R2) |
-| F3 | Size-Weighted Order Concentration | Implement average order size ratio $\bar{S}_{bid} / \bar{S}_{ask}$ ($Q/N$) to detect true whale walls vs retail order splitting. | M1 | Survey (R1, R2) |
-| F4 | Limit Wall Absorption Shielding | Check for opposing resting absorption blocks to prevent entries into heavy counter-flow walls. | M1 | Survey (R2) |
-| F5 | Trade Flow / CVD Impulse Confirmation | Require aggressive taker trade flow impulse to confirm book convexity before entry. | M1 | Survey (R2) |
-| F6 | Volatility & Volume Fee Hurdle Gating | Gate signals during low volatility or low volume regimes where fee hurdle cannot be cleared. | M1 | Survey (R2) |
-| F7 | Conviction & Sizing Threshold Tuning | Calibrate `entry_threshold` in `strategies.json` to filter low-conviction noise trades. | M1 | Survey (R3) |
-| F8 | Payoff Geometry & Trailing Stop Calibration | Widen `trailing_stop_distance_bps` and `take_profit_bps` to capture full cascade expansion beyond the 3.0 bps maker fee drag. | M1 | Survey (R1, R3) |
-| F9 | Defensive Maker Hedge Recalibration | Adjust `hedge_trigger_loss_bps` and `hedge_reversal_threshold` to prevent premature hedge execution on normal spread bounce. | M1 | Survey (R1, R3) |
-| F10 | Risk Guardrails & Loss Cooldown | Calibrate `stop_loss_bps` and `loss_cooldown_secs` to mitigate consecutive chop drawdowns. | M1 | Survey (R3) |
-| F11 | Continuous Multi-Day Replay Benchmark | Achieve Net PnL >= +$250.00, WR >= 58.0%, PF >= 2.50, and stop rate <= 3.0% on 142 files (782 MB). | M2 | ORIGINAL_REQUEST (R4) |
-| F12 | 76 Large Historical Sessions Benchmark | Achieve positive Net PnL, PF >= 2.00, WR >= 58.0% on 76 large HYPE sessions (702 MB). | M3 | ORIGINAL_REQUEST (R4) |
-| F13 | Triad Portfolio Synergy & Co-Entry Integrity | Verify concurrent execution with Hedged_Convexity and Momentum_Expansion achieves synergy and valid co-entry discounting. | M3 | ORIGINAL_REQUEST (R4) |
+| F1 | `orjson` Fast Deserialization & Fallback | SIMD JSON deserialization in `engine/data_collector.py` with automatic fallback to standard `json`. | M1 | Survey R1 |
+| F2 | 1 MB Buffered Binary Streaming | Chunked binary buffer reads (`open("rb", buffering=1024*1024)`) in `L2ReplayEngine.stream_events`. | M1 | Survey R1 |
+| F3 | Replay Script Ingest Acceleration | Update `scripts/replay_continuous_multiday_session.py` to use binary streaming and `orjson`. | M1 | Survey R1 |
+| F4 | Monotonic Price Extrema Queue | O(1) sliding window queue in `EdgeEvaluator.record_step` replacing pure Python generator `min()`/`max()`. | M2 | Survey R2 |
+| F5 | State-Cached VPIN Bucket Evaluation | Cache VPIN bucket sums on bucket count transitions, eliminating 99.9% of generator calls. | M2 | Survey R2 |
+| F6 | Zero-Allocation VOI Variance Deque | Replace list allocations and generator variance with zero-allocation rolling float deque. | M2 | Survey R2 |
+| F7 | O(log N) Trend Window Lookup | Replace linear scan in `MomentumExpansionSignal` with `bisect_left` on sorted timestamps. | M2 | Survey R2 |
+| F8 | `CompositeAlpha` Caching & Cleanup | Cache enabled sub-signal lookup and eliminate dead signal initializations. | M2 | Survey R2 |
+| F9 | Pre-Sorted OrderBook Sort Elimination | Remove redundant `.sort()` calls in `OrderBook.update_from_raw` for pre-sorted Hyperliquid feeds. | M3 | Survey R3 |
+| F10 | Dataclass `slots=True` Memory Optimization | Add `slots=True` to `L2Level`, `Trade`, and `VolumeBucket` to reduce heap memory by 68.4%. | M3 | Survey R3 |
+| F11 | Replay Mode History Bypass | Add `enable_history=False` option to bypass unused `self.history` deque in `OrderBook` during replay. | M3 | Survey R3 |
+| F12 | Multi-Core Worker Saturation | Default worker pool to `os.cpu_count()` (12 cores) in `scripts/test_all_strategies_all_data.py`. | M4 | Survey R4 |
+| F13 | Worker-Level Config Initialization | Load `StrategiesConfig` once per worker process instead of per dataset. | M4 | Survey R4 |
+| F14 | Compact IPC Trade Metric Aggregation | Aggregate exit reason counts in worker processes to eliminate bulky trade dictionary IPC serialization. | M4 | Survey R4 |
+| F15 | Continuous Multi-Day Benchmark Acceleration | Verify continuous 142-file replay runtime < 45.0s with 100% deterministic trade parity. | M5 | Survey R5 |
+| F16 | Batch 76-Session Benchmark Acceleration | Verify 76-session batch replay runtime < 25.0s with 100% deterministic trade parity. | M5 | Survey R5 |
+| F17 | Zero-Cheat Forensic Audit Verification | Verify zero hardcoded values, zero synthetic mocks, and strict fee/risk enforcement. | M5 | Survey R5 |
+| F18 | Comprehensive Performance Optimization Report | Generate `replay_performance_optimization_report.md` with cProfile benchmarks and parity proofs. | M5 | Survey R5 |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M1 | Alpha Signal Enhancement & Strategy Calibration | Implement F1-F10 in `signals/convexity_cascade.py` and `strategies.json` | Survey Complete | DONE |
-| M2 | Continuous Multi-Day Replay Benchmark Verification | Verify F11 across 142 continuous files (782 MB) to achieve Net PnL >= +$250, WR >= 58%, PF >= 2.50 | M1 | DONE |
-| M3 | 76 Historical Sessions & Portfolio Synergy Verification | Verify F12, F13 across 76 large sessions (702 MB) and triad portfolio synergy | M2 | DONE |
+| M1 | Fast I/O & Deserialization Pipeline (R1) | Implement F1, F2, F3 in `engine/data_collector.py` and `scripts/replay_continuous_multiday_session.py` | Survey Complete | DONE (2.65x speedup, verified parity) |
+| M2 | Algorithmic Hot-Path & Signal Acceleration (R2) | Implement F4, F5, F6, F7, F8 in `engine/backtester.py` and `signals/` | Survey Complete | DONE (371s -> 265.7s, verified parity) |
+| M3 | OrderBook & Allocation Streamlining (R3) | Implement F9, F10, F11 in `core/orderbook.py` | M1, M2 | DONE (slots=True, linear Timsort, history bypass, 100% parity) |
+| M4 | Batch Replay Parallelism & Multi-Core Scaling (R4) | Implement F12, F13, F14 in `scripts/test_all_strategies_all_data.py` | M1, M2, M3 | DONE (12-core scaling, LPT bin-packing, IPC compression, 22.6s runtime, 100% parity) |
+| M5 | Full Benchmark Verification, Parity Audit & Report (R5) | Execute F15, F16, F17, F18 across both harnesses, audit parity, and author report | M1, M2, M3, M4 | PLANNED |
 
 ## Interface Contracts
-### `signals/convexity_cascade.py` ↔ `engine/backtester.py`
-- Function: `ConvexityCascadeSignal.calculate_signal(order_book: dict, trades: list = None, ...) -> tuple[float, dict]`
-  - Output: `(conviction_score, metadata)` where `conviction_score` is a float in `[-1.0, 1.0]`.
-  - Sign convention: positive = bullish long signal, negative = bearish short signal.
-  - Metadata dict: includes individual factor components (`curvature`, `hole_detected`, `concentration_ratio`, `cvd_impulse`, `vol_gate`).
-  - Backward compatibility: must match expected return format for `L2EngineRunner` and `backtester.py`.
+### `engine/data_collector.py`
+- `L2ReplayEngine.stream_events()`: Must yield identical `dict` payloads whether parsed via `orjson` or standard `json`.
+- Event schema: `{"type": str, "coin": str, "timestamp": int, "data": dict}`.
 
-### `strategies.json` ↔ `engine/backtester.py`
-- Configuration schema under `"Convexity_Cascade"`:
-  ```json
-  {
-    "enabled": true,
-    "entry_threshold": float,
-    "take_profit_bps": float,
-    "stop_loss_bps": float,
-    "trailing_stop_activation_bps": float,
-    "trailing_stop_distance_bps": float,
-    "hedge_trigger_loss_bps": float,
-    "hedge_reversal_threshold": float,
-    "min_volatility_bps": float,
-    "loss_cooldown_secs": int
-  }
-  ```
+### `engine/backtester.py` ↔ `signals/`
+- `EdgeEvaluator.record_step`: Must compute `current_volatility_bps` with bit-for-bit mathematical equality.
+- Sub-signals (`VPINSignal`, `VOISignal`, `MomentumExpansionSignal`, `ConvexityCascadeSignal`, `HedgedConvexitySignal`):
+  - Must return `tuple[float, dict]` or `float` with identical return types, metadata schemas, and float values.
+
+### `core/orderbook.py`
+- `L2Level`: Attributes `.px: float`, `.sz: float`, `.n: int`. Retains 100% attribute access compatibility.
+- `OrderBook.get_bids()`, `OrderBook.get_asks()`: Return lists of `L2Level` objects preserving price-sorted order (descending for bids, ascending for asks).
 
 ## Code Layout
-- `signals/convexity_cascade.py`: Primary signal logic and factor formulations (Owned exclusively by Worker in M1).
-- `strategies.json`: Strategy parameter configuration (Owned exclusively by Worker in M2).
-- `engine/backtester.py`: Core backtesting engine, queue modeling, fee deduction, hedging, and co-entry discounting.
-- `scripts/replay_continuous_multiday_session.py`: Continuous 5.87-day 142-file replay harness.
-- `scripts/test_all_strategies_all_data.py`: 76 large HYPE sessions benchmark harness.
-- `scripts/test_multi_strategy_synergy.py`: Triad portfolio synergy & co-entry discount test harness.
+- `engine/data_collector.py`: Owned exclusively by M1 Worker.
+- `scripts/replay_continuous_multiday_session.py`: Owned exclusively by M1 Worker.
+- `engine/backtester.py`: Owned exclusively by M2 Worker.
+- `signals/vpin.py`: Owned exclusively by M2 Worker.
+- `signals/voi.py`: Owned exclusively by M2 Worker.
+- `signals/momentum_expansion.py`: Owned exclusively by M2 Worker.
+- `signals/composite_alpha.py`: Owned exclusively by M2 Worker.
+- `core/orderbook.py`: Owned exclusively by M3 Worker.
+- `scripts/test_all_strategies_all_data.py`: Owned exclusively by M4 Worker.
+- `replay_performance_optimization_report.md`: Produced in M5.

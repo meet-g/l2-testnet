@@ -1,0 +1,68 @@
+{
+  "status": "APPROVED",
+  "wall_clock_seconds": 254.0,
+  "elapsed_seconds": 253.93090772628784,
+  "runtime_target_seconds": 265.0,
+  "runtime_passed": true,
+  "total_events": 1029203,
+  "total_trades": 706,
+  "total_fields_compared": 9884,
+  "discrepancy_count": 0,
+  "discrepancies": [],
+  "portfolio_net_pnl": 447.4521568890179,
+  "peak_equity": 459.22857858881423,
+  "max_drawdown": 170.1203722298392,
+  "strategy_metrics": {
+    "Hedged_Convexity": {
+      "trades": 100,
+      "wins": 65,
+      "losses": 35,
+      "win_rate_pct": 65.0,
+      "gross_pnl_usd": 368.8639229602023,
+      "fees_usd": 263.92248121315237,
+      "net_pnl_usd": 104.94144174704999,
+      "profit_factor": 3.160669406308596,
+      "exits": {
+        "TAKE_PROFIT": 12,
+        "TRAILING_STOP": 53,
+        "DEFENSIVE_MAKER_HEDGE": 27,
+        "STOP_LOSS": 5,
+        "SESSION_SHUTDOWN": 0
+      }
+    },
+    "Convexity_Cascade": {
+      "trades": 172,
+      "wins": 101,
+      "losses": 71,
+      "win_rate_pct": 58.720930232558146,
+      "gross_pnl_usd": 675.6039835166309,
+      "fees_usd": 428.4109055324774,
+      "net_pnl_usd": 247.1930779841538,
+      "profit_factor": 3.303990692677158,
+      "exits": {
+        "TAKE_PROFIT": 18,
+        "TRAILING_STOP": 82,
+        "DEFENSIVE_MAKER_HEDGE": 57,
+        "STOP_LOSS": 1,
+        "SESSION_SHUTDOWN": 0
+      }
+    },
+    "Momentum_Expansion": {
+      "trades": 434,
+      "wins": 244,
+      "losses": 190,
+      "win_rate_pct": 56.22119815668203,
+      "gross_pnl_usd": 1120.4819399429384,
+      "fees_usd": 1025.1643027851258,
+      "net_pnl_usd": 95.31763715781409,
+      "profit_factor": 2.5768152944119533,
+      "exits": {
+        "TAKE_PROFIT": 31,
+        "TRAILING_STOP": 213,
+        "DEFENSIVE_MAKER_HEDGE": 163,
+        "STOP_LOSS": 1,
+        "SESSION_SHUTDOWN": 0
+      }
+    }
+  }
+}

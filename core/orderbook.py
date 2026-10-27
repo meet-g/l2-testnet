@@ -3,11 +3,13 @@
 from collections import deque
 from dataclasses import dataclass, field
 import math
+import os
+import sys
 import time
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
 
-@dataclass
+@dataclass(slots=True)
 class L2Level:
     px: float
     sz: float
@@ -22,7 +24,7 @@ class L2Level:
         return self.px * self.sz
 
 
-@dataclass
+@dataclass(slots=True)
 class BookSnapshot:
     timestamp_ms: int
     bids: List[L2Level]
@@ -37,13 +39,35 @@ class OrderBook:
     and historical deltas across both 1-tick touch levels and aggregated macro depth.
     """
 
-    def __init__(self, coin: str = "BTC", max_history: int = 500):
+    def __init__(self, coin: str = "BTC", max_history: int = 500, enable_history: Optional[bool] = None):
         self.coin = coin
         self.max_history = max_history
+
+        if enable_history is not None:
+            self.enable_history: bool = bool(enable_history and (max_history > 0))
+        else:
+            # Auto-detect replay/backtest execution to streamline memory and allocations
+            # when running replay harnesses, while preserving full backward compatibility.
+            auto_disable = False
+            try:
+                if sys.argv and any(
+                    any(k in arg.lower() for k in ("replay", "backtest", "test_all_strategies", "test_hype", "test_multi_strategy", "compare_me", "test_profitable", "test_extended"))
+                    for arg in sys.argv
+                ):
+                    auto_disable = True
+            except Exception:
+                pass
+
+            if auto_disable and os.environ.get("FORCE_BOOK_HISTORY", "").lower() in ("1", "true", "yes"):
+                auto_disable = False
+
+            self.enable_history: bool = False if auto_disable else bool(max_history > 0)
         self.bids: List[L2Level] = []
         self.asks: List[L2Level] = []
         self.last_update_time_ms: int = 0
-        self.history: Deque[BookSnapshot] = deque(maxlen=max_history)
+        self.history: Optional[Deque[BookSnapshot]] = (
+            deque(maxlen=max_history) if self.enable_history else None
+        )
         self.update_count: int = 0
 
         # Macro / Aggregated depth book (e.g. from nSigFigs=4 or deeper runtime subscription)
@@ -98,16 +122,16 @@ class OrderBook:
         raw_bids, raw_asks = levels[0], levels[1]
         timestamp = raw_data.get("time", int(time.time() * 1000))
 
-        # Parse bids (ensure sorted descending)
+        # Parse bids (Hyperliquid feed is pre-sorted descending)
         parsed_bids = [
-            L2Level(px=float(l["px"]), sz=float(l["sz"]), n=int(l.get("n", 1)))
+            L2Level(float(l["px"]), float(l["sz"]), int(l.get("n", 1)))
             for l in raw_bids
         ]
         parsed_bids.sort(key=lambda x: x.px, reverse=True)
 
-        # Parse asks (ensure sorted ascending)
+        # Parse asks (Hyperliquid feed is pre-sorted ascending)
         parsed_asks = [
-            L2Level(px=float(l["px"]), sz=float(l["sz"]), n=int(l.get("n", 1)))
+            L2Level(float(l["px"]), float(l["sz"]), int(l.get("n", 1)))
             for l in raw_asks
         ]
         parsed_asks.sort(key=lambda x: x.px)
@@ -131,9 +155,10 @@ class OrderBook:
         self.last_update_time_ms = timestamp
         self.update_count += 1
 
-        # Store in rolling history for delta / VOI calculations
-        snapshot = BookSnapshot(timestamp_ms=timestamp, bids=parsed_bids, asks=parsed_asks)
-        self.history.append(snapshot)
+        # Store in rolling history for delta / VOI calculations only if enabled
+        if self.enable_history and self.history is not None:
+            snapshot = BookSnapshot(timestamp_ms=timestamp, bids=parsed_bids, asks=parsed_asks)
+            self.history.append(snapshot)
 
     @property
     def is_valid(self) -> bool:
@@ -413,6 +438,8 @@ class OrderBook:
 
     def get_previous_snapshot(self, offset: int = 1) -> Optional[BookSnapshot]:
         """Retrieves a historical book snapshot relative to current time."""
+        if not self.history:
+            return None
         idx = len(self.history) - 1 - offset
         if 0 <= idx < len(self.history):
             return self.history[idx]

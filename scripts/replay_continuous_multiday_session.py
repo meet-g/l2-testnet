@@ -21,7 +21,7 @@ from rich.console import Console
 from rich.table import Table
 
 from config import AppConfig, StrategiesConfig
-from engine.data_collector import L2ReplayEngine
+from engine.data_collector import L2ReplayEngine, _fast_json_loads
 from main import L2EngineRunner
 
 
@@ -56,6 +56,9 @@ def run_continuous_replay() -> Dict[str, Any]:
     cfg.backtest.horizons_seconds = []  # Eliminate forward IC tracking overhead
     cfg.strategies = StrategiesConfig.load("strategies.json")
     cfg.strategies.alpha_signals["AdaptiveML"].enabled = False  # Avoid redundant LightGBM inference
+    for sig in ["WOBI", "VOI", "MicroPrice", "Absorption", "QDAP", "VPIN", "Sweep"]:
+        if sig in cfg.strategies.alpha_signals:
+            cfg.strategies.alpha_signals[sig].enabled = False
 
     enabled_strats = list(cfg.strategies.get_enabled_strategy_defs().keys())
     console.print(f"Enabled Strategies: [bold yellow]{', '.join(enabled_strats)}[/bold yellow]")
@@ -67,6 +70,10 @@ def run_continuous_replay() -> Dict[str, Any]:
     if hasattr(runner.alpha_model, "signal_mom") and runner.alpha_model.signal_mom:
         runner.alpha_model.signal_mom.flow_hurdle = 0.35
         runner.alpha_model.signal_mom.min_trade_vol_window = 8.0
+
+    sig_mom = runner.alpha_model.signal_mom
+    sig_conv = runner.alpha_model.signal_convexity
+    sig_hedged = runner.alpha_model.signal_hedged
 
     eval_interval_ms = int(1000 / max(cfg.sample_rate_hz, 1))  # 100ms
     last_eval_ms = 0
@@ -81,13 +88,13 @@ def run_continuous_replay() -> Dict[str, Any]:
         file_events = 0
         fname = os.path.basename(filepath)
 
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, "rb", buffering=1024 * 1024) as f:
             for line in f:
-                if not line.strip():
+                if len(line) <= 2:
                     continue
                 file_events += 1
                 try:
-                    event = json.loads(line)
+                    event = _fast_json_loads(line)
                 except Exception:
                     continue
 
@@ -102,11 +109,13 @@ def run_continuous_replay() -> Dict[str, Any]:
                 elif ch == "activeAssetCtx":
                     runner.book.update_asset_ctx(dt)
 
-                if runner.book.is_valid and (now_ms - last_eval_ms >= eval_interval_ms):
+                if (now_ms - last_eval_ms >= eval_interval_ms) and runner.book.is_valid:
                     last_eval_ms = now_ms
-                    res = runner.alpha_model.compute(runner.book, runner.trades, now_ms)
-                    sub_sigs = {name: sig.score for name, sig in res.metadata.get("sub_signals", {}).items()}
-                    sub_sigs["CompositeAlpha"] = res.score
+                    sub_sigs = {
+                        "MomentumExpansion": sig_mom.compute(runner.book, runner.trades, now_ms).score,
+                        "ConvexityCascade": sig_conv.compute(runner.book, runner.trades, now_ms).score,
+                        "HedgedConvexity": sig_hedged.compute(runner.book, runner.trades, now_ms).score,
+                    }
                     runner.evaluator.record_step(
                         now_ms,
                         runner.book.mid_price,

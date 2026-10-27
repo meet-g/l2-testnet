@@ -4,14 +4,14 @@ dual-horizon CVD acceleration, and active absorption trap protection to capture
 structural momentum expansions while rigorously overcoming exchange fee hurdles.
 """
 
+import bisect
 from collections import deque
 import math
-from typing import Any, Deque, Dict, Optional, Tuple
+from typing import Any, Deque, Dict, List, Optional, Tuple
 
 from core.orderbook import OrderBook
 from core.trade_stream import TradeManager
 from signals.base import BaseSignal, SignalResult
-from signals.qdap import QDAPSignal
 from signals.vpin import VPINSignal
 
 
@@ -54,9 +54,9 @@ class MomentumExpansionSignal(BaseSignal):
         self.flow_hurdle = flow_hurdle
         self.min_trade_vol_window = min_trade_vol_window
 
-        self.qdap = QDAPSignal()
         self.vpin = VPINSignal()
-        self.price_history: Deque[Tuple[int, float]] = deque()
+        self.price_history: List[Tuple[int, float]] = []
+        self._head_idx: int = 0
         self.depth_history: Deque[Tuple[int, float, float]] = deque(maxlen=60)
 
     def compute(
@@ -75,8 +75,12 @@ class MomentumExpansionSignal(BaseSignal):
 
         # Evict history beyond 10 minutes
         cutoff_ms = now_ms - 600_000
-        while self.price_history and self.price_history[0][0] < cutoff_ms:
-            self.price_history.popleft()
+        while self._head_idx < len(self.price_history) and self.price_history[self._head_idx][0] < cutoff_ms:
+            self._head_idx += 1
+
+        if self._head_idx > 1000:
+            self.price_history = self.price_history[self._head_idx:]
+            self._head_idx = 0
 
         bids = book.bids
         asks = book.asks
@@ -181,11 +185,11 @@ class MomentumExpansionSignal(BaseSignal):
         # 3. Medium-Term Trend Alignment (2-minute price drift)
         # ---------------------------------------------------------------------
         trend_cutoff = now_ms - int(self.trend_window_secs * 1000)
-        past_price = self.price_history[0][1]
-        for t, p in self.price_history:
-            if t >= trend_cutoff:
-                past_price = p
-                break
+        idx = bisect.bisect_left(self.price_history, (trend_cutoff, -1.0), lo=self._head_idx)
+        if idx < len(self.price_history):
+            past_price = self.price_history[idx][1]
+        else:
+            past_price = self.price_history[self._head_idx][1]
         if past_price > 0:
             trend_bps = ((mid_price - past_price) / past_price) * 10_000.0
             trend_score = math.tanh(trend_bps / max(self.trend_scale_bps, 1.0))

@@ -43,7 +43,8 @@ class VOISignal(BaseSignal):
         self.prev_ask_px: float = 0.0
         self.prev_ask_sz: float = 0.0
 
-        self.voi_history: Deque[Tuple[int, float]] = deque(maxlen=history_window)
+        self.voi_history: Deque[float] = deque(maxlen=history_window)
+        self.recent_30: Deque[float] = deque(maxlen=30)
         self.rolling_voi_sum: float = 0.0
 
     def compute(
@@ -95,27 +96,28 @@ class VOISignal(BaseSignal):
         self.prev_ask_sz = curr_ask_sz
 
         # Store in rolling window
-        self.voi_history.append((now_ms, instant_voi))
+        self.voi_history.append(instant_voi)
+        self.recent_30.append(instant_voi)
 
         # Calculate rolling VOI over recent snapshots (e.g. last 30 snapshots)
-        recent_values = [v for _, v in list(self.voi_history)[-30:]]
-        cum_voi = sum(recent_values)
+        cum_voi = sum(self.recent_30)
+        n_recent = len(self.recent_30)
+        n_all = len(self.voi_history)
 
         # Standardize via rolling mean and standard deviation
-        if len(self.voi_history) >= 15:
-            all_values = [v for _, v in self.voi_history]
-            mean_v = sum(all_values) / len(all_values)
-            variance = sum((x - mean_v) ** 2 for x in all_values) / len(all_values)
+        if n_all >= 15:
+            mean_v = sum(self.voi_history) / n_all
+            variance = sum((x - mean_v) ** 2 for x in self.voi_history) / n_all
             std_v = math.sqrt(variance) if variance > 1e-6 else 1.0
 
-            z_score = (cum_voi - mean_v) / (std_v * math.sqrt(len(recent_values)))
+            z_score = (cum_voi - mean_v) / (std_v * math.sqrt(n_recent))
             z_score = max(-self.z_score_clip, min(self.z_score_clip, z_score))
             # Smoothly map to [-1.0, 1.0] using tanh
             score = math.tanh(z_score / 1.5)
-            confidence = min(1.0, len(self.voi_history) / self.history_window)
+            confidence = min(1.0, n_all / self.history_window)
         else:
             score = math.tanh(cum_voi / 2.0)
-            confidence = len(self.voi_history) / 30.0
+            confidence = n_all / 30.0
 
         return SignalResult(
             name=self.name,

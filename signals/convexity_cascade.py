@@ -16,8 +16,9 @@ to decisively overcome Hyperliquid's 3.0 bps VIP 0 round-trip maker fee hurdle.
 """
 
 from collections import deque
+import bisect
 import math
-from typing import Any, Deque, Dict, Optional, Tuple
+from typing import Any, Deque, Dict, List, Optional, Tuple
 
 from core.orderbook import OrderBook
 from core.trade_stream import TradeManager
@@ -63,7 +64,8 @@ class ConvexityCascadeSignal(BaseSignal):
 
         self.vpin_signal = VPINSignal()
         self.depth_history: Deque[Tuple[int, float, float]] = deque(maxlen=60)
-        self.price_history: Deque[Tuple[int, float]] = deque(maxlen=600)
+        self.price_history: List[Tuple[int, float]] = []
+        self._head_idx: int = 0
 
     def compute(
         self,
@@ -175,11 +177,19 @@ class ConvexityCascadeSignal(BaseSignal):
         # Macro Trend Alignment (2-minute price drift)
         self.price_history.append((now_ms, mid))
         cutoff_ms = now_ms - 600_000
-        while self.price_history and self.price_history[0][0] < cutoff_ms:
-            self.price_history.popleft()
+        while self._head_idx < len(self.price_history) and self.price_history[self._head_idx][0] < cutoff_ms:
+            self._head_idx += 1
+
+        if self._head_idx > 1000:
+            self.price_history = self.price_history[self._head_idx:]
+            self._head_idx = 0
 
         trend_cutoff = now_ms - 120_000
-        past_p = next((p for t, p in self.price_history if t >= trend_cutoff), self.price_history[0][1])
+        idx = bisect.bisect_left(self.price_history, (trend_cutoff, -1.0), lo=self._head_idx)
+        if idx < len(self.price_history):
+            past_p = self.price_history[idx][1]
+        else:
+            past_p = self.price_history[self._head_idx][1]
         trend_bps = ((mid - past_p) / past_p) * 10_000.0 if past_p > 0 else 0.0
         trend_score = math.tanh(trend_bps / 6.0)
 

@@ -7,6 +7,26 @@ import time
 from typing import Any, Callable, Dict, Generator, List, Optional
 import websockets
 
+try:
+    import orjson
+
+    def _fast_json_loads(data: Any) -> Any:
+        return orjson.loads(data)
+
+    def _fast_json_dumps(obj: Any) -> bytes:
+        return orjson.dumps(obj)
+
+    HAS_ORJSON = True
+except ImportError:
+    def _fast_json_loads(data: Any) -> Any:
+        return json.loads(data)
+
+    def _fast_json_dumps(obj: Any) -> bytes:
+        return json.dumps(obj).encode("utf-8")
+
+    HAS_ORJSON = False
+
+
 
 class L2DataRecorder:
     """High-throughput L2 data recorder with automatic hourly file rotation and buffered disk writes."""
@@ -49,7 +69,7 @@ class L2DataRecorder:
         if not self.rotate_hourly:
             if not self.file_handle:
                 self.filepath = self._get_filename_for_now()
-                self.file_handle = open(self.filepath, "a", encoding="utf-8", buffering=64 * 1024)
+                self.file_handle = open(self.filepath, "ab", buffering=64 * 1024)
             return
 
         if now_sec >= self._next_rotate_ts:
@@ -58,7 +78,7 @@ class L2DataRecorder:
                 self.close()
                 self.current_hour_str = now_hour
                 self.filepath = self._get_filename_for_now()
-                self.file_handle = open(self.filepath, "a", encoding="utf-8", buffering=64 * 1024)
+                self.file_handle = open(self.filepath, "ab", buffering=64 * 1024)
                 self.record_count = 0
                 self._next_rotate_ts = ((int(now_sec) // 3600) + 1) * 3600
 
@@ -71,11 +91,14 @@ class L2DataRecorder:
             "channel": channel,
             "data": data,
         }
-        line = json.dumps(payload) + "\n"
-        self.file_handle.write(line)
+        line_bytes = _fast_json_dumps(payload) + b"\n"
+        if "b" in getattr(self.file_handle, "mode", "b"):
+            self.file_handle.write(line_bytes)
+        else:
+            self.file_handle.write(line_bytes.decode("utf-8"))
         self.record_count += 1
         self.total_records += 1
-        self.bytes_written += len(line.encode("utf-8"))
+        self.bytes_written += len(line_bytes)
 
         if channel == "trades":
             self.trades_count += len(data) if isinstance(data, list) else 1
@@ -161,7 +184,7 @@ class ContinuousCollectorDaemon:
                         while self.is_running and (time.time() - start_time) < max_secs:
                             try:
                                 msg_str = await asyncio.wait_for(ws.recv(), timeout=2.0)
-                                msg = json.loads(msg_str)
+                                msg = _fast_json_loads(msg_str)
                                 ch = msg.get("channel")
                                 if ch == "pong":
                                     continue
@@ -209,9 +232,10 @@ class L2ReplayEngine:
     2. TickFoundry / Hyperliquid Parquet archives (directories containing hl_l2, hl_trades)
     """
 
-    def __init__(self, filepath: str, speed_multiplier: float = 1.0):
+    def __init__(self, filepath: str, speed_multiplier: float = 1.0, buffer_size: int = 1024 * 1024):
         self.filepath = filepath
         self.speed_multiplier = speed_multiplier
+        self.buffer_size = buffer_size
         self._resolve_filepath()
 
     def _resolve_filepath(self) -> None:
@@ -244,6 +268,18 @@ class L2ReplayEngine:
                     self.filepath = candidate
                     return
 
+    @staticmethod
+    def fast_iter_jsonl(filepath: str, buffer_size: int = 1024 * 1024) -> Generator[Dict[str, Any], None, None]:
+        """Streams parsed JSON objects directly from a binary buffered file handle."""
+        with open(filepath, "rb", buffering=buffer_size) as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    yield _fast_json_loads(line)
+                except Exception:
+                    continue
+
     def stream_events(self) -> Generator[dict, None, None]:
         """Yields recorded events maintaining relative time offsets."""
         import glob
@@ -268,11 +304,11 @@ class L2ReplayEngine:
                 raise FileNotFoundError(f"No recording files matching pattern: {self.filepath}")
             prev_ts = None
             for fpath in matched_files:
-                with open(fpath, "r", encoding="utf-8") as f:
+                with open(fpath, "rb", buffering=self.buffer_size) as f:
                     for line in f:
                         if not line.strip():
                             continue
-                        event = json.loads(line)
+                        event = _fast_json_loads(line)
                         ts = event.get("recv_ts", 0)
                         if prev_ts is not None and 0 < self.speed_multiplier < 1000:
                             delay_ms = (ts - prev_ts) / self.speed_multiplier
@@ -297,11 +333,11 @@ class L2ReplayEngine:
             if jsonl_files and not has_parquet:
                 prev_ts = None
                 for fpath in jsonl_files:
-                    with open(fpath, "r", encoding="utf-8") as f:
+                    with open(fpath, "rb", buffering=self.buffer_size) as f:
                         for line in f:
                             if not line.strip():
                                 continue
-                            event = json.loads(line)
+                            event = _fast_json_loads(line)
                             ts = event.get("recv_ts", 0)
                             if prev_ts is not None and 0 < self.speed_multiplier < 1000:
                                 delay_ms = (ts - prev_ts) / self.speed_multiplier
@@ -318,11 +354,11 @@ class L2ReplayEngine:
 
         # 4. Single JSONL file
         prev_ts = None
-        with open(self.filepath, "r", encoding="utf-8") as f:
+        with open(self.filepath, "rb", buffering=self.buffer_size) as f:
             for line in f:
                 if not line.strip():
                     continue
-                event = json.loads(line)
+                event = _fast_json_loads(line)
                 ts = event.get("recv_ts", 0)
 
                 if prev_ts is not None and 0 < self.speed_multiplier < 1000:
