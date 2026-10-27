@@ -827,6 +827,7 @@ if __name__ == "__main__":
     parser.add_argument("--workers", type=int, default=0, help="Multiprocessing workers (0 = auto-detect all host CPU cores)")
     parser.add_argument("--verify-baseline", action="store_true", help="Assert deterministic parity against 76-session HYPE baseline")
     parser.add_argument("--baseline-file", type=str, default="audits/hype_76_sessions_benchmark.json", help="Path to baseline benchmark JSON")
+    parser.add_argument("--output-json", type=str, default="", help="Path to save summary result JSON")
     args = parser.parse_args()
 
     if args.verify_baseline:
@@ -843,6 +844,11 @@ if __name__ == "__main__":
         verify_baseline=args.verify_baseline,
         baseline_path=args.baseline_file,
     )
+
+    if args.output_json and summary:
+        with open(args.output_json, "w") as f:
+            json.dump(summary, f, indent=2, default=str)
+        print(f"Summary JSON saved to {args.output_json}")
 
     if args.verify_baseline:
         if summary and summary.get("comb_trades") == 873 and abs(summary.get("comb_net", 0.0) - 1103.18) < 0.05:

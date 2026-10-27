@@ -256,15 +256,15 @@ class ConvexityCascadeSignal(BaseSignal):
         # ---------------------------------------------------------------------
         # Protect passive maker entries from informed adverse selection
         if raw_alpha > 0 and vpin_score < -0.20:
-            adverse_drag = min(1.0, abs(vpin_score) / 0.50)
-            raw_alpha *= (1.0 - 0.70 * adverse_drag)
-            if vpin_score < -0.45:
-                raw_alpha = min(raw_alpha, 0.0)
+            adverse_drag = min(1.0, abs(vpin_score) / 0.45)
+            raw_alpha *= (1.0 - 0.75 * adverse_drag)
+            if vpin_score < -0.35:
+                raw_alpha = min(raw_alpha, 0.05)
         elif raw_alpha < 0 and vpin_score > 0.20:
-            adverse_drag = min(1.0, abs(vpin_score) / 0.50)
-            raw_alpha *= (1.0 - 0.70 * adverse_drag)
-            if vpin_score > 0.45:
-                raw_alpha = max(raw_alpha, 0.0)
+            adverse_drag = min(1.0, abs(vpin_score) / 0.45)
+            raw_alpha *= (1.0 - 0.75 * adverse_drag)
+            if vpin_score > 0.35:
+                raw_alpha = max(raw_alpha, -0.05)
 
         # Extreme Choppy Toxicity Gate: When unsigned VPIN is extreme without clear direction
         toxic_ceiling = 0.88 if is_btc else 0.75

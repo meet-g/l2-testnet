@@ -224,17 +224,17 @@ class HedgedConvexitySignal(BaseSignal):
         # A. Adverse Toxic Flow: Protect passive maker entries from adverse selection
         if raw_alpha > 0 and vpin_score < -0.20:
             # Informed selling threatens maker buy order
-            adverse_drag = min(1.0, abs(vpin_score) / 0.50)
-            raw_alpha *= (1.0 - 0.50 * adverse_drag)
-            # If adverse selling is acute, flip negative to arm defensive maker hedge
-            if vpin_score < -0.45:
-                raw_alpha = min(raw_alpha, vpin_score)
+            adverse_drag = min(1.0, abs(vpin_score) / 0.45)
+            raw_alpha *= (1.0 - 0.75 * adverse_drag)
+            # If adverse selling is acute, drop score below hedge threshold (0.20) to arm defensive maker hedge
+            if vpin_score < -0.35:
+                raw_alpha = min(raw_alpha, 0.10)
         elif raw_alpha < 0 and vpin_score > 0.20:
             # Informed buying threatens maker sell order
-            adverse_drag = min(1.0, abs(vpin_score) / 0.50)
-            raw_alpha *= (1.0 - 0.50 * adverse_drag)
-            if vpin_score > 0.45:
-                raw_alpha = max(raw_alpha, vpin_score)
+            adverse_drag = min(1.0, abs(vpin_score) / 0.45)
+            raw_alpha *= (1.0 - 0.75 * adverse_drag)
+            if vpin_score > 0.35:
+                raw_alpha = max(raw_alpha, -0.10)
 
         # B. Extreme Choppy Toxicity Gate: When unsigned VPIN is extreme without clear direction
         toxic_ceiling = 0.88 if is_btc else 0.75

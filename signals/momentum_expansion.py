@@ -257,6 +257,19 @@ class MomentumExpansionSignal(BaseSignal):
         if is_toxic:
             raw_score = max(-0.30, min(0.30, raw_score * 0.15))
 
+        # Directional Toxicity Shield: Protect passive maker entries from informed adverse selection
+        vpin_score = vpin_res.score
+        if raw_score > 0 and vpin_score < -0.20:
+            adverse_drag = min(1.0, abs(vpin_score) / 0.45)
+            raw_score *= (1.0 - 0.75 * adverse_drag)
+            if vpin_score < -0.35:
+                raw_score = min(raw_score, 0.10)
+        elif raw_score < 0 and vpin_score > 0.20:
+            adverse_drag = min(1.0, abs(vpin_score) / 0.45)
+            raw_score *= (1.0 - 0.75 * adverse_drag)
+            if vpin_score > 0.35:
+                raw_score = max(raw_score, -0.10)
+
         # Depth Fragility Shield: if resting wall was rapidly pulled (spoof decay), dampen alpha
         if (raw_score > 0 and wall_drop_b) or (raw_score < 0 and wall_drop_a):
             raw_score = max(-0.30, min(0.30, raw_score * 0.20))
