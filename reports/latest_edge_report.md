@@ -2,41 +2,43 @@
 
 - **Network**: Hyperliquid Mainnet
 - **Asset**: HYPE-PERP
-- **Timestamp**: 2026-10-26 13:58:56
-- **Mid Price**: $76.84
-- **Book Spread**: $0.00 (0.39 bps)
-- **Total Cumulative CVD**: +1084.9000 HYPE
+- **Timestamp**: 2026-10-27 22:22:21
+- **Mid Price**: $81.18
+- **Book Spread**: $0.00 (0.12 bps)
+- **Total Cumulative CVD**: +778723.8900 HYPE
 
 ## 1. Paper-Trading Performance Summary
 
 | Strategy | Trades | Win Rate | Gross PnL ($) | Net Fees ($) | Net PnL ($) | Profit Factor | Sharpe Ratio | Max Drawdown ($) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| Hedged_Convexity | 2 | 50.0% | $-1.60 | -$5.10 | $-6.70 | 0.31 | -317.27 | $10.94 |
-| Momentum_Expansion | 15 | 60.0% | $+51.57 | -$38.25 | $+13.33 | 1.35 | 82.67 | $32.53 |
+| Hedged_Convexity | 36 | 52.8% | $+82.08 | -$98.18 | $-16.10 | 0.90 | 16.79 | $63.40 |
+| Convexity_Cascade | 48 | 37.5% | $+69.33 | -$122.41 | $-53.08 | 0.74 | -67.43 | $100.58 |
+| Momentum_Expansion | 133 | 54.1% | $+322.94 | -$318.76 | $+4.18 | 1.01 | -1.33 | $106.01 |
 
 ## 2. Predictive Edge Matrix (Information Coefficient & Directional Hit Rate)
 
 | Signal Factor | 1s IC | 1s Hit% | 3s IC | 3s Hit% | 5s IC | 5s Hit% | 10s IC | 10s Hit% | 30s IC | 30s Hit% | 60s IC | 60s Hit% |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| Hedged_Convexity | +0.084 | 10.7% | +0.133 | 30.7% | +0.157 | 50.7% | +0.120 | 54.4% | +0.046 | 54.2% | -0.018 | 53.0% |
-| Momentum_Expansion | +0.051 | 11.3% | +0.085 | 32.2% | +0.113 | 53.6% | +0.056 | 55.9% | +0.029 | 57.0% | +0.075 | 54.5% |
+| Hedged_Convexity | +0.122 | 8.3% | +0.207 | 23.3% | +0.262 | 38.8% | +0.242 | 48.8% | +0.100 | 54.9% | +0.035 | 53.3% |
+| Convexity_Cascade | +0.114 | 8.2% | +0.186 | 23.3% | +0.231 | 38.7% | +0.206 | 49.8% | +0.139 | 54.9% | +0.040 | 52.8% |
+| Momentum_Expansion | +0.100 | 9.0% | +0.174 | 25.3% | +0.229 | 42.0% | +0.221 | 51.4% | +0.192 | 58.3% | +0.104 | 54.7% |
 
 ## 3. Position Trade Log (Executed Positions)
 
 | Exit Time | Strategy | Side & Size | Exit Price | Exec Type | Exit Reason | Net PnL ($) | Return (bps) |
 | :--- | :--- | :---: | :---: | :---: | :--- | :---: | :---: |
-| 13:23:35 | Momentum_Expansion | SHORT 109.86 BTC | $77.4 | MAKER | DEFENSIVE_MAKER_HEDGE | $-7.27 | -8.6 bps |
-| 13:27:06 | Momentum_Expansion | SHORT 109.98 BTC | $77.3 | MAKER | DEFENSIVE_MAKER_HEDGE | $-7.28 | -8.6 bps |
-| 13:31:14 | Momentum_Expansion | SHORT 109.94 BTC | $77.3 | MAKER | DEFENSIVE_MAKER_HEDGE | $-6.07 | -7.1 bps |
-| 13:36:42 | Momentum_Expansion | LONG 109.95 BTC | $77.3 | MAKER | DEFENSIVE_MAKER_HEDGE | $-5.74 | -6.8 bps |
-| 13:41:48 | Momentum_Expansion | SHORT 109.71 BTC | $77.4 | MAKER | TRAILING_STOP | $+9.58 | +11.3 bps |
-| 13:43:36 | Momentum_Expansion | SHORT 109.96 BTC | $77.2 | MAKER | TRAILING_STOP | $+8.95 | +10.5 bps |
-| 13:45:56 | Momentum_Expansion | LONG 109.88 BTC | $77.4 | MAKER | TRAILING_STOP | $+3.99 | +4.7 bps |
-| 13:48:22 | Hedged_Convexity | SHORT 110.25 BTC | $77.2 | MAKER | DEFENSIVE_MAKER_HEDGE | $-9.72 | -11.4 bps |
-| 13:49:58 | Momentum_Expansion | SHORT 110.15 BTC | $77.1 | MAKER | TRAILING_STOP | $+0.60 | +0.7 bps |
-| 13:50:46 | Momentum_Expansion | LONG 110.05 BTC | $77.2 | MAKER | DEFENSIVE_MAKER_HEDGE | $-5.63 | -6.6 bps |
-| 13:53:49 | Momentum_Expansion | SHORT 110.20 BTC | $77.0 | MAKER | TRAILING_STOP | $+8.70 | +10.2 bps |
-| 13:54:37 | Momentum_Expansion | SHORT 110.33 BTC | $77.0 | MAKER | TRAILING_STOP | $+5.96 | +7.0 bps |
-| 13:56:41 | Momentum_Expansion | SHORT 110.53 BTC | $76.8 | MAKER | TRAILING_STOP | $+9.07 | +10.7 bps |
-| 13:57:40 | Hedged_Convexity | SHORT 110.85 BTC | $76.6 | MAKER | TRAILING_STOP | $+3.01 | +3.5 bps |
-| 13:58:05 | Momentum_Expansion | SHORT 110.84 BTC | $76.7 | MAKER | DEFENSIVE_MAKER_HEDGE | $-6.32 | -7.4 bps |
+| 19:56:08 | Convexity_Cascade | SHORT 104.45 BTC | $81.3 | MAKER | TRAILING_STOP | $+8.11 | +9.5 bps |
+| 19:59:44 | Momentum_Expansion | LONG 104.55 BTC | $81.3 | MAKER | PROFIT_DECAY_EXIT | $-2.45 | -2.9 bps |
+| 20:06:34 | Momentum_Expansion | SHORT 104.69 BTC | $81.2 | MAKER | TRAILING_STOP | $+0.72 | +0.9 bps |
+| 20:10:51 | Momentum_Expansion | SHORT 104.74 BTC | $81.1 | MAKER | PROFIT_DECAY_EXIT | $-2.13 | -2.5 bps |
+| 20:17:17 | Momentum_Expansion | LONG 104.76 BTC | $81.3 | MAKER | TRAILING_STOP | $+9.68 | +11.4 bps |
+| 20:22:25 | Momentum_Expansion | SHORT 104.83 BTC | $81.1 | MAKER | DEFENSIVE_MAKER_HEDGE | $-6.32 | -7.4 bps |
+| 20:31:34 | Momentum_Expansion | SHORT 104.93 BTC | $81.0 | MAKER | TRAILING_STOP | $+1.16 | +1.4 bps |
+| 20:50:58 | Momentum_Expansion | LONG 104.81 BTC | $81.1 | MAKER | DEFENSIVE_MAKER_HEDGE | $-6.11 | -7.2 bps |
+| 21:26:52 | Momentum_Expansion | LONG 105.25 BTC | $80.8 | MAKER | TRAILING_STOP | $+5.06 | +6.0 bps |
+| 21:33:33 | Momentum_Expansion | LONG 104.53 BTC | $81.5 | MAKER | TAKE_PROFIT | $+14.69 | +17.3 bps |
+| 21:35:36 | Hedged_Convexity | LONG 104.24 BTC | $81.5 | MAKER | DEFENSIVE_MAKER_HEDGE | $-7.97 | -9.4 bps |
+| 21:43:07 | Momentum_Expansion | SHORT 104.39 BTC | $81.4 | MAKER | TRAILING_STOP | $+2.07 | +2.4 bps |
+| 21:46:15 | Momentum_Expansion | SHORT 104.54 BTC | $81.3 | MAKER | DEFENSIVE_MAKER_HEDGE | $-6.63 | -7.8 bps |
+| 22:01:35 | Momentum_Expansion | SHORT 104.93 BTC | $81.0 | MAKER | DEFENSIVE_MAKER_HEDGE | $-5.49 | -6.5 bps |
+| 22:07:35 | Convexity_Cascade | SHORT 104.89 BTC | $81.0 | MAKER | PROFIT_DECAY_EXIT | $-3.28 | -3.9 bps |

@@ -1,0 +1,452 @@
+{
+  "benchmark_timestamp_utc": "2026-10-27T22:33:27Z",
+  "target_session_id": "session_20261026_135859_607_e404",
+  "session_files_count": 33,
+  "session_total_mb": 185.40922164916992,
+  "runs": {
+    "current_triad": {
+      "mode": "CURRENT",
+      "runtime_secs": 43.043962717056274,
+      "total_events": 248983,
+      "active_strats": [
+        "Convexity_Cascade",
+        "Momentum_Expansion",
+        "Hedged_Convexity"
+      ],
+      "strategies": {
+        "Convexity_Cascade": {
+          "trades": 45,
+          "wins": 18,
+          "losses": 27,
+          "win_rate_pct": 40.0,
+          "gross_pnl_usd": 55.20174103625081,
+          "fees_usd": 109.66155787842766,
+          "net_pnl_usd": -54.45981684217686,
+          "profit_factor": 1.5148659405218103,
+          "max_drawdown_usd": 75.88815639325045,
+          "avg_return_bps": -0.9046083403507388,
+          "exits": {
+            "PROFIT_DECAY_EXIT": 6,
+            "DEFENSIVE_MAKER_HEDGE": 20,
+            "TAKE_PROFIT": 2,
+            "TRAILING_STOP": 16,
+            "STOP_LOSS": 1
+          }
+        },
+        "Momentum_Expansion": {
+          "trades": 130,
+          "wins": 72,
+          "losses": 58,
+          "win_rate_pct": 55.38461538461539,
+          "gross_pnl_usd": 394.88662145351225,
+          "fees_usd": 313.6669814024739,
+          "net_pnl_usd": 81.21964005103854,
+          "profit_factor": 2.843081051936504,
+          "max_drawdown_usd": 79.41595310204912,
+          "avg_return_bps": 0.5105243416461117,
+          "exits": {
+            "TRAILING_STOP": 63,
+            "TAKE_PROFIT": 9,
+            "DEFENSIVE_MAKER_HEDGE": 52,
+            "PROFIT_DECAY_EXIT": 6
+          }
+        },
+        "Hedged_Convexity": {
+          "trades": 35,
+          "wins": 18,
+          "losses": 17,
+          "win_rate_pct": 51.42857142857142,
+          "gross_pnl_usd": 73.40669159739724,
+          "fees_usd": 98.1779899431207,
+          "net_pnl_usd": -24.771298345723515,
+          "profit_factor": 1.6470122331743813,
+          "max_drawdown_usd": 71.65632372594602,
+          "avg_return_bps": 0.10179923382066376,
+          "exits": {
+            "TRAILING_STOP": 11,
+            "DEFENSIVE_MAKER_HEDGE": 11,
+            "TAKE_PROFIT": 7,
+            "STOP_LOSS": 5,
+            "PROFIT_DECAY_EXIT": 1
+          }
+        }
+      },
+      "portfolio": {
+        "trades": 210,
+        "wins": 108,
+        "losses": 102,
+        "win_rate_pct": 51.42857142857142,
+        "gross_pnl_usd": 523.4950540871603,
+        "fees_usd": 521.5065292240222,
+        "net_pnl_usd": 1.98852486313816,
+        "profit_factor": 2.2036467547348586,
+        "co_entry_count": 23,
+        "co_entry_win_rate": 47.82608695652174,
+        "co_entry_net_pnl": 22.850802068325294,
+        "iso_count": 187,
+        "iso_win_rate": 51.87165775401069,
+        "iso_net_pnl": -20.862277205187166
+      }
+    },
+    "old_triad": {
+      "mode": "OLD",
+      "runtime_secs": 54.59143805503845,
+      "total_events": 248983,
+      "active_strats": [
+        "Convexity_Cascade",
+        "Momentum_Expansion",
+        "Hedged_Convexity"
+      ],
+      "strategies": {
+        "Convexity_Cascade": {
+          "trades": 46,
+          "wins": 24,
+          "losses": 22,
+          "win_rate_pct": 52.17391304347826,
+          "gross_pnl_usd": 106.05477837370066,
+          "fees_usd": 128.78525673163935,
+          "net_pnl_usd": -22.73047835793868,
+          "profit_factor": 1.9737151312174708,
+          "max_drawdown_usd": 70.94855464820239,
+          "avg_return_bps": -0.9393645435252685,
+          "exits": {
+            "DEFENSIVE_MAKER_HEDGE": 9,
+            "TAKE_PROFIT": 2,
+            "STOP_LOSS": 7,
+            "TRAILING_STOP": 22,
+            "PROFIT_DECAY_EXIT": 4,
+            "TIME_LIMIT": 2
+          }
+        },
+        "Momentum_Expansion": {
+          "trades": 153,
+          "wins": 94,
+          "losses": 59,
+          "win_rate_pct": 61.43790849673203,
+          "gross_pnl_usd": 512.6774928154977,
+          "fees_usd": 413.1230007408009,
+          "net_pnl_usd": 99.55449207469646,
+          "profit_factor": 2.580386917653194,
+          "max_drawdown_usd": 62.29818336742384,
+          "avg_return_bps": 0.8956519072855567,
+          "exits": {
+            "STOP_LOSS": 18,
+            "DEFENSIVE_MAKER_HEDGE": 29,
+            "TAKE_PROFIT": 16,
+            "TRAILING_STOP": 78,
+            "PROFIT_DECAY_EXIT": 8,
+            "TIME_LIMIT": 4
+          }
+        },
+        "Hedged_Convexity": {
+          "trades": 31,
+          "wins": 17,
+          "losses": 14,
+          "win_rate_pct": 54.83870967741935,
+          "gross_pnl_usd": 53.86772235220161,
+          "fees_usd": 90.51867454173352,
+          "net_pnl_usd": -36.65095218953188,
+          "profit_factor": 1.5577148713068647,
+          "max_drawdown_usd": 89.64819132381584,
+          "avg_return_bps": 0.18488465891016315,
+          "exits": {
+            "TRAILING_STOP": 10,
+            "TAKE_PROFIT": 7,
+            "STOP_LOSS": 7,
+            "DEFENSIVE_MAKER_HEDGE": 4,
+            "TIME_LIMIT": 1,
+            "PROFIT_DECAY_EXIT": 2
+          }
+        }
+      },
+      "portfolio": {
+        "trades": 230,
+        "wins": 135,
+        "losses": 95,
+        "win_rate_pct": 58.69565217391305,
+        "gross_pnl_usd": 672.5999935414,
+        "fees_usd": 632.4269320141738,
+        "net_pnl_usd": 40.1730615272259,
+        "profit_factor": 2.2692861621151104,
+        "co_entry_count": 25,
+        "co_entry_win_rate": 68.0,
+        "co_entry_net_pnl": 44.44610346108098,
+        "iso_count": 205,
+        "iso_win_rate": 57.56097560975609,
+        "iso_net_pnl": -4.273041933855041
+      }
+    },
+    "curr_iso_cc": {
+      "mode": "CURRENT",
+      "runtime_secs": 29.091458559036255,
+      "total_events": 248983,
+      "active_strats": [
+        "Convexity_Cascade"
+      ],
+      "strategies": {
+        "Convexity_Cascade": {
+          "trades": 51,
+          "wins": 24,
+          "losses": 27,
+          "win_rate_pct": 47.05882352941176,
+          "gross_pnl_usd": 126.32182664624938,
+          "fees_usd": 132.6166315648359,
+          "net_pnl_usd": -6.294804918586522,
+          "profit_factor": 2.121392146315941,
+          "max_drawdown_usd": 75.6393100458068,
+          "avg_return_bps": -0.1451442261866532,
+          "exits": {
+            "PROFIT_DECAY_EXIT": 6,
+            "DEFENSIVE_MAKER_HEDGE": 20,
+            "TAKE_PROFIT": 2,
+            "TRAILING_STOP": 22,
+            "STOP_LOSS": 1
+          }
+        }
+      },
+      "portfolio": {
+        "trades": 51,
+        "wins": 24,
+        "losses": 27,
+        "win_rate_pct": 47.05882352941176,
+        "gross_pnl_usd": 126.32182664624938,
+        "fees_usd": 132.6166315648359,
+        "net_pnl_usd": -6.294804918586522,
+        "profit_factor": 2.121392146315941,
+        "co_entry_count": 0,
+        "co_entry_win_rate": 0.0,
+        "co_entry_net_pnl": 0,
+        "iso_count": 51,
+        "iso_win_rate": 47.05882352941176,
+        "iso_net_pnl": -6.294804918586522
+      }
+    },
+    "old_iso_cc": {
+      "mode": "OLD",
+      "runtime_secs": 32.97903823852539,
+      "total_events": 248983,
+      "active_strats": [
+        "Convexity_Cascade"
+      ],
+      "strategies": {
+        "Convexity_Cascade": {
+          "trades": 50,
+          "wins": 28,
+          "losses": 22,
+          "win_rate_pct": 56.00000000000001,
+          "gross_pnl_usd": 123.18239479850426,
+          "fees_usd": 145.36257913328018,
+          "net_pnl_usd": -22.180184334775905,
+          "profit_factor": 2.0415935620674825,
+          "max_drawdown_usd": 79.0849099666396,
+          "avg_return_bps": -0.5218224086895217,
+          "exits": {
+            "TRAILING_STOP": 26,
+            "DEFENSIVE_MAKER_HEDGE": 9,
+            "TAKE_PROFIT": 2,
+            "STOP_LOSS": 7,
+            "PROFIT_DECAY_EXIT": 4,
+            "TIME_LIMIT": 2
+          }
+        }
+      },
+      "portfolio": {
+        "trades": 50,
+        "wins": 28,
+        "losses": 22,
+        "win_rate_pct": 56.00000000000001,
+        "gross_pnl_usd": 123.18239479850426,
+        "fees_usd": 145.36257913328018,
+        "net_pnl_usd": -22.180184334775905,
+        "profit_factor": 2.0415935620674825,
+        "co_entry_count": 0,
+        "co_entry_win_rate": 0.0,
+        "co_entry_net_pnl": 0,
+        "iso_count": 50,
+        "iso_win_rate": 56.00000000000001,
+        "iso_net_pnl": -22.180184334775905
+      }
+    },
+    "curr_iso_me": {
+      "mode": "CURRENT",
+      "runtime_secs": 31.33763885498047,
+      "total_events": 248983,
+      "active_strats": [
+        "Momentum_Expansion"
+      ],
+      "strategies": {
+        "Momentum_Expansion": {
+          "trades": 132,
+          "wins": 74,
+          "losses": 58,
+          "win_rate_pct": 56.060606060606055,
+          "gross_pnl_usd": 421.15856261451256,
+          "fees_usd": 336.62024839044375,
+          "net_pnl_usd": 84.5383142240689,
+          "profit_factor": 2.7821436711383942,
+          "max_drawdown_usd": 90.4526451027872,
+          "avg_return_bps": 0.7534574538829841,
+          "exits": {
+            "TRAILING_STOP": 64,
+            "TAKE_PROFIT": 10,
+            "DEFENSIVE_MAKER_HEDGE": 52,
+            "PROFIT_DECAY_EXIT": 6
+          }
+        }
+      },
+      "portfolio": {
+        "trades": 132,
+        "wins": 74,
+        "losses": 58,
+        "win_rate_pct": 56.060606060606055,
+        "gross_pnl_usd": 421.15856261451256,
+        "fees_usd": 336.62024839044375,
+        "net_pnl_usd": 84.5383142240689,
+        "profit_factor": 2.7821436711383942,
+        "co_entry_count": 0,
+        "co_entry_win_rate": 0.0,
+        "co_entry_net_pnl": 0,
+        "iso_count": 132,
+        "iso_win_rate": 56.060606060606055,
+        "iso_net_pnl": 84.5383142240689
+      }
+    },
+    "old_iso_me": {
+      "mode": "OLD",
+      "runtime_secs": 38.944318532943726,
+      "total_events": 248983,
+      "active_strats": [
+        "Momentum_Expansion"
+      ],
+      "strategies": {
+        "Momentum_Expansion": {
+          "trades": 156,
+          "wins": 96,
+          "losses": 60,
+          "win_rate_pct": 61.53846153846154,
+          "gross_pnl_usd": 562.4261883061926,
+          "fees_usd": 443.73405925294594,
+          "net_pnl_usd": 118.69212905324672,
+          "profit_factor": 2.654849404815723,
+          "max_drawdown_usd": 63.91662952062126,
+          "avg_return_bps": 0.895142168731795,
+          "exits": {
+            "STOP_LOSS": 18,
+            "DEFENSIVE_MAKER_HEDGE": 29,
+            "TAKE_PROFIT": 17,
+            "TRAILING_STOP": 79,
+            "PROFIT_DECAY_EXIT": 8,
+            "TIME_LIMIT": 5
+          }
+        }
+      },
+      "portfolio": {
+        "trades": 156,
+        "wins": 96,
+        "losses": 60,
+        "win_rate_pct": 61.53846153846154,
+        "gross_pnl_usd": 562.4261883061926,
+        "fees_usd": 443.73405925294594,
+        "net_pnl_usd": 118.69212905324672,
+        "profit_factor": 2.654849404815723,
+        "co_entry_count": 0,
+        "co_entry_win_rate": 0.0,
+        "co_entry_net_pnl": 0,
+        "iso_count": 156,
+        "iso_win_rate": 61.53846153846154,
+        "iso_net_pnl": 118.69212905324672
+      }
+    },
+    "curr_iso_hc": {
+      "mode": "CURRENT",
+      "runtime_secs": 28.50809955596924,
+      "total_events": 248983,
+      "active_strats": [
+        "Hedged_Convexity"
+      ],
+      "strategies": {
+        "Hedged_Convexity": {
+          "trades": 40,
+          "wins": 23,
+          "losses": 17,
+          "win_rate_pct": 57.49999999999999,
+          "gross_pnl_usd": 144.57849905039535,
+          "fees_usd": 114.75354301428916,
+          "net_pnl_usd": 29.824956036106137,
+          "profit_factor": 2.2743260253798607,
+          "max_drawdown_usd": 63.67224023663343,
+          "avg_return_bps": 0.8772587383694276,
+          "exits": {
+            "TRAILING_STOP": 15,
+            "DEFENSIVE_MAKER_HEDGE": 11,
+            "TAKE_PROFIT": 8,
+            "STOP_LOSS": 5,
+            "PROFIT_DECAY_EXIT": 1
+          }
+        }
+      },
+      "portfolio": {
+        "trades": 40,
+        "wins": 23,
+        "losses": 17,
+        "win_rate_pct": 57.49999999999999,
+        "gross_pnl_usd": 144.57849905039535,
+        "fees_usd": 114.75354301428916,
+        "net_pnl_usd": 29.824956036106137,
+        "profit_factor": 2.2743260253798607,
+        "co_entry_count": 0,
+        "co_entry_win_rate": 0.0,
+        "co_entry_net_pnl": 0,
+        "iso_count": 40,
+        "iso_win_rate": 57.49999999999999,
+        "iso_net_pnl": 29.824956036106137
+      }
+    },
+    "old_iso_hc": {
+      "mode": "OLD",
+      "runtime_secs": 28.439399003982544,
+      "total_events": 248983,
+      "active_strats": [
+        "Hedged_Convexity"
+      ],
+      "strategies": {
+        "Hedged_Convexity": {
+          "trades": 40,
+          "wins": 24,
+          "losses": 16,
+          "win_rate_pct": 60.0,
+          "gross_pnl_usd": 149.00962319199712,
+          "fees_usd": 122.39930120914359,
+          "net_pnl_usd": 26.61032198285356,
+          "profit_factor": 2.3304561554157965,
+          "max_drawdown_usd": 65.60225521676362,
+          "avg_return_bps": 0.7826968860853817,
+          "exits": {
+            "TRAILING_STOP": 16,
+            "STOP_LOSS": 8,
+            "TAKE_PROFIT": 8,
+            "DEFENSIVE_MAKER_HEDGE": 5,
+            "TIME_LIMIT": 1,
+            "PROFIT_DECAY_EXIT": 2
+          }
+        }
+      },
+      "portfolio": {
+        "trades": 40,
+        "wins": 24,
+        "losses": 16,
+        "win_rate_pct": 60.0,
+        "gross_pnl_usd": 149.00962319199712,
+        "fees_usd": 122.39930120914359,
+        "net_pnl_usd": 26.61032198285356,
+        "profit_factor": 2.3304561554157965,
+        "co_entry_count": 0,
+        "co_entry_win_rate": 0.0,
+        "co_entry_net_pnl": 0,
+        "iso_count": 40,
+        "iso_win_rate": 60.0,
+        "iso_net_pnl": 26.61032198285356
+      }
+    }
+  }
+}
