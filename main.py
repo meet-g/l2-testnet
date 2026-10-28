@@ -206,16 +206,21 @@ class L2EngineRunner:
 
                 # Feed live order executor if enabled
                 if self.live_executor:
-                    # If currently holding an active position, preserve the owning strategy and its signal for lifecycle management
+                    # 1. If holding an active position, preserve the owning strategy
                     if abs(self.live_executor.cached_position) > 1e-6 and self.live_executor.position_strategy:
                         strat_to_use = self.live_executor.position_strategy
                         active_strat = self.config.strategies.execution_strategies.get(strat_to_use)
                         sig_score = scores.get(active_strat.signal_key, 0.0) if active_strat else 0.0
+                    # 2. If an entry order is resting on the book, preserve its owning strategy
+                    elif self.live_executor.active_order and self.live_executor.active_order.get("strategy_name"):
+                        strat_to_use = self.live_executor.active_order.get("strategy_name")
+                        active_strat = self.config.strategies.execution_strategies.get(strat_to_use)
+                        sig_score = scores.get(active_strat.signal_key, 0.0) if active_strat else 0.0
+                    # 3. When completely flat with no resting order, dispatch across enabled strategies
                     else:
                         active_name = self.config.strategies.live_execution.active_strategy
                         active_strat = self.config.strategies.execution_strategies.get(active_name)
 
-                        # Determine active firing strategy (prioritizing designated active_strategy, or highest conviction enabled strategy)
                         strat_to_use = active_name
                         sig_score = scores.get(active_strat.signal_key, 0.0) if (active_strat and active_strat.enabled) else 0.0
                         threshold = active_strat.entry_threshold if active_strat else 0.85

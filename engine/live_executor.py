@@ -199,12 +199,19 @@ class LiveOrderExecutor:
                 self.active_order = None
             else:
                 first_o = coin_orders[0]
+                oid_val = int(first_o["oid"])
+                is_buy_order = first_o.get("side", "B") == "B"
+                prev_strat = self.active_order.get("strategy_name", self.strategy_name) if (self.active_order and self.active_order.get("oid") == oid_val) else self.strategy_name
+                prev_is_exit = self.active_order.get("is_exit", abs(self.cached_position) > 1e-6) if (self.active_order and self.active_order.get("oid") == oid_val) else (abs(self.cached_position) > 1e-6)
+                prev_time = self.active_order.get("time", now) if (self.active_order and self.active_order.get("oid") == oid_val) else now
                 self.active_order = {
-                    "oid": int(first_o["oid"]),
-                    "is_buy": first_o.get("side", "B") == "B",
+                    "oid": oid_val,
+                    "is_buy": is_buy_order,
                     "price": float(first_o.get("limitPx", 0.0)),
                     "size": float(first_o.get("sz", 0.0)),
-                    "time": now,
+                    "time": prev_time,
+                    "strategy_name": prev_strat,
+                    "is_exit": prev_is_exit,
                 }
         except Exception as e:
             logging.debug(f"[LiveExecutor] State sync exception: {e}")
@@ -277,6 +284,8 @@ class LiveOrderExecutor:
         price: float,
         post_only: bool = True,
         signal_score: float = 0.0,
+        is_exit: bool = False,
+        **kwargs,
     ) -> Optional[Dict[str, Any]]:
         """Places a limit order on Hyperliquid (Testnet or Mainnet) with post-only and cooldown protection."""
         if not self.is_initialized or not self.exchange:
@@ -344,6 +353,8 @@ class LiveOrderExecutor:
                         "price": px_fmt,
                         "size": sz_fmt,
                         "time": now,
+                        "strategy_name": self.strategy_name,
+                        "is_exit": is_exit,
                     }
                     self.console.print(f"[bold green]✓ [LiveExecutor] [{self.strategy_name}] Order RESTING on {net_label} Book! OID: {oid}[/bold green]")
                     if self.auditor:
@@ -392,6 +403,8 @@ class LiveOrderExecutor:
                 elif "error" in first_status:
                     err_msg = first_status.get("error")
                     self.console.print(f"[bold red]✗ [LiveExecutor] Exchange rejected order: {err_msg}[/bold red]")
+                    if "Post only order would have immediately matched" in str(err_msg):
+                        self.active_order = None
                     if self.auditor:
                         self.auditor.record_live_order_event(
                             strategy_name=self.strategy_name,
@@ -481,8 +494,8 @@ class LiveOrderExecutor:
         # 1. POSITION MANAGEMENT (ACTIVE EXITS: TP, SL, TRAILING STOP, HEDGE)
         # ---------------------------------------------------------------------
         if abs(pos) > 1e-6:
-            # Cancel any lingering entry quote if we are in an active position
-            if self.active_order:
+            # If an active resting order is NOT an exit quote (e.g. leftover entry quote), cancel it
+            if self.active_order and not self.active_order.get("is_exit", False):
                 self.cancel_order(self.active_order["oid"])
 
             is_long = pos > 0
@@ -492,32 +505,54 @@ class LiveOrderExecutor:
                 self.peak_price = max(self.peak_price, mid_price)
                 gain_bps = ((mid_price - entry_px) / entry_px) * 10_000.0
 
-                # 1A. Emergency Stop Loss
+                # 1A. Emergency Stop Loss (Immediate Taker Sell at Best Bid)
                 if gain_bps <= -sl_bps:
-                    self.console.print(f"[bold red][LiveExecutor] Emergency Stop Loss triggered ({gain_bps:.1f} bps)![/bold red]")
-                    self.place_limit_order(is_buy=False, size_btc=abs(pos), price=best_bid, post_only=False, signal_score=signal_score)
+                    self.console.print(f"[bold red][LiveExecutor] [{self.strategy_name}] Emergency Stop Loss triggered ({gain_bps:.1f} bps)![/bold red]")
+                    if self.active_order:
+                        self.cancel_order(self.active_order["oid"])
+                    self.place_limit_order(is_buy=False, size_btc=abs(pos), price=best_bid, post_only=False, signal_score=signal_score, is_exit=True)
                     return
 
                 # 1B. Take Profit (Passive Maker Limit Sell at Best Ask)
+                target_exit_px = self.format_price(best_ask)
+                exit_triggered = False
+
                 if gain_bps >= tp_bps:
-                    self.console.print(f"[bold green][LiveExecutor] Take Profit reached (+{gain_bps:.1f} bps)! Quoting maker exit...[/bold green]")
-                    self.place_limit_order(is_buy=False, size_btc=abs(pos), price=best_ask, post_only=True, signal_score=signal_score)
-                    return
+                    self.console.print(f"[bold green][LiveExecutor] [{self.strategy_name}] Take Profit reached (+{gain_bps:.1f} bps)! Quoting maker exit...[/bold green]")
+                    exit_triggered = True
 
                 # 1C. Trailing Stop Ratchet
-                if gain_bps >= trail_act_bps:
+                elif gain_bps >= trail_act_bps:
                     self.trailing_stop_active = True
-                if self.trailing_stop_active:
+                if not exit_triggered and self.trailing_stop_active:
                     trail_floor = self.peak_price * (1.0 - (trail_dist_bps / 10_000.0))
                     if mid_price <= trail_floor:
-                        self.console.print(f"[bold yellow][LiveExecutor] Trailing Stop triggered at ${trail_floor:,.4f}![/bold yellow]")
-                        self.place_limit_order(is_buy=False, size_btc=abs(pos), price=best_ask, post_only=True, signal_score=signal_score)
-                        return
+                        self.console.print(f"[bold yellow][LiveExecutor] [{self.strategy_name}] Trailing Stop triggered at ${trail_floor:,.4f}![/bold yellow]")
+                        exit_triggered = True
 
                 # 1D. Defensive Maker Hedge (Adverse Flow Reversal)
-                if signal_score <= hedge_rev:
-                    self.console.print(f"[bold magenta][LiveExecutor] Defensive Maker Hedge triggered (signal: {signal_score:.3f})![/bold magenta]")
-                    self.place_limit_order(is_buy=False, size_btc=abs(pos), price=best_ask, post_only=True, signal_score=signal_score)
+                if not exit_triggered and signal_score <= hedge_rev:
+                    self.console.print(f"[bold magenta][LiveExecutor] [{self.strategy_name}] Defensive Maker Hedge triggered (signal: {signal_score:.3f})![/bold magenta]")
+                    exit_triggered = True
+
+                if exit_triggered:
+                    # Check resting exit order persistence
+                    if self.active_order and self.active_order.get("is_exit") and not self.active_order.get("is_buy"):
+                        cur_px = self.active_order.get("price")
+                        # Already resting at target exit price: KEEP IT RESTING (preserve queue priority!)
+                        if abs(cur_px - target_exit_px) < 1e-6:
+                            return
+                        # Price drifted: cancel and re-quote at new best ask
+                        self.cancel_order(self.active_order["oid"])
+                    elif self.active_order:
+                        self.cancel_order(self.active_order["oid"])
+
+                    self.place_limit_order(is_buy=False, size_btc=abs(pos), price=target_exit_px, post_only=True, signal_score=signal_score, is_exit=True)
+                    return
+                else:
+                    # No exit condition active. If an exit quote is lingering, cancel it
+                    if self.active_order and self.active_order.get("is_exit"):
+                        self.cancel_order(self.active_order["oid"])
                     return
 
             else:
@@ -525,32 +560,54 @@ class LiveOrderExecutor:
                 self.trough_price = min(self.trough_price, mid_price) if self.trough_price > 0 else mid_price
                 gain_bps = ((entry_px - mid_price) / entry_px) * 10_000.0
 
-                # 1A. Emergency Stop Loss
+                # 1A. Emergency Stop Loss (Immediate Taker Buy at Best Ask)
                 if gain_bps <= -sl_bps:
-                    self.console.print(f"[bold red][LiveExecutor] Emergency Stop Loss triggered ({gain_bps:.1f} bps)![/bold red]")
-                    self.place_limit_order(is_buy=True, size_btc=abs(pos), price=best_ask, post_only=False, signal_score=signal_score)
+                    self.console.print(f"[bold red][LiveExecutor] [{self.strategy_name}] Emergency Stop Loss triggered ({gain_bps:.1f} bps)![/bold red]")
+                    if self.active_order:
+                        self.cancel_order(self.active_order["oid"])
+                    self.place_limit_order(is_buy=True, size_btc=abs(pos), price=best_ask, post_only=False, signal_score=signal_score, is_exit=True)
                     return
 
                 # 1B. Take Profit (Passive Maker Limit Buy at Best Bid)
+                target_exit_px = self.format_price(best_bid)
+                exit_triggered = False
+
                 if gain_bps >= tp_bps:
-                    self.console.print(f"[bold green][LiveExecutor] Take Profit reached (+{gain_bps:.1f} bps)! Quoting maker exit...[/bold green]")
-                    self.place_limit_order(is_buy=True, size_btc=abs(pos), price=best_bid, post_only=True, signal_score=signal_score)
-                    return
+                    self.console.print(f"[bold green][LiveExecutor] [{self.strategy_name}] Take Profit reached (+{gain_bps:.1f} bps)! Quoting maker exit...[/bold green]")
+                    exit_triggered = True
 
                 # 1C. Trailing Stop Ratchet
-                if gain_bps >= trail_act_bps:
+                elif gain_bps >= trail_act_bps:
                     self.trailing_stop_active = True
-                if self.trailing_stop_active:
+                if not exit_triggered and self.trailing_stop_active:
                     trail_ceiling = self.trough_price * (1.0 + (trail_dist_bps / 10_000.0))
                     if mid_price >= trail_ceiling:
-                        self.console.print(f"[bold yellow][LiveExecutor] Trailing Stop triggered at ${trail_ceiling:,.4f}![/bold yellow]")
-                        self.place_limit_order(is_buy=True, size_btc=abs(pos), price=best_bid, post_only=True, signal_score=signal_score)
-                        return
+                        self.console.print(f"[bold yellow][LiveExecutor] [{self.strategy_name}] Trailing Stop triggered at ${trail_ceiling:,.4f}![/bold yellow]")
+                        exit_triggered = True
 
                 # 1D. Defensive Maker Hedge (Adverse Flow Reversal)
-                if signal_score >= -hedge_rev:
-                    self.console.print(f"[bold magenta][LiveExecutor] Defensive Maker Hedge triggered (signal: {signal_score:.3f})![/bold magenta]")
-                    self.place_limit_order(is_buy=True, size_btc=abs(pos), price=best_bid, post_only=True, signal_score=signal_score)
+                if not exit_triggered and signal_score >= -hedge_rev:
+                    self.console.print(f"[bold magenta][LiveExecutor] [{self.strategy_name}] Defensive Maker Hedge triggered (signal: {signal_score:.3f})![/bold magenta]")
+                    exit_triggered = True
+
+                if exit_triggered:
+                    # Check resting exit order persistence
+                    if self.active_order and self.active_order.get("is_exit") and self.active_order.get("is_buy"):
+                        cur_px = self.active_order.get("price")
+                        # Already resting at target exit price: KEEP IT RESTING (preserve queue priority!)
+                        if abs(cur_px - target_exit_px) < 1e-6:
+                            return
+                        # Price drifted: cancel and re-quote at new best bid
+                        self.cancel_order(self.active_order["oid"])
+                    elif self.active_order:
+                        self.cancel_order(self.active_order["oid"])
+
+                    self.place_limit_order(is_buy=True, size_btc=abs(pos), price=target_exit_px, post_only=True, signal_score=signal_score, is_exit=True)
+                    return
+                else:
+                    # No exit condition active. If an exit quote is lingering, cancel it
+                    if self.active_order and self.active_order.get("is_exit"):
+                        self.cancel_order(self.active_order["oid"])
                     return
 
             return
@@ -562,6 +619,10 @@ class LiveOrderExecutor:
         self.trailing_stop_active = False
         self.position_strategy = None
 
+        # Hysteresis parameters
+        cancel_decay_floor = maker_threshold * 0.45
+        max_rest_duration_secs = 60.0
+
         # Bullish Entry: Post passive maker quote at Best Bid
         if signal_score >= maker_threshold:
             target_px = self.format_price(best_bid)
@@ -572,7 +633,7 @@ class LiveOrderExecutor:
                 # If existing resting order is already at best bid, KEEP IT RESTING (preserve queue priority!)
                 if abs(cur_px - target_px) < 1e-6:
                     return
-                # Price has drifted away from our quote -> cancel and re-post at new best bid
+                # Price has drifted -> cancel and re-post at new best bid
                 self.cancel_order(self.active_order["oid"])
 
             elif self.active_order and not self.active_order.get("is_buy"):
@@ -586,6 +647,7 @@ class LiveOrderExecutor:
                 price=target_px,
                 post_only=True,
                 signal_score=signal_score,
+                is_exit=False,
             )
 
         # Bearish Entry: Post passive maker quote at Best Ask
@@ -598,7 +660,7 @@ class LiveOrderExecutor:
                 # If existing resting order is already at best ask, KEEP IT RESTING (preserve queue priority!)
                 if abs(cur_px - target_px) < 1e-6:
                     return
-                # Price has drifted away from our quote -> cancel and re-post at new best ask
+                # Price has drifted -> cancel and re-post at new best ask
                 self.cancel_order(self.active_order["oid"])
 
             elif self.active_order and self.active_order.get("is_buy"):
@@ -612,9 +674,23 @@ class LiveOrderExecutor:
                 price=target_px,
                 post_only=True,
                 signal_score=signal_score,
+                is_exit=False,
             )
 
         else:
-            # Signal is neutral (below entry threshold): clean up any resting entry orders
+            # Signal is in neutral zone: apply hysteresis
+            # Only cancel if signal decayed below hysteresis floor or flipped opposite, OR price drifted
             if self.active_order:
-                self.cancel_order(self.active_order["oid"])
+                cur_px = self.active_order.get("price")
+                is_buy = self.active_order.get("is_buy", True)
+                target_px = self.format_price(best_bid if is_buy else best_ask)
+                should_cancel = False
+                if abs(cur_px - target_px) >= 1e-6:
+                    should_cancel = True
+                elif is_buy and signal_score < cancel_decay_floor:
+                    should_cancel = True
+                elif not is_buy and signal_score > -cancel_decay_floor:
+                    should_cancel = True
+
+                if should_cancel:
+                    self.cancel_order(self.active_order["oid"])

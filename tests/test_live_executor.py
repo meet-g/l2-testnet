@@ -4,8 +4,9 @@ Verifies:
 1. Formatting helpers (price 5 sig figs, size decimals, min notional enforcement).
 2. Stateful resting order persistence (zero instant self-cancellation churn).
 3. Market price drift re-quoting.
-4. Signal decay cancellation.
+4. Signal decay cancellation with hysteresis.
 5. Exit lifecycle (Take Profit, Stop Loss, Trailing Stop, Defensive Maker Hedge).
+6. Exit quote resting persistence (no 100ms self-cancellation churn).
 """
 
 import unittest
@@ -52,7 +53,7 @@ class TestLiveOrderExecutor(unittest.TestCase):
         self.executor.capital_usd = 5000.0
         self.executor.allocation_pct = 1.0
         actions = []
-        self.executor.place_limit_order = lambda is_buy, size_btc, price, post_only=True, signal_score=0: (
+        self.executor.place_limit_order = lambda is_buy, size_btc, price, post_only=True, signal_score=0, **kwargs: (
             actions.append(("PLACE", is_buy, size_btc, price)),
             {"status": "ok"}
         )[1]
@@ -63,9 +64,11 @@ class TestLiveOrderExecutor(unittest.TestCase):
 
     def test_resting_order_persistence_no_churn(self):
         actions = []
-        self.executor.place_limit_order = lambda is_buy, size_btc, price, post_only=True, signal_score=0: (
+        self.executor.place_limit_order = lambda is_buy, size_btc, price, post_only=True, signal_score=0, **kwargs: (
             actions.append(("PLACE", is_buy, price)),
-            setattr(self.executor, "active_order", {"oid": 101, "is_buy": is_buy, "price": price, "size": size_btc, "time": 100.0}),
+            setattr(self.executor, "active_order", {
+                "oid": 101, "is_buy": is_buy, "price": price, "size": size_btc, "time": 100.0, "is_exit": False
+            }),
             {"status": "ok"}
         )[2]
         self.executor.cancel_order = lambda oid: (actions.append(("CANCEL", oid)), setattr(self.executor, "active_order", None), True)[2]
@@ -85,14 +88,35 @@ class TestLiveOrderExecutor(unittest.TestCase):
         self.executor.on_signal_update(0.99, 81502.0, 81503.0, 1.0)
         self.assertEqual(actions, [("CANCEL", 101), ("PLACE", True, 81502.0)])
 
-        # Tick 4: Signal decays to neutral -> Must cancel resting order
+        # Tick 4: Signal decays below hysteresis floor (0.10 < 0.985 * 0.45) -> Must cancel resting order
         actions.clear()
         self.executor.on_signal_update(0.10, 81502.0, 81503.0, 1.0)
         self.assertEqual(actions, [("CANCEL", 101)])
 
+    def test_entry_hysteresis_preserves_quote_on_minor_dip(self):
+        actions = []
+        self.executor.place_limit_order = lambda is_buy, size_btc, price, post_only=True, signal_score=0, **kwargs: (
+            actions.append(("PLACE", is_buy, price)),
+            setattr(self.executor, "active_order", {
+                "oid": 202, "is_buy": is_buy, "price": price, "size": size_btc, "time": 100.0, "is_exit": False
+            }),
+            {"status": "ok"}
+        )[2]
+        self.executor.cancel_order = lambda oid: (actions.append(("CANCEL", oid)), setattr(self.executor, "active_order", None), True)[2]
+
+        # Tick 1: Signal triggers entry (0.99 > 0.985 threshold)
+        self.executor.on_signal_update(0.99, 81500.0, 81501.0, 1.0)
+        self.assertEqual(len(actions), 1)
+
+        # Tick 2: Signal dips to 0.75 (below 0.985, but well above hysteresis floor of 0.44)
+        # MUST PRESERVE QUOTE (no cancel churn!)
+        actions.clear()
+        self.executor.on_signal_update(0.75, 81500.0, 81501.0, 1.0)
+        self.assertEqual(len(actions), 0, "Minor signal dip should not cancel resting quote")
+
     def test_position_exit_take_profit(self):
         actions = []
-        self.executor.place_limit_order = lambda is_buy, size_btc, price, post_only=True, signal_score=0: (
+        self.executor.place_limit_order = lambda is_buy, size_btc, price, post_only=True, signal_score=0, **kwargs: (
             actions.append(("EXIT", is_buy, price, post_only)),
             {"status": "ok"}
         )[1]
@@ -106,9 +130,34 @@ class TestLiveOrderExecutor(unittest.TestCase):
         self.assertEqual(len(actions), 1)
         self.assertEqual(actions[0], ("EXIT", False, 80250.0, True))  # Maker limit sell at best ask
 
+    def test_position_exit_quote_persistence_no_churn(self):
+        actions = []
+        self.executor.place_limit_order = lambda is_buy, size_btc, price, post_only=True, signal_score=0, **kwargs: (
+            actions.append(("EXIT", is_buy, price, post_only)),
+            setattr(self.executor, "active_order", {
+                "oid": 303, "is_buy": is_buy, "price": price, "size": size_btc, "time": 100.0, "is_exit": True
+            }),
+            {"status": "ok"}
+        )[2]
+        self.executor.cancel_order = lambda oid: (actions.append(("CANCEL", oid)), setattr(self.executor, "active_order", None), True)[2]
+
+        self.executor.cached_position = 0.0005
+        self.executor.entry_price = 80000.0
+        self.executor.peak_price = 80000.0
+
+        # Tick 1: Take profit reached (+31.2 bps) -> posts maker exit sell
+        self.executor.on_signal_update(0.50, 80249.0, 80250.0, 1.0)
+        self.assertEqual(len(actions), 1)
+        self.assertEqual(actions[0], ("EXIT", False, 80250.0, True))
+
+        # Tick 2: Next tick 100ms later with same price -> MUST NOT CANCEL EXIT QUOTE!
+        actions.clear()
+        self.executor.on_signal_update(0.50, 80249.0, 80250.0, 1.0)
+        self.assertEqual(len(actions), 0, "Active resting exit quote must NOT be cancelled on subsequent ticks with same price")
+
     def test_position_exit_stop_loss(self):
         actions = []
-        self.executor.place_limit_order = lambda is_buy, size_btc, price, post_only=True, signal_score=0: (
+        self.executor.place_limit_order = lambda is_buy, size_btc, price, post_only=True, signal_score=0, **kwargs: (
             actions.append(("EXIT", is_buy, price, post_only)),
             {"status": "ok"}
         )[1]
@@ -124,7 +173,7 @@ class TestLiveOrderExecutor(unittest.TestCase):
 
     def test_position_exit_defensive_maker_hedge(self):
         actions = []
-        self.executor.place_limit_order = lambda is_buy, size_btc, price, post_only=True, signal_score=0: (
+        self.executor.place_limit_order = lambda is_buy, size_btc, price, post_only=True, signal_score=0, **kwargs: (
             actions.append(("EXIT", is_buy, price, post_only)),
             {"status": "ok"}
         )[1]
