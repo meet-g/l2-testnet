@@ -251,10 +251,10 @@ DEFAULT_STRATEGIES_JSON = {
             "order_size_btc": 0.1,
             "take_profit_bps": 30.0,
             "stop_loss_bps": 8.0,
-            "trailing_stop_activation_bps": 4.0,
-            "trailing_stop_distance_bps": 1.5,
+            "trailing_stop_activation_bps": 3.5,
+            "trailing_stop_distance_bps": 1.2,
             "hedge_trigger_loss_bps": -3.5,
-            "hedge_reversal_threshold": -0.15,
+            "hedge_reversal_threshold": -0.10,
             "max_holding_time_secs": 180,
             "exit_reversal_threshold": 0.80,
             "min_volatility_bps": 4.5,
@@ -419,10 +419,10 @@ class QueueReplenishmentConfig:
     order_size_btc: float = 0.1
     take_profit_bps: float = 30.0
     stop_loss_bps: float = 8.0
-    trailing_stop_activation_bps: float = 4.0
-    trailing_stop_distance_bps: float = 1.5
+    trailing_stop_activation_bps: float = 3.5
+    trailing_stop_distance_bps: float = 1.2
     hedge_trigger_loss_bps: float = -3.5
-    hedge_reversal_threshold: float = -0.15
+    hedge_reversal_threshold: float = -0.10
     max_holding_time_secs: int = 180
     exit_reversal_threshold: float = 0.80
     min_volatility_bps: float = 4.5

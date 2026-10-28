@@ -16,6 +16,7 @@ from typing import Any, Deque, Dict, List, Optional, Tuple
 from core.orderbook import OrderBook
 from core.trade_stream import TradeManager
 from signals.base import BaseSignal, SignalResult
+from signals.vpin import VPINSignal
 
 
 class QueueReplenishmentSignal(BaseSignal):
@@ -55,6 +56,9 @@ class QueueReplenishmentSignal(BaseSignal):
         self.w_rep3 = w_rep3
         self.w_lat = w_lat
         self.w_canc = w_canc
+
+        # Sub-signal for Directional Toxicity Shielding
+        self.vpin_signal = VPINSignal()
 
         # State tracking buffers
         self.b1_history: Deque[float] = deque(maxlen=baseline_window)
@@ -124,6 +128,8 @@ class QueueReplenishmentSignal(BaseSignal):
             "c_a": 0.0,
             "total_vol_fast": 0.0,
             "regime": "INITIALIZATION",
+            "vpin_score": 0.0,
+            "vpin_raw": 0.0,
         }
 
         # Step 1: Structural validity guard
@@ -353,6 +359,30 @@ class QueueReplenishmentSignal(BaseSignal):
             confidence = 0.20
             regime_flag = "DAMPENED_FLOW_DISAGREEMENT"
 
+        # Step 7: Directional VPIN Toxicity Shield & Defensive Hedge Alert
+        vpin_res = self.vpin_signal.compute(book, trades, now_ms)
+        vpin_score = vpin_res.score
+        vpin_raw = vpin_res.raw_value
+
+        if raw_alpha > 0 and vpin_score < -0.20:
+            # Informed selling threatens maker buy order
+            adverse_drag = min(1.0, abs(vpin_score) / 0.45)
+            raw_alpha *= (1.0 - 0.75 * adverse_drag)
+            if vpin_score < -0.35:
+                raw_alpha = min(raw_alpha, 0.10)
+        elif raw_alpha < 0 and vpin_score > 0.20:
+            # Informed buying threatens maker sell order
+            adverse_drag = min(1.0, abs(vpin_score) / 0.45)
+            raw_alpha *= (1.0 - 0.75 * adverse_drag)
+            if vpin_score > 0.35:
+                raw_alpha = max(raw_alpha, -0.10)
+
+        # Extreme Choppy Toxicity Gate: When unsigned VPIN is extreme without clear direction
+        is_btc = (book.coin.upper() == "BTC")
+        toxic_ceiling = 0.88 if is_btc else 0.75
+        if vpin_raw >= toxic_ceiling and abs(vpin_score) < 0.25:
+            raw_alpha *= 0.65
+
         score = max(-1.0, min(1.0, raw_alpha))
         confidence = max(0.0, min(1.0, confidence))
 
@@ -389,5 +419,7 @@ class QueueReplenishmentSignal(BaseSignal):
                 "c_a": c_a,
                 "total_vol_fast": total_vol_fast,
                 "regime": regime_flag,
+                "vpin_score": vpin_score,
+                "vpin_raw": vpin_raw,
             },
         )
