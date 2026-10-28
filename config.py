@@ -245,7 +245,7 @@ DEFAULT_STRATEGIES_JSON = {
             "coentry_group": "triad",
         },
         "Queue_Replenishment": {
-            "enabled": True,
+            "enabled": False,
             "description": "Orthogonal queue replenishment dynamics with multi-tier cancellation asymmetry, depletion persistence, and defensive maker hedging",
             "signal_key": "QueueReplenishment",
             "execution_type": "HEDGED_MAKER",

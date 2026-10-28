@@ -67,7 +67,7 @@
       "coentry_group": "triad"
     },
     "Queue_Replenishment": {
-      "enabled": true,
+      "enabled": false,
       "description": "Orthogonal queue replenishment dynamics with multi-tier cancellation asymmetry, depletion persistence, and defensive maker hedging",
       "signal_key": "QueueReplenishment",
       "execution_type": "HEDGED_MAKER",
