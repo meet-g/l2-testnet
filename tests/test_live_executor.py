@@ -46,6 +46,21 @@ class TestLiveOrderExecutor(unittest.TestCase):
         upgraded = self.executor.ensure_min_notional(0.05, 80.0)
         self.assertGreaterEqual(upgraded * 80.0, 15.0)
 
+    def test_dynamic_capital_usd_sizing(self):
+        # With capital_usd = $5000 and allocation_pct = 1.0 at price 80,000:
+        # Size = 5000 / 80000 = 0.0625 BTC
+        self.executor.capital_usd = 5000.0
+        self.executor.allocation_pct = 1.0
+        actions = []
+        self.executor.place_limit_order = lambda is_buy, size_btc, price, post_only=True, signal_score=0: (
+            actions.append(("PLACE", is_buy, size_btc, price)),
+            {"status": "ok"}
+        )[1]
+
+        self.executor.on_signal_update(0.99, 80000.0, 80001.0, 1.0)
+        self.assertEqual(len(actions), 1)
+        self.assertEqual(actions[0][2], 0.0625)
+
     def test_resting_order_persistence_no_churn(self):
         actions = []
         self.executor.place_limit_order = lambda is_buy, size_btc, price, post_only=True, signal_score=0: (

@@ -144,6 +144,8 @@ class BacktestConfig:
     initial_cash_usd: float = 10_000.0
     order_size_btc: float = 0.1
     max_position_btc: float = 0.5
+    capital_usd: Optional[float] = None
+    capital_allocation_pct: float = 1.0
     
     # Execution modes: 'MAKER' (spread capture + rebate) or 'SMART_TAKER' (dislocation with trailing stop)
     default_execution_mode: str = "MAKER"

@@ -612,11 +612,16 @@ class EdgeEvaluator:
                         continue
 
                 sz = self.strategy_params.get(s_name, {}).get("order_size_btc", self.bt_cfg.order_size_btc)
+                if getattr(self.bt_cfg, "capital_usd", None) is not None and self.bt_cfg.capital_usd > 0:
+                    capital_ratio = self.bt_cfg.capital_usd / 10_000.0
+                    sz = sz * capital_ratio
                 is_coin_units = (sz > 1.0)
                 if same_dir_active:
                     sz = sz * 0.5  # 50% size discount on co-entry within the same group
                 if self.market_cfg.coin.upper() != "BTC" and mid_price > 0 and not is_coin_units:
                     sz = round(sz * (85000.0 / mid_price), 2)
+                elif self.market_cfg.coin.upper() == "BTC":
+                    sz = round(sz, 4)
                 else:
                     sz = round(sz, 2)
 

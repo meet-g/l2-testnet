@@ -41,6 +41,8 @@ class LiveOrderExecutor:
         console: Optional[Console] = None,
         max_position_btc: float = 0.05,
         default_order_size_btc: float = 0.0005,
+        capital_usd: Optional[float] = None,
+        allocation_pct: float = 1.0,
         order_cooldown_secs: float = 2.0,
         auditor: Optional[Any] = None,
         strategy_name: str = "LiveExecution",
@@ -49,6 +51,8 @@ class LiveOrderExecutor:
         self.console = console or Console()
         self.max_position_btc = max_position_btc
         self.default_order_size_btc = default_order_size_btc
+        self.capital_usd = capital_usd if capital_usd is not None else getattr(self.config.backtest, "capital_usd", None)
+        self.allocation_pct = allocation_pct if allocation_pct is not None else getattr(self.config.backtest, "capital_allocation_pct", 1.0)
         self.order_cooldown_secs = order_cooldown_secs
         self.auditor = auditor
         self.strategy_name = strategy_name
@@ -463,7 +467,12 @@ class LiveOrderExecutor:
         trail_dist_bps = getattr(strat_cfg, "trailing_stop_distance_bps", 1.2)
 
         mid_price = (best_bid + best_ask) / 2.0 if (best_bid > 0 and best_ask > 0) else best_bid
-        order_size = self.ensure_min_notional(self.default_order_size_btc, mid_price)
+        if self.capital_usd is not None and self.capital_usd > 0 and mid_price > 0:
+            target_notional = self.capital_usd * self.allocation_pct
+            computed_sz = self.format_size(target_notional / mid_price)
+            order_size = self.ensure_min_notional(computed_sz, mid_price)
+        else:
+            order_size = self.ensure_min_notional(self.default_order_size_btc, mid_price)
 
         # ---------------------------------------------------------------------
         # 1. POSITION MANAGEMENT (ACTIVE EXITS: TP, SL, TRAILING STOP, HEDGE)

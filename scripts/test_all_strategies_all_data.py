@@ -240,26 +240,30 @@ def detect_coin(filepath: str) -> str:
     return "BTC"
 
 
-def get_coin_order_size(coin: str) -> float:
-    """Returns calibrated order size to approximate ~$8,500 - $9,500 USD notional."""
+def get_coin_order_size(coin: str, capital_usd: float = 10000.0) -> float:
+    """Returns calibrated order size scaled to account capital ($10,000 baseline)."""
+    ratio = capital_usd / 10000.0 if capital_usd > 0 else 1.0
     c = coin.upper()
     if c == "HYPE":
-        return 95.0
+        return round(95.0 * ratio, 2)
     elif c == "SOL":
-        return 50.0
+        return round(50.0 * ratio, 2)
     elif c == "ETH":
-        return 3.0
+        return round(3.0 * ratio, 4)
     else:  # BTC
-        return 0.1
+        return round(0.1 * ratio, 5)
 
 
 def replay_single_dataset(arg: Any) -> Dict[str, Any]:
     """Top-level worker function for multiprocessing.Pool (Windows spawn-compatible)."""
     global _GLOBAL_STRATEGIES_CFG
+    capital_usd = 10000.0
     if isinstance(arg, tuple):
         filepath = arg[0]
         size_mb = float(arg[1]) if len(arg) > 1 and isinstance(arg[1], (int, float)) else os.path.getsize(filepath) / (1024.0 * 1024.0)
         enabled_strategies_list = arg[2] if len(arg) > 2 else None
+        if len(arg) > 3 and isinstance(arg[3], (int, float)):
+            capital_usd = float(arg[3])
     else:
         filepath = arg
         size_mb = os.path.getsize(filepath) / (1024.0 * 1024.0)
@@ -273,7 +277,9 @@ def replay_single_dataset(arg: Any) -> Dict[str, Any]:
 
     cfg = AppConfig(strategies=_GLOBAL_STRATEGIES_CFG)
     cfg.market.coin = coin
-    cfg.backtest.order_size_btc = get_coin_order_size(coin)
+    cfg.backtest.initial_cash_usd = capital_usd
+    cfg.backtest.capital_usd = capital_usd
+    cfg.backtest.order_size_btc = get_coin_order_size(coin, capital_usd)
     cfg.backtest.horizons_seconds = []  # Bypass unused forward return IC computation (F13)
 
     if enabled_strategies_list:
@@ -497,6 +503,7 @@ def run_full_backtest(
     strategies_filter: Optional[List[str]] = None,
     verify_baseline: bool = False,
     baseline_path: Optional[str] = "audits/hype_76_sessions_benchmark.json",
+    capital: float = 10000.0,
 ) -> Dict[str, Any]:
     console = Console(highlight=False)
 
@@ -547,7 +554,7 @@ def run_full_backtest(
         active_strats = strategies_filter
     console.print(f"Active Strategies:[bold yellow] {', '.join(active_strats)}[/bold yellow]\n")
 
-    tasks = [(f, os.path.getsize(f) / (1024.0 * 1024.0)) for f in all_files]
+    tasks = [(f, os.path.getsize(f) / (1024.0 * 1024.0), active_strats, capital) for f in all_files]
     results = []
 
     # Multiprocessing Pool with greedy work-stealing and one-time worker init
@@ -836,6 +843,7 @@ if __name__ == "__main__":
     parser.add_argument("--verify-baseline", action="store_true", help="Assert deterministic parity against 76-session HYPE baseline")
     parser.add_argument("--baseline-file", type=str, default="audits/hype_76_sessions_benchmark.json", help="Path to baseline benchmark JSON")
     parser.add_argument("--strategies", type=str, default="", help="Comma-separated strategy names to evaluate (e.g. 'Queue_Replenishment')")
+    parser.add_argument("--capital", type=float, default=10000.0, help="Simulated account capital in USD (default: $10,000)")
     parser.add_argument("--output-json", type=str, default="", help="Path to save summary result JSON")
     args = parser.parse_args()
 
@@ -854,6 +862,7 @@ if __name__ == "__main__":
         strategies_filter=strat_filter,
         verify_baseline=args.verify_baseline,
         baseline_path=args.baseline_file,
+        capital=args.capital,
     )
 
     if args.output_json and summary:

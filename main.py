@@ -120,6 +120,8 @@ class L2EngineRunner:
                 config=self.config,
                 console=self.console,
                 default_order_size_btc=order_size_btc,
+                capital_usd=getattr(self.config.backtest, "capital_usd", None),
+                allocation_pct=getattr(self.config.backtest, "capital_allocation_pct", 1.0),
                 auditor=self.auditor,
                 strategy_name=active_name,
             )
@@ -1551,6 +1553,8 @@ def main():
     parser.add_argument("--speed", type=float, default=1.0, help="Replay speed multiplier")
     parser.add_argument("--size", type=float, default=0.1, help="Simulated order size in BTC (default: 0.1 BTC)")
     parser.add_argument("--cash", type=float, default=10000.0, help="Initial simulated account capital in USD (default: $10,000)")
+    parser.add_argument("--capital", type=float, default=0.0, help="Total trading capital in USD to dynamically scale order sizes (e.g. 5000 for $5,000)")
+    parser.add_argument("--allocation", type=float, default=1.0, help="Fraction of capital per trade (default: 1.0 for 100%, 0.2 for 20%)")
     parser.add_argument("--save-model", type=str, default="models/l2_trained_weights.json", help="Model weights save path")
     parser.add_argument("--max-files", type=int, default=0, help="Maximum number of files to ingest for ML training (0 = all)")
     parser.add_argument("--prune-empty", action="store_true", help="Remove empty audit session directories (0 trades)")
@@ -1580,13 +1584,37 @@ def main():
     if args.secret_key:
         cfg.account.secret_key = args.secret_key.strip()
     cfg.market.coin = args.coin.upper()
-    if cfg.market.coin == "HYPE":
-        if args.order_size == 0.0005:
-            args.order_size = 1.0  # 1.0 HYPE (~$90 notional, exceeds $10 minimum)
-        if args.size == 0.1:
-            args.size = 95.0       # 95.0 HYPE (~$8,550 notional, matching 0.1 BTC baseline)
-    cfg.backtest.order_size_btc = args.size
+    if args.capital > 0:
+        args.cash = args.capital
     cfg.backtest.initial_cash_usd = args.cash
+    cfg.backtest.capital_usd = args.capital if args.capital > 0 else (args.cash if args.cash != 10000.0 else None)
+    cfg.backtest.capital_allocation_pct = args.allocation
+
+    # Dynamic scaling for backtesting & live trading based on capital
+    if cfg.backtest.capital_usd is not None and cfg.backtest.capital_usd > 0:
+        ratio = cfg.backtest.capital_usd / 10000.0
+        if cfg.market.coin == "HYPE":
+            if args.size == 0.1:
+                args.size = round(95.0 * ratio, 2)
+            if args.order_size == 0.0005:
+                args.order_size = round(60.0 * ratio * args.allocation, 2)
+        elif cfg.market.coin == "BTC":
+            if args.size == 0.1:
+                args.size = round(0.1 * ratio, 5)
+            if args.order_size == 0.0005:
+                args.order_size = round(0.06 * ratio * args.allocation, 5)
+        elif cfg.market.coin == "SOL" and args.size == 0.1:
+            args.size = round(50.0 * ratio, 2)
+        elif cfg.market.coin == "ETH" and args.size == 0.1:
+            args.size = round(3.0 * ratio, 4)
+    else:
+        if cfg.market.coin == "HYPE":
+            if args.order_size == 0.0005:
+                args.order_size = 1.0  # 1.0 HYPE (~$90 notional, exceeds $10 minimum)
+            if args.size == 0.1:
+                args.size = 95.0       # 95.0 HYPE (~$8,550 notional, matching 0.1 BTC baseline)
+
+    cfg.backtest.order_size_btc = args.size
 
     # Resolve UI display mode (3 explicit choices: 'cli', 'browser', 'no-ui')
     ui_mode = "cli"
@@ -1714,12 +1742,13 @@ def main():
         for c in ["btc", "hype", "sol", "eth"]:
             if f"hl_{c}_" in fpath_lower or f"/{c}/" in fpath_lower:
                 cfg.market.coin = c.upper()
-                if c == "hype" and args.size == 0.1:
-                    cfg.backtest.order_size_btc = 95.0
-                elif c == "sol" and args.size == 0.1:
-                    cfg.backtest.order_size_btc = 50.0
-                elif c == "eth" and args.size == 0.1:
-                    cfg.backtest.order_size_btc = 3.0
+                ratio = (cfg.backtest.capital_usd / 10000.0) if (cfg.backtest.capital_usd and cfg.backtest.capital_usd > 0) else 1.0
+                if c == "hype" and (args.size == 0.1 or args.size == 95.0):
+                    cfg.backtest.order_size_btc = round(95.0 * ratio, 2)
+                elif c == "sol" and (args.size == 0.1 or args.size == 50.0):
+                    cfg.backtest.order_size_btc = round(50.0 * ratio, 2)
+                elif c == "eth" and (args.size == 0.1 or args.size == 3.0):
+                    cfg.backtest.order_size_btc = round(3.0 * ratio, 4)
                 break
 
         # Offline replay
