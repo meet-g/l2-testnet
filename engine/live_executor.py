@@ -5,8 +5,21 @@ directly to the live Hyperliquid Testnet orderbook via the official SDK with ris
 """
 
 import logging
+import sys
 import time
 from typing import Any, Dict, List, Optional
+
+# Ensure standard output and error support unicode symbols (✓ / ✗) on Windows
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 import eth_account
 from hyperliquid.exchange import Exchange
