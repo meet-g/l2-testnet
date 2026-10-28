@@ -206,16 +206,27 @@ class L2EngineRunner:
                 if self.live_executor:
                     active_name = self.config.strategies.live_execution.active_strategy
                     active_strat = self.config.strategies.execution_strategies.get(active_name)
-                    if active_strat and active_strat.enabled:
-                        sig_score = scores.get(active_strat.signal_key, res.score)
-                    else:
-                        sig_score = res.score
 
+                    # Determine active firing strategy (prioritizing designated active_strategy, or highest conviction enabled strategy)
+                    strat_to_use = active_name
+                    sig_score = scores.get(active_strat.signal_key, 0.0) if (active_strat and active_strat.enabled) else 0.0
+                    threshold = active_strat.entry_threshold if active_strat else 0.85
+
+                    if abs(sig_score) < threshold:
+                        for s_name, s_def in self.config.strategies.execution_strategies.items():
+                            if s_def.enabled and s_name != active_name:
+                                s_score = scores.get(s_def.signal_key, 0.0)
+                                if abs(s_score) >= s_def.entry_threshold and abs(s_score) > abs(sig_score):
+                                    sig_score = s_score
+                                    strat_to_use = s_name
+
+                    self.live_executor.strategy_name = strat_to_use
                     self.live_executor.on_signal_update(
                         signal_score=sig_score,
                         best_bid=self.book.best_bid,
                         best_ask=self.book.best_ask,
                         spread=self.book.spread,
+                        scores=scores,
                     )
 
             elapsed = time.perf_counter() - start_t

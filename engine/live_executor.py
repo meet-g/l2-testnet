@@ -1,10 +1,12 @@
-"""Live Order Execution Manager for Hyperliquid Testnet.
+"""Live Order Execution Manager for Hyperliquid Testnet & Mainnet.
 
-Bridges high-conviction microstructure alpha signals (WOBI, MicroPrice, Composite Alpha, Adaptive ML)
-directly to the live Hyperliquid Testnet orderbook via the official SDK with risk guardrails.
+Bridges high-conviction microstructure alpha signals (Hedged Convexity, Convexity Cascade,
+Momentum Expansion, Queue Replenishment, Composite Alpha) directly to the live Hyperliquid
+order book via the official SDK with comprehensive risk guardrails.
 """
 
 import logging
+import math
 import sys
 import time
 from typing import Any, Dict, List, Optional
@@ -31,15 +33,15 @@ from config import AppConfig
 
 
 class LiveOrderExecutor:
-    """Manages real-time order placement, cancellation, and risk management on Hyperliquid Testnet."""
+    """Manages real-time order placement, cancellation, stateful tracking, and risk management on Hyperliquid."""
 
     def __init__(
         self,
         config: Optional[AppConfig] = None,
         console: Optional[Console] = None,
         max_position_btc: float = 0.05,
-        default_order_size_btc: float = 0.0005,  # ~$40 notional (above $10 minimum)
-        order_cooldown_secs: float = 5.0,
+        default_order_size_btc: float = 0.0005,
+        order_cooldown_secs: float = 2.0,
         auditor: Optional[Any] = None,
         strategy_name: str = "LiveExecution",
     ):
@@ -66,10 +68,24 @@ class LiveOrderExecutor:
         self.info: Optional[Info] = None
         self.is_initialized: bool = False
 
+        # Asset metadata specifications
+        self.sz_decimals: int = 5
+        self.max_price_decimals: int = 1
+        self.max_leverage: int = 40
+
+        # Stateful local position & order management (prevents hot-loop REST blocking)
+        self.cached_position: float = 0.0
+        self.entry_price: float = 0.0
+        self.peak_price: float = 0.0
+        self.trough_price: float = 0.0
+        self.trailing_stop_active: bool = False
+        self.last_sync_time: float = 0.0
+        self.active_order: Optional[Dict[str, Any]] = None  # {"oid": int, "is_buy": bool, "price": float, "size": float, "time": float}
+
         self._initialize()
 
     def _initialize(self) -> None:
-        """Initializes Hyperliquid SDK client with configured wallet and account address."""
+        """Initializes Hyperliquid SDK client with configured wallet, account address, and coin metadata."""
         if not self.secret_key:
             self.console.print("[dim yellow][LiveExecutor] No secret key configured; live execution disabled.[/dim yellow]")
             return
@@ -82,16 +98,111 @@ class LiveOrderExecutor:
                 base_url=self.base_url,
                 account_address=self.account_address if self.account_address else None,
             )
+
+            # Retrieve asset decimals and specifications from exchange metadata
+            try:
+                meta = self.info.meta()
+                universe = meta.get("universe", [])
+                coin_meta = next((c for c in universe if c.get("name") == self.coin), None)
+                if coin_meta:
+                    self.sz_decimals = int(coin_meta.get("szDecimals", 5))
+                    self.max_price_decimals = max(0, 6 - self.sz_decimals)
+                    self.max_leverage = int(coin_meta.get("maxLeverage", 40))
+            except Exception as meta_err:
+                logging.warning(f"[LiveExecutor] Could not retrieve meta specifications for {self.coin}: {meta_err}")
+
             self.is_initialized = True
             signer_addr = wallet.address
             network_label = "TESTNET" if self.config.hyperliquid.use_testnet else "MAINNET"
             self.console.print(
                 f"[bold green]✓ [LiveExecutor] Connected to Hyperliquid {network_label}![/bold green] "
-                f"Master: [dim]{self.account_address[:8]}...[/dim] | Signer: [dim]{signer_addr[:8]}...[/dim]"
+                f"Master: [dim]{self.account_address[:8]}...[/dim] | Signer: [dim]{signer_addr[:8]}...[/dim] | "
+                f"Coin: [bold cyan]{self.coin}[/bold cyan] (szDec: {self.sz_decimals}, maxPxDec: {self.max_price_decimals})"
             )
+
+            # Perform initial state sync
+            self.sync_state(force=True)
+
         except Exception as e:
             self.console.print(f"[bold red]✗ [LiveExecutor] Initialization failed: {e}[/bold red]")
             self.is_initialized = False
+
+    def format_price(self, price: float) -> float:
+        """Formats price conforming to Hyperliquid's 5 significant figures and max decimal rules."""
+        if price <= 0:
+            return 0.0
+        # Hyperliquid requires max 5 significant figures
+        formatted = f"{price:.5g}"
+        val = float(formatted)
+        return round(val, self.max_price_decimals)
+
+    def format_size(self, size: float) -> float:
+        """Formats order size conforming to asset's szDecimals."""
+        if self.sz_decimals == 0:
+            return float(int(round(size)))
+        return round(size, self.sz_decimals)
+
+    def ensure_min_notional(self, size: float, price: float) -> float:
+        """Ensures order size achieves at least $15.00 notional (safely above the $10 exchange minimum)."""
+        if price <= 0:
+            return self.format_size(size)
+        notional = size * price
+        if notional < 15.0:
+            # Upgrade size to achieve ~$20.00 notional
+            target_size = 20.0 / price
+            upgraded = self.format_size(target_size)
+            if self.sz_decimals == 0 and upgraded < 1.0:
+                upgraded = 1.0
+            return max(self.format_size(size), upgraded)
+        return self.format_size(size)
+
+    def sync_state(self, force: bool = False) -> None:
+        """Synchronizes on-chain positions and open orders. Throttled to max once every 5.0s to avoid rate limiting."""
+        if not self.is_initialized or not self.info or not self.account_address:
+            return
+
+        now = time.time()
+        if not force and (now - self.last_sync_time < 5.0):
+            return
+        self.last_sync_time = now
+
+        try:
+            # Sync user position
+            user_state = self.info.user_state(self.account_address)
+            pos_found = False
+            for p in user_state.get("assetPositions", []):
+                pos = p.get("position", {})
+                if pos.get("coin") == self.coin:
+                    self.cached_position = float(pos.get("szi", 0.0))
+                    entry_px = float(pos.get("entryPx", 0.0))
+                    if entry_px > 0:
+                        self.entry_price = entry_px
+                    pos_found = True
+                    break
+
+            if not pos_found:
+                self.cached_position = 0.0
+                self.entry_price = 0.0
+                self.trailing_stop_active = False
+
+            # Sync open orders for this coin
+            open_orders = self.info.open_orders(self.account_address)
+            coin_orders = [o for o in open_orders if o.get("coin") == self.coin]
+            self.active_order_oids = [int(o["oid"]) for o in coin_orders]
+
+            if not coin_orders:
+                self.active_order = None
+            else:
+                first_o = coin_orders[0]
+                self.active_order = {
+                    "oid": int(first_o["oid"]),
+                    "is_buy": first_o.get("side", "B") == "B",
+                    "price": float(first_o.get("limitPx", 0.0)),
+                    "size": float(first_o.get("sz", 0.0)),
+                    "time": now,
+                }
+        except Exception as e:
+            logging.debug(f"[LiveExecutor] State sync exception: {e}")
 
     def get_open_orders(self) -> List[Dict[str, Any]]:
         """Fetches active resting limit orders from Hyperliquid exchange."""
@@ -103,18 +214,39 @@ class LiveOrderExecutor:
             return []
 
     def get_current_position(self) -> float:
-        """Fetches active net position size in BTC from Hyperliquid exchange."""
-        if not self.info or not self.account_address:
-            return 0.0
+        """Returns the current net position size in asset units (from fast local cache or exchange)."""
+        self.sync_state(force=False)
+        return self.cached_position
+
+    def cancel_order(self, oid: int) -> bool:
+        """Cancels a specific order by ID and updates local tracking."""
+        if not self.is_initialized or not self.exchange:
+            return False
+
         try:
-            user_state = self.info.user_state(self.account_address)
-            for p in user_state.get("assetPositions", []):
-                pos = p.get("position", {})
-                if pos.get("coin") == self.coin:
-                    return float(pos.get("szi", 0.0))
-            return 0.0
-        except Exception:
-            return 0.0
+            res = self.exchange.cancel(self.coin, oid)
+            if res.get("status") == "ok":
+                if self.active_order and self.active_order.get("oid") == oid:
+                    self.active_order = None
+                if oid in self.active_order_oids:
+                    self.active_order_oids.remove(oid)
+                self.console.print(f"[dim yellow][LiveExecutor] Cancelled order {oid} for {self.coin}[/dim yellow]")
+                if self.auditor:
+                    self.auditor.record_live_order_event(
+                        strategy_name=self.strategy_name,
+                        event_type="CANCEL",
+                        side="UNKNOWN",
+                        size_btc=0.0,
+                        price=0.0,
+                        order_id=oid,
+                        status="ok",
+                    )
+                return True
+            else:
+                self.console.print(f"[dim red][LiveExecutor] Failed to cancel order {oid}: {res}[/dim red]")
+        except Exception as e:
+            self.console.print(f"[dim red][LiveExecutor] Exception cancelling order {oid}: {e}[/dim red]")
+        return False
 
     def cancel_all_orders(self) -> int:
         """Cancels all open orders for the configured coin."""
@@ -125,25 +257,11 @@ class LiveOrderExecutor:
         open_orders = self.get_open_orders()
         for o in open_orders:
             if o.get("coin") == self.coin:
-                oid = o.get("oid")
-                try:
-                    res = self.exchange.cancel(self.coin, oid)
-                    if res.get("status") == "ok":
-                        cancelled_count += 1
-                        self.console.print(f"[dim yellow][LiveExecutor] Cancelled order {oid} for {self.coin}[/dim yellow]")
-                        if self.auditor:
-                            self.auditor.record_live_order_event(
-                                strategy_name=self.strategy_name,
-                                event_type="CANCEL",
-                                side="UNKNOWN",
-                                size_btc=0.0,
-                                price=0.0,
-                                order_id=oid,
-                                status="ok",
-                            )
-                except Exception as e:
-                    self.console.print(f"[dim red][LiveExecutor] Failed to cancel order {oid}: {e}[/dim red]")
+                oid = int(o.get("oid"))
+                if self.cancel_order(oid):
+                    cancelled_count += 1
 
+        self.active_order = None
         self.active_order_oids.clear()
         return cancelled_count
 
@@ -155,15 +273,7 @@ class LiveOrderExecutor:
         post_only: bool = True,
         signal_score: float = 0.0,
     ) -> Optional[Dict[str, Any]]:
-        """Places a limit order on Hyperliquid Testnet.
-        
-        Args:
-            is_buy: True for BUY, False for SELL.
-            size_btc: Size in BTC (must exceed $10 notional).
-            price: Limit price in USD.
-            post_only: If True, uses 'Alo' (Add Liquidity Only / Post Only) to guarantee maker execution.
-            signal_score: Alpha signal score triggering this order.
-        """
+        """Places a limit order on Hyperliquid (Testnet or Mainnet) with post-only and cooldown protection."""
         if not self.is_initialized or not self.exchange:
             self.console.print("[dim red][LiveExecutor] Cannot place order: executor not initialized.[/dim red]")
             return None
@@ -173,8 +283,11 @@ class LiveOrderExecutor:
         if now - self.last_order_time < self.order_cooldown_secs:
             return None
 
-        # Check notional value (Hyperliquid requires >= $10)
-        notional = size_btc * price
+        # Format price and size conforming to Hyperliquid tick rules
+        px_fmt = self.format_price(price)
+        sz_fmt = self.ensure_min_notional(self.format_size(size_btc), px_fmt)
+
+        notional = sz_fmt * px_fmt
         if notional < 10.0:
             self.console.print(f"[dim yellow][LiveExecutor] Order notional ${notional:.2f} is below $10 minimum requirement.[/dim yellow]")
             return None
@@ -182,11 +295,11 @@ class LiveOrderExecutor:
         tif = "Alo" if post_only else "Gtc"
         side_str = "BUY" if is_buy else "SELL"
         side_color = "green" if is_buy else "red"
-
         net_label = "TESTNET" if self.config.hyperliquid.use_testnet else "MAINNET"
+
         self.console.print(
-            f"[bold {side_color}][LIVE {net_label} ORDER] Submitting {side_str} {size_btc:.4f} {self.coin} @ ${price:,.1f} "
-            f"(${notional:,.1f} notional, TIF: {tif})...[/bold {side_color}]"
+            f"[bold {side_color}][LIVE {net_label} ORDER] Submitting {side_str} {sz_fmt} {self.coin} @ ${px_fmt:,.4f} "
+            f"(${notional:,.2f} notional, TIF: {tif})...[/bold {side_color}]"
         )
 
         if self.auditor:
@@ -194,8 +307,8 @@ class LiveOrderExecutor:
                 strategy_name=self.strategy_name,
                 event_type="SUBMIT",
                 side=side_str,
-                size_btc=size_btc,
-                price=price,
+                size_btc=sz_fmt,
+                price=px_fmt,
                 tif=tif,
                 status="submitting",
                 signal_score=signal_score,
@@ -205,8 +318,8 @@ class LiveOrderExecutor:
             res = self.exchange.order(
                 name=self.coin,
                 is_buy=is_buy,
-                sz=size_btc,
-                limit_px=round(price, 1),
+                sz=sz_fmt,
+                limit_px=px_fmt,
                 order_type={"limit": {"tif": tif}},
                 reduce_only=False,
             )
@@ -218,28 +331,43 @@ class LiveOrderExecutor:
                 first_status = statuses[0] if statuses else {}
 
                 if "resting" in first_status:
-                    oid = first_status["resting"].get("oid")
+                    oid = int(first_status["resting"].get("oid"))
                     self.active_order_oids.append(oid)
+                    self.active_order = {
+                        "oid": oid,
+                        "is_buy": is_buy,
+                        "price": px_fmt,
+                        "size": sz_fmt,
+                        "time": now,
+                    }
                     self.console.print(f"[bold green]✓ [LiveExecutor] Order RESTING on {net_label} Book! OID: {oid}[/bold green]")
                     if self.auditor:
                         self.auditor.record_live_order_event(
                             strategy_name=self.strategy_name,
                             event_type="RESTING",
                             side=side_str,
-                            size_btc=size_btc,
-                            price=price,
+                            size_btc=sz_fmt,
+                            price=px_fmt,
                             tif=tif,
                             order_id=oid,
                             status="ok",
                             signal_score=signal_score,
                         )
                     return res
+
                 elif "filled" in first_status:
                     fill = first_status["filled"]
-                    avg_px = float(fill.get("avgPx", price))
-                    total_sz = float(fill.get("totalSz", size_btc))
-                    oid = fill.get("oid")
-                    self.console.print(f"[bold green]✓ [LiveExecutor] Order FILLED immediately! Px: ${avg_px:,.1f} | Sz: {total_sz:.4f}[/bold green]")
+                    avg_px = float(fill.get("avgPx", px_fmt))
+                    total_sz = float(fill.get("totalSz", sz_fmt))
+                    oid = int(fill.get("oid", 0))
+                    self.cached_position += (total_sz if is_buy else -total_sz)
+                    self.entry_price = avg_px
+                    self.peak_price = avg_px
+                    self.trough_price = avg_px
+                    self.trailing_stop_active = False
+                    self.active_order = None
+
+                    self.console.print(f"[bold green]✓ [LiveExecutor] Order FILLED immediately! Px: ${avg_px:,.4f} | Sz: {total_sz}[/bold green]")
                     if self.auditor:
                         self.auditor.record_live_order_event(
                             strategy_name=self.strategy_name,
@@ -255,6 +383,7 @@ class LiveOrderExecutor:
                             signal_score=signal_score,
                         )
                     return res
+
                 elif "error" in first_status:
                     err_msg = first_status.get("error")
                     self.console.print(f"[bold red]✗ [LiveExecutor] Exchange rejected order: {err_msg}[/bold red]")
@@ -263,8 +392,8 @@ class LiveOrderExecutor:
                             strategy_name=self.strategy_name,
                             event_type="REJECTED",
                             side=side_str,
-                            size_btc=size_btc,
-                            price=price,
+                            size_btc=sz_fmt,
+                            price=px_fmt,
                             tif=tif,
                             status="rejected",
                             error_message=str(err_msg),
@@ -278,8 +407,8 @@ class LiveOrderExecutor:
                         strategy_name=self.strategy_name,
                         event_type="REJECTED",
                         side=side_str,
-                        size_btc=size_btc,
-                        price=price,
+                        size_btc=sz_fmt,
+                        price=px_fmt,
                         tif=tif,
                         status="failed",
                         error_message=str(res),
@@ -294,8 +423,8 @@ class LiveOrderExecutor:
                     strategy_name=self.strategy_name,
                     event_type="ERROR",
                     side=side_str,
-                    size_btc=size_btc,
-                    price=price,
+                    size_btc=sz_fmt,
+                    price=px_fmt,
                     tif=tif,
                     status="exception",
                     error_message=str(e),
@@ -309,77 +438,170 @@ class LiveOrderExecutor:
         best_bid: float,
         best_ask: float,
         spread: float,
+        scores: Optional[Dict[str, float]] = None,
     ) -> None:
-        """Evaluates signal score, manages inventory/positions, and posts quotes on the live order book."""
+        """Evaluates signal score, manages resting quotes, inventory positions, and executes full strategy lifecycle.
+        
+        Fixes:
+        1. Stateful Resting Order Persistence: Does NOT cancel active resting maker quotes unless price moves away.
+        2. Non-blocking Local Position Tracking: Uses cached state to avoid synchronous HTTP stalls in the async loop.
+        3. Full Lifecycle Management: Includes Take Profit, Stop Loss, Trailing Stops, and Defensive Maker Hedges.
+        """
         if not self.is_initialized:
             return
 
-        # Fetch current live position from exchange
-        pos_btc = self.get_current_position()
+        # Periodic background sync (throttled to 5s)
+        self.sync_state(force=False)
+        pos = self.cached_position
+
         strat_cfg = self.config.strategies.execution_strategies.get(self.strategy_name) if hasattr(self.config, "strategies") else None
         maker_threshold = strat_cfg.entry_threshold if strat_cfg else self.config.backtest.entry_threshold
         hedge_rev = getattr(strat_cfg, "hedge_reversal_threshold", None) or -maker_threshold
-        size = self.default_order_size_btc
+        tp_bps = getattr(strat_cfg, "take_profit_bps", 20.0)
+        sl_bps = getattr(strat_cfg, "stop_loss_bps", 8.0)
+        trail_act_bps = getattr(strat_cfg, "trailing_stop_activation_bps", 3.5)
+        trail_dist_bps = getattr(strat_cfg, "trailing_stop_distance_bps", 1.2)
 
-        # 1. Manage Active Long Position
-        if pos_btc > 0:
-            # If signal reverses or triggers defensive hedge -> Place passive maker SELL limit order at best ask
-            if signal_score <= hedge_rev:
-                self.cancel_all_orders()
-                exit_sz = min(pos_btc, size)
-                self.place_limit_order(
-                    is_buy=False,
-                    size_btc=exit_sz,
-                    price=best_ask,
-                    post_only=True,
-                    signal_score=signal_score,
-                )
-                return
+        mid_price = (best_bid + best_ask) / 2.0 if (best_bid > 0 and best_ask > 0) else best_bid
+        order_size = self.ensure_min_notional(self.default_order_size_btc, mid_price)
 
-            # If already at or above max_position_btc, DO NOT add more buys
-            if pos_btc >= self.max_position_btc:
-                return
+        # ---------------------------------------------------------------------
+        # 1. POSITION MANAGEMENT (ACTIVE EXITS: TP, SL, TRAILING STOP, HEDGE)
+        # ---------------------------------------------------------------------
+        if abs(pos) > 1e-6:
+            # Cancel any lingering entry quote if we are in an active position
+            if self.active_order:
+                self.cancel_order(self.active_order["oid"])
 
-        # 2. Manage Active Short Position
-        elif pos_btc < 0:
-            # If signal reverses or triggers defensive hedge -> Place passive maker BUY limit order at best bid
-            if signal_score >= -hedge_rev:
-                self.cancel_all_orders()
-                exit_sz = min(abs(pos_btc), size)
-                self.place_limit_order(
-                    is_buy=True,
-                    size_btc=exit_sz,
-                    price=best_bid,
-                    post_only=True,
-                    signal_score=signal_score,
-                )
-                return
+            is_long = pos > 0
+            entry_px = self.entry_price if self.entry_price > 0 else mid_price
 
-            # If already at or below -max_position_btc, DO NOT add more sells
-            if abs(pos_btc) >= self.max_position_btc:
-                return
+            if is_long:
+                self.peak_price = max(self.peak_price, mid_price)
+                gain_bps = ((mid_price - entry_px) / entry_px) * 10_000.0
 
-        # 3. New Entry Quotes (Capped by max_position_btc)
-        # High bullish conviction -> Post at Best Bid
+                # 1A. Emergency Stop Loss
+                if gain_bps <= -sl_bps:
+                    self.console.print(f"[bold red][LiveExecutor] Emergency Stop Loss triggered ({gain_bps:.1f} bps)![/bold red]")
+                    self.place_limit_order(is_buy=False, size_btc=abs(pos), price=best_bid, post_only=False, signal_score=signal_score)
+                    return
+
+                # 1B. Take Profit (Passive Maker Limit Sell at Best Ask)
+                if gain_bps >= tp_bps:
+                    self.console.print(f"[bold green][LiveExecutor] Take Profit reached (+{gain_bps:.1f} bps)! Quoting maker exit...[/bold green]")
+                    self.place_limit_order(is_buy=False, size_btc=abs(pos), price=best_ask, post_only=True, signal_score=signal_score)
+                    return
+
+                # 1C. Trailing Stop Ratchet
+                if gain_bps >= trail_act_bps:
+                    self.trailing_stop_active = True
+                if self.trailing_stop_active:
+                    trail_floor = self.peak_price * (1.0 - (trail_dist_bps / 10_000.0))
+                    if mid_price <= trail_floor:
+                        self.console.print(f"[bold yellow][LiveExecutor] Trailing Stop triggered at ${trail_floor:,.4f}![/bold yellow]")
+                        self.place_limit_order(is_buy=False, size_btc=abs(pos), price=best_ask, post_only=True, signal_score=signal_score)
+                        return
+
+                # 1D. Defensive Maker Hedge (Adverse Flow Reversal)
+                if signal_score <= hedge_rev:
+                    self.console.print(f"[bold magenta][LiveExecutor] Defensive Maker Hedge triggered (signal: {signal_score:.3f})![/bold magenta]")
+                    self.place_limit_order(is_buy=False, size_btc=abs(pos), price=best_ask, post_only=True, signal_score=signal_score)
+                    return
+
+            else:
+                # SHORT POSITION MANAGEMENT
+                self.trough_price = min(self.trough_price, mid_price) if self.trough_price > 0 else mid_price
+                gain_bps = ((entry_px - mid_price) / entry_px) * 10_000.0
+
+                # 1A. Emergency Stop Loss
+                if gain_bps <= -sl_bps:
+                    self.console.print(f"[bold red][LiveExecutor] Emergency Stop Loss triggered ({gain_bps:.1f} bps)![/bold red]")
+                    self.place_limit_order(is_buy=True, size_btc=abs(pos), price=best_ask, post_only=False, signal_score=signal_score)
+                    return
+
+                # 1B. Take Profit (Passive Maker Limit Buy at Best Bid)
+                if gain_bps >= tp_bps:
+                    self.console.print(f"[bold green][LiveExecutor] Take Profit reached (+{gain_bps:.1f} bps)! Quoting maker exit...[/bold green]")
+                    self.place_limit_order(is_buy=True, size_btc=abs(pos), price=best_bid, post_only=True, signal_score=signal_score)
+                    return
+
+                # 1C. Trailing Stop Ratchet
+                if gain_bps >= trail_act_bps:
+                    self.trailing_stop_active = True
+                if self.trailing_stop_active:
+                    trail_ceiling = self.trough_price * (1.0 + (trail_dist_bps / 10_000.0))
+                    if mid_price >= trail_ceiling:
+                        self.console.print(f"[bold yellow][LiveExecutor] Trailing Stop triggered at ${trail_ceiling:,.4f}![/bold yellow]")
+                        self.place_limit_order(is_buy=True, size_btc=abs(pos), price=best_bid, post_only=True, signal_score=signal_score)
+                        return
+
+                # 1D. Defensive Maker Hedge (Adverse Flow Reversal)
+                if signal_score >= -hedge_rev:
+                    self.console.print(f"[bold magenta][LiveExecutor] Defensive Maker Hedge triggered (signal: {signal_score:.3f})![/bold magenta]")
+                    self.place_limit_order(is_buy=True, size_btc=abs(pos), price=best_bid, post_only=True, signal_score=signal_score)
+                    return
+
+            return
+
+        # ---------------------------------------------------------------------
+        # 2. ENTRY QUOTE MANAGEMENT (WHEN FLAT: MAINTAIN PERSISTENT RESTING QUOTES)
+        # ---------------------------------------------------------------------
+        self.entry_price = 0.0
+        self.trailing_stop_active = False
+
+        # Bullish Entry: Post passive maker quote at Best Bid
         if signal_score >= maker_threshold:
-            if pos_btc + size <= self.max_position_btc:
-                self.cancel_all_orders()
-                self.place_limit_order(
-                    is_buy=True,
-                    size_btc=size,
-                    price=best_bid,
-                    post_only=True,
-                    signal_score=signal_score,
-                )
+            target_px = self.format_price(best_bid)
 
-        # High bearish conviction -> Post at Best Ask
+            # Check existing resting order persistence
+            if self.active_order and self.active_order.get("is_buy"):
+                cur_px = self.active_order.get("price")
+                # If existing resting order is already at best bid, KEEP IT RESTING (preserve queue priority!)
+                if abs(cur_px - target_px) < 1e-6:
+                    return
+                # Price has drifted away from our quote -> cancel and re-post at new best bid
+                self.cancel_order(self.active_order["oid"])
+
+            elif self.active_order and not self.active_order.get("is_buy"):
+                # Active order is on opposite side -> cancel it
+                self.cancel_order(self.active_order["oid"])
+
+            # Place persistent resting maker buy
+            self.place_limit_order(
+                is_buy=True,
+                size_btc=order_size,
+                price=target_px,
+                post_only=True,
+                signal_score=signal_score,
+            )
+
+        # Bearish Entry: Post passive maker quote at Best Ask
         elif signal_score <= -maker_threshold:
-            if abs(pos_btc - size) <= self.max_position_btc:
-                self.cancel_all_orders()
-                self.place_limit_order(
-                    is_buy=False,
-                    size_btc=size,
-                    price=best_ask,
-                    post_only=True,
-                    signal_score=signal_score,
-                )
+            target_px = self.format_price(best_ask)
+
+            # Check existing resting order persistence
+            if self.active_order and not self.active_order.get("is_buy"):
+                cur_px = self.active_order.get("price")
+                # If existing resting order is already at best ask, KEEP IT RESTING (preserve queue priority!)
+                if abs(cur_px - target_px) < 1e-6:
+                    return
+                # Price has drifted away from our quote -> cancel and re-post at new best ask
+                self.cancel_order(self.active_order["oid"])
+
+            elif self.active_order and self.active_order.get("is_buy"):
+                # Active order is on opposite side -> cancel it
+                self.cancel_order(self.active_order["oid"])
+
+            # Place persistent resting maker sell
+            self.place_limit_order(
+                is_buy=False,
+                size_btc=order_size,
+                price=target_px,
+                post_only=True,
+                signal_score=signal_score,
+            )
+
+        else:
+            # Signal is neutral (below entry threshold): clean up any resting entry orders
+            if self.active_order:
+                self.cancel_order(self.active_order["oid"])
