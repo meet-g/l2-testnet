@@ -85,6 +85,7 @@ class LiveOrderExecutor:
         self.trailing_stop_active: bool = False
         self.last_sync_time: float = 0.0
         self.active_order: Optional[Dict[str, Any]] = None  # {"oid": int, "is_buy": bool, "price": float, "size": float, "time": float}
+        self.position_strategy: Optional[str] = None  # Strategy that opened current position
 
         self._initialize()
 
@@ -302,7 +303,7 @@ class LiveOrderExecutor:
         net_label = "TESTNET" if self.config.hyperliquid.use_testnet else "MAINNET"
 
         self.console.print(
-            f"[bold {side_color}][LIVE {net_label} ORDER] Submitting {side_str} {sz_fmt} {self.coin} @ ${px_fmt:,.4f} "
+            f"[bold {side_color}][LIVE {net_label} ORDER] [{self.strategy_name}] Submitting {side_str} {sz_fmt} {self.coin} @ ${px_fmt:,.4f} "
             f"(${notional:,.2f} notional, TIF: {tif})...[/bold {side_color}]"
         )
 
@@ -344,7 +345,7 @@ class LiveOrderExecutor:
                         "size": sz_fmt,
                         "time": now,
                     }
-                    self.console.print(f"[bold green]✓ [LiveExecutor] Order RESTING on {net_label} Book! OID: {oid}[/bold green]")
+                    self.console.print(f"[bold green]✓ [LiveExecutor] [{self.strategy_name}] Order RESTING on {net_label} Book! OID: {oid}[/bold green]")
                     if self.auditor:
                         self.auditor.record_live_order_event(
                             strategy_name=self.strategy_name,
@@ -457,6 +458,8 @@ class LiveOrderExecutor:
         # Periodic background sync (throttled to 5s)
         self.sync_state(force=False)
         pos = self.cached_position
+        if abs(pos) > 1e-6 and not self.position_strategy:
+            self.position_strategy = self.strategy_name
 
         strat_cfg = self.config.strategies.execution_strategies.get(self.strategy_name) if hasattr(self.config, "strategies") else None
         maker_threshold = strat_cfg.entry_threshold if strat_cfg else self.config.backtest.entry_threshold
@@ -557,6 +560,7 @@ class LiveOrderExecutor:
         # ---------------------------------------------------------------------
         self.entry_price = 0.0
         self.trailing_stop_active = False
+        self.position_strategy = None
 
         # Bullish Entry: Post passive maker quote at Best Bid
         if signal_score >= maker_threshold:

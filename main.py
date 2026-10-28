@@ -206,21 +206,27 @@ class L2EngineRunner:
 
                 # Feed live order executor if enabled
                 if self.live_executor:
-                    active_name = self.config.strategies.live_execution.active_strategy
-                    active_strat = self.config.strategies.execution_strategies.get(active_name)
+                    # If currently holding an active position, preserve the owning strategy and its signal for lifecycle management
+                    if abs(self.live_executor.cached_position) > 1e-6 and self.live_executor.position_strategy:
+                        strat_to_use = self.live_executor.position_strategy
+                        active_strat = self.config.strategies.execution_strategies.get(strat_to_use)
+                        sig_score = scores.get(active_strat.signal_key, 0.0) if active_strat else 0.0
+                    else:
+                        active_name = self.config.strategies.live_execution.active_strategy
+                        active_strat = self.config.strategies.execution_strategies.get(active_name)
 
-                    # Determine active firing strategy (prioritizing designated active_strategy, or highest conviction enabled strategy)
-                    strat_to_use = active_name
-                    sig_score = scores.get(active_strat.signal_key, 0.0) if (active_strat and active_strat.enabled) else 0.0
-                    threshold = active_strat.entry_threshold if active_strat else 0.85
+                        # Determine active firing strategy (prioritizing designated active_strategy, or highest conviction enabled strategy)
+                        strat_to_use = active_name
+                        sig_score = scores.get(active_strat.signal_key, 0.0) if (active_strat and active_strat.enabled) else 0.0
+                        threshold = active_strat.entry_threshold if active_strat else 0.85
 
-                    if abs(sig_score) < threshold:
-                        for s_name, s_def in self.config.strategies.execution_strategies.items():
-                            if s_def.enabled and s_name != active_name:
-                                s_score = scores.get(s_def.signal_key, 0.0)
-                                if abs(s_score) >= s_def.entry_threshold and abs(s_score) > abs(sig_score):
-                                    sig_score = s_score
-                                    strat_to_use = s_name
+                        if abs(sig_score) < threshold:
+                            for s_name, s_def in self.config.strategies.execution_strategies.items():
+                                if s_def.enabled and s_name != active_name:
+                                    s_score = scores.get(s_def.signal_key, 0.0)
+                                    if abs(s_score) >= s_def.entry_threshold and abs(s_score) > abs(sig_score):
+                                        sig_score = s_score
+                                        strat_to_use = s_name
 
                     self.live_executor.strategy_name = strat_to_use
                     self.live_executor.on_signal_update(
@@ -1687,7 +1693,12 @@ def main():
             cfg.backtest.order_size_btc = args.order_size
             net = cfg.hyperliquid.network_name.upper()
             active_live = cfg.strategies.live_execution.active_strategy
-            console.print(f"\n[bold red blink]⚠ LIVE {net} ORDER EXECUTION ENABLED! Strategy: {active_live}[/bold red blink]\n")
+            other_active = [s for s in en_strats if s != active_live]
+            if other_active:
+                strats_desc = f"{active_live} (Primary) + {', '.join(other_active)} (Dynamic Multi-Strategy Dispatch)"
+            else:
+                strats_desc = active_live
+            console.print(f"\n[bold red blink]⚠ LIVE {net} ORDER EXECUTION ENABLED! Active Strategies: {strats_desc}[/bold red blink]\n")
         runner = L2EngineRunner(
             config=cfg,
             record_data=True,
