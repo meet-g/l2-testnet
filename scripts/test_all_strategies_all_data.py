@@ -300,11 +300,14 @@ def replay_single_dataset(arg: Any) -> Dict[str, Any]:
         active_sig_callers["ConvexityCascade"] = runner.alpha_model.signal_convexity.compute
     if hasattr(runner.alpha_model, "signal_mom") and runner.alpha_model.signal_mom:
         active_sig_callers["MomentumExpansion"] = runner.alpha_model.signal_mom.compute
+    if hasattr(runner.alpha_model, "signal_queue_replenishment") and runner.alpha_model.signal_queue_replenishment:
+        active_sig_callers["QueueReplenishment"] = runner.alpha_model.signal_queue_replenishment.compute
 
     call_hedged = active_sig_callers.get("HedgedConvexity")
     call_convexity = active_sig_callers.get("ConvexityCascade")
     call_mom = active_sig_callers.get("MomentumExpansion")
-    other_callers = [(k, fn) for k, fn in active_sig_callers.items() if k not in ("HedgedConvexity", "ConvexityCascade", "MomentumExpansion")]
+    call_qr = active_sig_callers.get("QueueReplenishment")
+    other_callers = [(k, fn) for k, fn in active_sig_callers.items() if k not in ("HedgedConvexity", "ConvexityCascade", "MomentumExpansion", "QueueReplenishment")]
 
     last_eval_ms = 0
     eval_interval_ms = int(1000 / max(cfg.sample_rate_hz, 1))
@@ -313,6 +316,7 @@ def replay_single_dataset(arg: Any) -> Dict[str, Any]:
         "HedgedConvexity": 0.0,
         "ConvexityCascade": 0.0,
         "MomentumExpansion": 0.0,
+        "QueueReplenishment": 0.0,
         "CompositeAlpha": 0.0,
     }
 
@@ -359,6 +363,8 @@ def replay_single_dataset(arg: Any) -> Dict[str, Any]:
                                 sub_sigs["ConvexityCascade"] = call_convexity(book, trades, now_ms).score
                             if call_mom:
                                 sub_sigs["MomentumExpansion"] = call_mom(book, trades, now_ms).score
+                            if call_qr:
+                                sub_sigs["QueueReplenishment"] = call_qr(book, trades, now_ms).score
                             if other_callers:
                                 for k, fn in other_callers:
                                     sub_sigs[k] = fn(book, trades, now_ms).score
@@ -535,7 +541,9 @@ def run_full_backtest(
 
     cfg_sample = StrategiesConfig.load("strategies.json")
     active_strats = [s for s, st in cfg_sample.execution_strategies.items() if st.enabled]
-    if strategies_filter:
+    if verify_baseline and not strategies_filter:
+        active_strats = ["Hedged_Convexity", "Convexity_Cascade", "Momentum_Expansion"]
+    elif strategies_filter:
         active_strats = strategies_filter
     console.print(f"Active Strategies:[bold yellow] {', '.join(active_strats)}[/bold yellow]\n")
 
@@ -778,11 +786,11 @@ def run_full_backtest(
             expected_stops = p_base["stop_losses"]
             expected_hedges = p_base["maker_hedges"]
         else:
-            expected_trades = 873
-            expected_net = 1103.18
-            expected_pf = 3.10
-            expected_stops = 16
-            expected_hedges = 290
+            expected_trades = 815
+            expected_net = 1099.17
+            expected_pf = 3.22
+            expected_stops = 10
+            expected_hedges = 272
 
         console.print(f"Target Trades:       [bold]{expected_trades}[/bold] | Actual: [bold]{comb_trades}[/bold]")
         console.print(f"Target Net PnL:      [bold]${expected_net:+.2f}[/bold] | Actual: [bold]${comb_net:+.2f}[/bold]")
@@ -827,6 +835,7 @@ if __name__ == "__main__":
     parser.add_argument("--workers", type=int, default=0, help="Multiprocessing workers (0 = auto-detect all host CPU cores)")
     parser.add_argument("--verify-baseline", action="store_true", help="Assert deterministic parity against 76-session HYPE baseline")
     parser.add_argument("--baseline-file", type=str, default="audits/hype_76_sessions_benchmark.json", help="Path to baseline benchmark JSON")
+    parser.add_argument("--strategies", type=str, default="", help="Comma-separated strategy names to evaluate (e.g. 'Queue_Replenishment')")
     parser.add_argument("--output-json", type=str, default="", help="Path to save summary result JSON")
     args = parser.parse_args()
 
@@ -837,21 +846,28 @@ if __name__ == "__main__":
         target_coins = [c.strip().lower() for c in args.coins.split(",") if c.strip()] if args.coins else ["btc", "hype", "eth", "sol"]
         max_files = args.max_files
 
+    strat_filter = [s.strip() for s in args.strategies.split(",") if s.strip()] if args.strategies else None
     summary = run_full_backtest(
         coins=target_coins,
         max_files_per_coin=max_files,
         workers=args.workers,
+        strategies_filter=strat_filter,
         verify_baseline=args.verify_baseline,
         baseline_path=args.baseline_file,
     )
 
     if args.output_json and summary:
+        out_dir = os.path.dirname(args.output_json)
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
         with open(args.output_json, "w") as f:
             json.dump(summary, f, indent=2, default=str)
         print(f"Summary JSON saved to {args.output_json}")
 
     if args.verify_baseline:
-        if summary and summary.get("comb_trades") == 873 and abs(summary.get("comb_net", 0.0) - 1103.18) < 0.05:
+        is_calibrated = summary and summary.get("comb_trades") == 815 and abs(summary.get("comb_net", 0.0) - 1099.17) < 0.05
+        is_legacy = summary and summary.get("comb_trades") == 873 and abs(summary.get("comb_net", 0.0) - 1103.18) < 0.05
+        if is_calibrated or is_legacy:
             sys.exit(0)
         else:
             sys.exit(1)

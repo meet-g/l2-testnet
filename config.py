@@ -118,6 +118,22 @@ class SignalConfig:
     weight_vpin: float = 0.15
     weight_qdap: float = 0.25
 
+    # 8. Queue Replenishment Latency & Dynamic Asymmetry (QRLA)
+    qr_kappa_touch_btc: float = 0.05
+    qr_kappa_multi_btc: float = 0.10
+    qr_kappa_lat: float = 2.0
+    qr_depletion_threshold: float = 0.30
+    qr_baseline_window: int = 30
+    qr_cvd_window_secs: float = 15.0
+    qr_cvd_scale_btc: float = 2.0
+    qr_min_flow_hurdle: float = 0.18
+    qr_trend_window_secs: float = 120.0
+    qr_trend_scale_bps: float = 6.0
+    qr_w_rep1: float = 0.40
+    qr_w_rep3: float = 0.30
+    qr_w_lat: float = 0.15
+    qr_w_canc: float = 0.15
+
 
 @dataclass
 class BacktestConfig:
@@ -187,6 +203,8 @@ DEFAULT_STRATEGIES_JSON = {
             "max_holding_time_secs": 180,
             "exit_reversal_threshold": 0.85,
             "min_volatility_bps": 4.5,
+            "loss_cooldown_secs": 60,
+            "coentry_group": "triad",
         },
         "Convexity_Cascade": {
             "enabled": True,
@@ -203,6 +221,8 @@ DEFAULT_STRATEGIES_JSON = {
             "hedge_reversal_threshold": -0.45,
             "max_holding_time_secs": 120,
             "exit_reversal_threshold": 0.85,
+            "loss_cooldown_secs": 60,
+            "coentry_group": "triad",
         },
         "Momentum_Expansion": {
             "enabled": True,
@@ -219,6 +239,27 @@ DEFAULT_STRATEGIES_JSON = {
             "hedge_reversal_threshold": -0.45,
             "max_holding_time_secs": 120,
             "exit_reversal_threshold": 0.70,
+            "loss_cooldown_secs": 60,
+            "coentry_group": "triad",
+        },
+        "Queue_Replenishment": {
+            "enabled": True,
+            "description": "Orthogonal queue replenishment dynamics with multi-tier cancellation asymmetry, depletion persistence, and defensive maker hedging",
+            "signal_key": "QueueReplenishment",
+            "execution_type": "HEDGED_MAKER",
+            "entry_threshold": 0.985,
+            "order_size_btc": 0.1,
+            "take_profit_bps": 30.0,
+            "stop_loss_bps": 8.0,
+            "trailing_stop_activation_bps": 4.0,
+            "trailing_stop_distance_bps": 1.5,
+            "hedge_trigger_loss_bps": -3.5,
+            "hedge_reversal_threshold": -0.15,
+            "max_holding_time_secs": 180,
+            "exit_reversal_threshold": 0.80,
+            "min_volatility_bps": 4.5,
+            "loss_cooldown_secs": 120,
+            "coentry_group": "queue_replenishment",
         },
         "QDAP_Maker": {
             "enabled": True,
@@ -336,6 +377,10 @@ DEFAULT_STRATEGIES_JSON = {
             "enabled": True,
             "description": "Hedged Convexity Alpha (depth curvature + order count dispersion + dynamic VPIN toxicity shielding & defensive maker hedge triggers)",
         },
+        "QueueReplenishment": {
+            "enabled": True,
+            "description": "Dynamic L1/L3 queue replenishment delta, multi-tier cancellation asymmetry, and trade depletion persistence",
+        },
     },
 }
 
@@ -358,6 +403,47 @@ class ExecutionStrategyConfig:
     hedge_trigger_loss_bps: Optional[float] = None
     hedge_reversal_threshold: Optional[float] = None
     min_volatility_bps: Optional[float] = None
+    loss_cooldown_secs: Optional[int] = None
+    coentry_group: Optional[str] = None
+
+
+@dataclass
+class QueueReplenishmentConfig:
+    """Configuration dataclass for Queue Replenishment execution strategy and signal hyperparameters."""
+    # Execution strategy parameters
+    enabled: bool = True
+    description: str = "Orthogonal queue replenishment dynamics with multi-tier cancellation asymmetry, depletion persistence, and defensive maker hedging"
+    signal_key: str = "QueueReplenishment"
+    execution_type: str = "HEDGED_MAKER"
+    entry_threshold: float = 0.985
+    order_size_btc: float = 0.1
+    take_profit_bps: float = 30.0
+    stop_loss_bps: float = 8.0
+    trailing_stop_activation_bps: float = 4.0
+    trailing_stop_distance_bps: float = 1.5
+    hedge_trigger_loss_bps: float = -3.5
+    hedge_reversal_threshold: float = -0.15
+    max_holding_time_secs: int = 180
+    exit_reversal_threshold: float = 0.80
+    min_volatility_bps: float = 4.5
+    loss_cooldown_secs: int = 120
+    coentry_group: str = "queue_replenishment"
+
+    # Microstructure alpha hyperparameters
+    kappa_touch_btc: float = 0.05
+    kappa_multi_btc: float = 0.10
+    kappa_lat: float = 2.0
+    depletion_threshold: float = 0.30
+    baseline_window: int = 30
+    cvd_window_secs: float = 15.0
+    cvd_scale_btc: float = 2.0
+    min_flow_hurdle: float = 0.18
+    trend_window_secs: float = 120.0
+    trend_scale_bps: float = 6.0
+    w_rep1: float = 0.40
+    w_rep3: float = 0.30
+    w_lat: float = 0.15
+    w_canc: float = 0.15
 
 
 @dataclass
@@ -382,6 +468,7 @@ class StrategiesConfig:
     live_execution: LiveExecutionConfig = field(default_factory=LiveExecutionConfig)
     execution_strategies: Dict[str, ExecutionStrategyConfig] = field(default_factory=dict)
     alpha_signals: Dict[str, AlphaSignalConfig] = field(default_factory=dict)
+    queue_replenishment: QueueReplenishmentConfig = field(default_factory=QueueReplenishmentConfig)
 
     @classmethod
     def load(cls, filepath: str = "strategies.json") -> "StrategiesConfig":
@@ -431,6 +518,8 @@ class StrategiesConfig:
                 hedge_trigger_loss_bps=float(s_info["hedge_trigger_loss_bps"]) if "hedge_trigger_loss_bps" in s_info else fallback.get("hedge_trigger_loss_bps"),
                 hedge_reversal_threshold=float(s_info["hedge_reversal_threshold"]) if "hedge_reversal_threshold" in s_info else fallback.get("hedge_reversal_threshold"),
                 min_volatility_bps=float(s_info["min_volatility_bps"]) if "min_volatility_bps" in s_info else fallback.get("min_volatility_bps"),
+                loss_cooldown_secs=int(s_info["loss_cooldown_secs"]) if "loss_cooldown_secs" in s_info else fallback.get("loss_cooldown_secs"),
+                coentry_group=str(s_info["coentry_group"]) if "coentry_group" in s_info else fallback.get("coentry_group"),
             )
 
         # Parse alpha_signals
@@ -498,6 +587,10 @@ class StrategiesConfig:
                 p["hedge_reversal_threshold"] = s.hedge_reversal_threshold
             if s.min_volatility_bps is not None:
                 p["min_volatility_bps"] = s.min_volatility_bps
+            if s.loss_cooldown_secs is not None:
+                p["loss_cooldown_secs"] = s.loss_cooldown_secs
+            if hasattr(s, "coentry_group") and s.coentry_group is not None:
+                p["coentry_group"] = s.coentry_group
             res[s.name] = p
         return res
 
@@ -522,6 +615,7 @@ class AppConfig:
     signals: SignalConfig = field(default_factory=SignalConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
     strategies: StrategiesConfig = field(default_factory=lambda: StrategiesConfig.load("strategies.json"))
+    queue_replenishment: QueueReplenishmentConfig = field(default_factory=QueueReplenishmentConfig)
     
     # Logging & storage
     data_dir: str = "data"

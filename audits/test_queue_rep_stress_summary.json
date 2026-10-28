@@ -1,0 +1,54 @@
+{
+  "timestamp_utc": "2026-10-28T01:40:38Z",
+  "summary_10k": {
+    "total_iterations": 10000,
+    "seed": 42,
+    "category_counts": {
+      "SPREAD_OSCILLATION": 2000,
+      "LIQUIDITY_EXTREMES": 2000,
+      "TRADE_BURSTS_SWEEPS": 2000,
+      "CANCELLATION_CASCADES": 2000,
+      "DEGENERATE_FUZZ": 2000
+    },
+    "regime_counts": {
+      "INITIALIZATION": 2074,
+      "DAMPENED_FLOW_DISAGREEMENT": 6765,
+      "REPLENISHMENT_FLOW_ALIGNED": 1161
+    },
+    "score_stats": {
+      "min": -0.9999716763708046,
+      "max": 0.9999264503282037,
+      "mean": -0.020382250056011495
+    },
+    "confidence_stats": {
+      "min": 0.0,
+      "max": 0.999977312787551,
+      "mean": 0.21245881886626233
+    },
+    "latency_us": {
+      "mean": 20.937620000000027,
+      "p50": 22.2,
+      "p95": 37.0,
+      "p99": 49.4,
+      "max": 108.5
+    },
+    "tau_clamping_verified": true,
+    "zero_division_errors": 0,
+    "overflow_errors": 0,
+    "nan_inf_violations": 0,
+    "bound_violations": 0,
+    "status": "PASSED"
+  },
+  "targeted_edge_cases": {
+    "sub_penny_mid": "PASSED",
+    "mega_price_mid": "PASSED",
+    "depletion_clamping_50": "PASSED",
+    "negative_notional_scale": "PASSED",
+    "backward_timestamp": "PASSED"
+  },
+  "multi_seed_validation": {
+    "seed_1337": "PASSED (2000/2000)",
+    "seed_2026": "PASSED (2000/2000)"
+  },
+  "verdict": "APPROVE"
+}

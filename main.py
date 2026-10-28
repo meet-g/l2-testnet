@@ -1553,7 +1553,14 @@ def main():
         from config import StrategiesConfig
         cfg.strategies = StrategiesConfig.load(args.strategies_config)
     if args.strategy:
-        cfg.strategies.live_execution.active_strategy = args.strategy.strip()
+        strat_name = args.strategy.strip()
+        valid_strats = list(cfg.strategies.execution_strategies.keys())
+        if args.mode not in ("audit",) and strat_name not in valid_strats:
+            Console().print(f"[bold red]Error: Unknown strategy '{strat_name}'. Valid strategies: {', '.join(valid_strats)}[/bold red]")
+            sys.exit(1)
+        if strat_name in cfg.strategies.execution_strategies:
+            cfg.strategies.execution_strategies[strat_name].enabled = True
+        cfg.strategies.live_execution.active_strategy = strat_name
 
     if args.use_testnet is not None:
         cfg.hyperliquid.use_testnet = args.use_testnet

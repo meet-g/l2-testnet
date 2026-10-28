@@ -1,78 +1,108 @@
-# Project: Hyperliquid L2 Replay & Backtest Execution Acceleration
+# Project: Orthogonal Microstructure Strategy Research & Production Integration
 
 ## Architecture
-The execution acceleration architecture optimizes the high-frequency L2 replay and backtesting pipeline across four decoupled layers:
-1. **Fast Ingestion & Deserialization Layer (`engine/data_collector.py`, `scripts/`)**:
-   - High-throughput binary file streaming using `open("rb", buffering=1024*1024)`.
-   - SIMD-accelerated JSON deserialization via `orjson.loads` with seamless, robust fallback to Python's standard `json`.
-2. **Microstructure Alpha & Signal Calculation Layer (`signals/`, `engine/backtester.py`)**:
-   - Monotonic sliding window queue for O(1) rolling price extrema (`min`/`max`) in `EdgeEvaluator.record_step`.
-   - State-cached volume bucket imbalance in `VPINSignal` eliminating 99.9% of generator evaluations.
-   - Zero-allocation rolling float deque for `VOISignal` variance and standardization.
-   - C-accelerated O(log N) `bisect_left` lookup for chronological trend windows in `MomentumExpansionSignal`.
-   - Redundant sub-signal evaluation deduplication in `CompositeAlpha`.
-3. **OrderBook & Memory Allocation Layer (`core/orderbook.py`)**:
-   - Elimination of redundant Timsort calls on pre-sorted Hyperliquid L2 order books.
-   - `slots=True` memory optimization on `L2Level`, `Trade`, and `VolumeBucket` dataclasses, reducing per-instance memory by 68.4%.
-   - Replay-mode bypass of unconsumed `self.history = deque(maxlen=500)` snapshot retaining queue.
-4. **Multi-Core Batch Replay Layer (`scripts/test_all_strategies_all_data.py`)**:
-   - Host CPU core saturation (`os.cpu_count() == 12`).
-   - One-time worker process initialization of `StrategiesConfig`.
-   - In-worker aggregation of exit reasons to minimize IPC serialization overhead.
+The system architecture integrates an orthogonal market microstructure strategy (`Queue_Replenishment`) into the existing Hyperliquid high-frequency trading and offline L2 replay platform. The architecture comprises five decoupled layers:
+
+1. **Market Microstructure Feature Extraction Layer (`signals/queue_replenishment.py`)**:
+   - Computes dynamic Level-1 queue replenishment deltas ($R_{b1}, R_{a1}$) accounting for aggressive trade depletion and resting quote updates.
+   - Computes multi-tier (Levels 1-3) depth replenishment ($R_{b3}, R_{a3}$) and order cancellation asymmetry ($C_a, C_b$).
+   - Tracks depletion latency persistence ($\tau_a, \tau_b$) across consecutive depleted order book snapshots.
+   - Applies active taker flow gating ($|S_{cvd}| \ge 0.18$) and 2-minute macro trend alignment to eliminate dead spreads and toxic adverse selection.
+   - Scales notional depth thresholds dynamically via `book.notional_scale` ($85,000 / P_{mid}$) for cross-coin portability.
+   - Returns a strictly normalized `SignalResult` with `score` $\in [-1.0, 1.0]$ and `confidence` $\in [0.0, 1.0]$.
+
+2. **Composite Alpha Aggregation Layer (`signals/composite_alpha.py`)**:
+   - Instantiates `QueueReplenishmentSignal` alongside existing sub-signals.
+   - Exposes `signal_queue_replenishment` for direct engine and backtest extraction.
+
+3. **Configuration & Parameter Management Layer (`strategies.json`, `config.py`)**:
+   - Registers strategy parameters (`entry_threshold: 0.82`, `order_size_btc: 0.1`, `take_profit_bps: 20.0`, `stop_loss_bps: 8.0`, `trailing_stop_activation_bps: 5.0`, `trailing_stop_distance_bps: 2.0`, `hedge_trigger_loss_bps: -3.5`, `hedge_reversal_threshold: 0.15`, `min_volatility_bps: 4.5`, `loss_cooldown_secs: 120`).
+   - Registers dataclass definitions and programmatic fallback defaults in `config.py`.
+
+4. **Execution & Risk Management Engine Layer (`engine/backtester.py`, `main.py`)**:
+   - Implements `HEDGED_MAKER` lifecycle: passive maker entry at inside quotes (1.5 bps fee), maker take profit (+20 bps), trailing stop fee ratchet (+5 bps activation, 2 bps distance), defensive maker hedge exit (-3.5 bps loss on signal reversal saving 3.0 bps taker fee), and emergency taker stop loss (-8 bps, 4.5 bps taker fee + 0.2 bps slippage).
+   - Enforces co-entry protection (+0.04 conviction hurdle boost, 50% size discount) when multiple strategies hold simultaneous positions in the same direction.
+   - Routes live and paper trading in `main.py`.
+
+5. **Multi-Core Parallel Replay & Verification Layer (`scripts/test_all_strategies_all_data.py`)**:
+   - Saturates 12 CPU cores using multiprocessing with LPT bin packing.
+   - Wires `QueueReplenishment` signal caller in `active_sig_callers` and `sub_sigs` for high-throughput parallel evaluation across all 505 HYPE recording datasets.
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| F1 | `orjson` Fast Deserialization & Fallback | SIMD JSON deserialization in `engine/data_collector.py` with automatic fallback to standard `json`. | M1 | Survey R1 |
-| F2 | 1 MB Buffered Binary Streaming | Chunked binary buffer reads (`open("rb", buffering=1024*1024)`) in `L2ReplayEngine.stream_events`. | M1 | Survey R1 |
-| F3 | Replay Script Ingest Acceleration | Update `scripts/replay_continuous_multiday_session.py` to use binary streaming and `orjson`. | M1 | Survey R1 |
-| F4 | Monotonic Price Extrema Queue | O(1) sliding window queue in `EdgeEvaluator.record_step` replacing pure Python generator `min()`/`max()`. | M2 | Survey R2 |
-| F5 | State-Cached VPIN Bucket Evaluation | Cache VPIN bucket sums on bucket count transitions, eliminating 99.9% of generator calls. | M2 | Survey R2 |
-| F6 | Zero-Allocation VOI Variance Deque | Replace list allocations and generator variance with zero-allocation rolling float deque. | M2 | Survey R2 |
-| F7 | O(log N) Trend Window Lookup | Replace linear scan in `MomentumExpansionSignal` with `bisect_left` on sorted timestamps. | M2 | Survey R2 |
-| F8 | `CompositeAlpha` Caching & Cleanup | Cache enabled sub-signal lookup and eliminate dead signal initializations. | M2 | Survey R2 |
-| F9 | Pre-Sorted OrderBook Sort Elimination | Remove redundant `.sort()` calls in `OrderBook.update_from_raw` for pre-sorted Hyperliquid feeds. | M3 | Survey R3 |
-| F10 | Dataclass `slots=True` Memory Optimization | Add `slots=True` to `L2Level`, `Trade`, and `VolumeBucket` to reduce heap memory by 68.4%. | M3 | Survey R3 |
-| F11 | Replay Mode History Bypass | Add `enable_history=False` option to bypass unused `self.history` deque in `OrderBook` during replay. | M3 | Survey R3 |
-| F12 | Multi-Core Worker Saturation | Default worker pool to `os.cpu_count()` (12 cores) in `scripts/test_all_strategies_all_data.py`. | M4 | Survey R4 |
-| F13 | Worker-Level Config Initialization | Load `StrategiesConfig` once per worker process instead of per dataset. | M4 | Survey R4 |
-| F14 | Compact IPC Trade Metric Aggregation | Aggregate exit reason counts in worker processes to eliminate bulky trade dictionary IPC serialization. | M4 | Survey R4 |
-| F15 | Continuous Multi-Day Benchmark Acceleration | Verify continuous 142-file replay runtime < 45.0s with 100% deterministic trade parity. | M5 | Survey R5 |
-| F16 | Batch 76-Session Benchmark Acceleration | Verify 76-session batch replay runtime < 25.0s with 100% deterministic trade parity. | M5 | Survey R5 |
-| F17 | Zero-Cheat Forensic Audit Verification | Verify zero hardcoded values, zero synthetic mocks, and strict fee/risk enforcement. | M5 | Survey R5 |
-| F18 | Comprehensive Performance Optimization Report | Generate `replay_performance_optimization_report.md` with cProfile benchmarks and parity proofs. | M5 | Survey R5 |
+| F1 | Level-1 Dynamic Queue Replenishment Delta | Real-time calculation of $R_{b1} = \Delta Q_{b1} + Vol_{sold}$ and $R_{a1} = \Delta Q_{a1} + Vol_{bought}$ | M1 | Survey R1/R2 |
+| F2 | Multi-Tier Depth & Cancellation Asymmetry | 3-level replenishment $R_{b3}, R_{a3}$ and multi-tier cancellation asymmetry $S_{canc} = \frac{C_a - C_b}{C_a + C_b + \epsilon}$ | M1 | Survey R1/R2 |
+| F3 | Depletion Latency Persistence Tracker | Tracks consecutive depleted snapshots $\tau_a, \tau_b$ to measure depth elasticity and replenishment delays | M1 | Survey R1/R2 |
+| F4 | Trend & Flow Directional Gating | Active trade flow gate ($|S_{cvd}| \ge 0.18$), 2-min macro trend alignment, and sign consistency | M1 | Survey R1/R2 |
+| F5 | Composite Alpha Model Integration | Instantiate and expose `signal_queue_replenishment` in `signals/composite_alpha.py` | M1 | Survey R1 |
+| F6 | Strategy Parameter Registration in `strategies.json` | Configure `Queue_Replenishment` parameters and register in `execution_strategies` | M2 | Survey R1/R2 |
+| F7 | Config Class Models & Defaults in `config.py` | Add `QueueReplenishmentConfig` dataclass and update `DEFAULT_STRATEGIES_JSON` | M2 | Survey R1 |
+| F8 | Backtester Strategy Registry & Engine Integration | Register `Queue_Replenishment` in `engine/backtester.py:strategy_defs` and `unique_signals` as `HEDGED_MAKER` | M2 | Survey R1 |
+| F9 | CLI & Runtime Routing in `main.py` | Register strategy in `main.py` for live/paper trading and strategy list validation | M2 | Survey R1 |
+| F10 | Replay Script Caller Hook in `scripts/test_all_strategies_all_data.py` | Wire `QueueReplenishment` into `active_sig_callers` and `sub_sigs` for multi-core replay | M2 | Survey R3 |
+| F11 | Standalone 505 HYPE Dataset Backtest Evaluation | Execute parallel replay of `Queue_Replenishment` across all 505 HYPE datasets, achieving positive Net PnL (> $0) under VIP 0 retail fees | M3 | Survey R3 |
+| F12 | Combined Portfolio Synergy Evaluation | Execute 4-strategy parallel replay across all 505 HYPE datasets, expanding Net PnL beyond the +$1,694.20 Triad baseline | M3 | Survey R3 |
+| F13 | Audit Artifact Generation & Performance Documentation | Generate `audits/queue_replenishment_505_eval.json` and comprehensive synergy audit report | M3 | Survey R3 |
+| F14 | Adversarial Robustness & Extreme Condition Testing | Verify strategy behavior under zero volatility, spread spikes, order book collapse, and rapid reversals | M4 | Final Gate |
+| F15 | Zero-Cheat Forensic Audit Verification | Verify 100% authentic logic, zero hardcoding, zero dummy facades, and strict fee/risk compliance | M4 | Final Gate |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M1 | Fast I/O & Deserialization Pipeline (R1) | Implement F1, F2, F3 in `engine/data_collector.py` and `scripts/replay_continuous_multiday_session.py` | Survey Complete | DONE (2.65x speedup, verified parity) |
-| M2 | Algorithmic Hot-Path & Signal Acceleration (R2) | Implement F4, F5, F6, F7, F8 in `engine/backtester.py` and `signals/` | Survey Complete | DONE (371s -> 265.7s, verified parity) |
-| M3 | OrderBook & Allocation Streamlining (R3) | Implement F9, F10, F11 in `core/orderbook.py` | M1, M2 | DONE (slots=True, linear Timsort, history bypass, 100% parity) |
-| M4 | Batch Replay Parallelism & Multi-Core Scaling (R4) | Implement F12, F13, F14 in `scripts/test_all_strategies_all_data.py` | M1, M2, M3 | DONE (12-core scaling, LPT bin-packing, IPC compression, 22.6s runtime, 100% parity) |
-| M5 | Full Benchmark Verification, Parity Audit & Report (R5) | Execute F15, F16, F17, F18 across both harnesses, audit parity, and author report | M1, M2, M3, M4 | PLANNED |
+| M1 | Signal Module Implementation (`QueueReplenishmentSignal`) | Implement F1, F2, F3, F4, F5 in `signals/queue_replenishment.py` and `signals/composite_alpha.py` | Survey Complete | PLANNED |
+| M2 | System Integration & Configuration Registration | Implement F6, F7, F8, F9, F10 in `strategies.json`, `config.py`, `engine/backtester.py`, `main.py`, and `scripts/test_all_strategies_all_data.py` | M1 | PLANNED |
+| M3 | 505 HYPE Dataset Parallel Backtesting & Portfolio Synergy | Execute F11, F12, F13 across all 505 HYPE datasets via `scripts/test_all_strategies_all_data.py` | M1, M2 | PLANNED |
+| M4 | Final Gate Review & Adversarial Hardening | Execute F14, F15 with Reviewers, Challengers, and Forensic Auditor | M1, M2, M3 | PLANNED |
 
 ## Interface Contracts
-### `engine/data_collector.py`
-- `L2ReplayEngine.stream_events()`: Must yield identical `dict` payloads whether parsed via `orjson` or standard `json`.
-- Event schema: `{"type": str, "coin": str, "timestamp": int, "data": dict}`.
+### `signals/queue_replenishment.py` ↔ `engine/backtester.py`
+- Inherits: `signals.base.BaseSignal(ABC)`
+- Method: `compute(self, book: OrderBook, trades: TradeManager, timestamp_ms: Optional[int] = None) -> SignalResult`
+- Output Schema:
+  - `name: str = "QueueReplenishment"`
+  - `score: float` strictly in $[-1.0, 1.0]$
+  - `raw_value: float` (unbounded core composite replenishment value)
+  - `confidence: float` strictly in $[0.0, 1.0]$
+  - `timestamp_ms: int`
+  - `metadata: Dict[str, Any]` including `l1_rep_bid`, `l1_rep_ask`, `l3_rep_bid`, `l3_rep_ask`, `latency_bid`, `latency_ask`, `s_canc`, `cvd_fast`, `trend_bps`
 
-### `engine/backtester.py` ↔ `signals/`
-- `EdgeEvaluator.record_step`: Must compute `current_volatility_bps` with bit-for-bit mathematical equality.
-- Sub-signals (`VPINSignal`, `VOISignal`, `MomentumExpansionSignal`, `ConvexityCascadeSignal`, `HedgedConvexitySignal`):
-  - Must return `tuple[float, dict]` or `float` with identical return types, metadata schemas, and float values.
+### `strategies.json` & `config.py` ↔ `engine/backtester.py`
+- Configuration Dictionary:
+  ```json
+  "Queue_Replenishment": {
+      "enabled": true,
+      "execution_type": "HEDGED_MAKER",
+      "entry_threshold": 0.82,
+      "order_size_btc": 0.1,
+      "take_profit_bps": 20.0,
+      "stop_loss_bps": 8.0,
+      "trailing_stop_activation_bps": 5.0,
+      "trailing_stop_distance_bps": 2.0,
+      "hedge_trigger_loss_bps": -3.5,
+      "hedge_reversal_threshold": 0.15,
+      "min_volatility_bps": 4.5,
+      "loss_cooldown_secs": 120
+  }
+  ```
 
-### `core/orderbook.py`
-- `L2Level`: Attributes `.px: float`, `.sz: float`, `.n: int`. Retains 100% attribute access compatibility.
-- `OrderBook.get_bids()`, `OrderBook.get_asks()`: Return lists of `L2Level` objects preserving price-sorted order (descending for bids, ascending for asks).
+### `scripts/test_all_strategies_all_data.py`
+- Registration in `active_sig_callers`:
+  ```python
+  if hasattr(runner.alpha_model, "signal_queue_replenishment") and runner.alpha_model.signal_queue_replenishment:
+      active_sig_callers["QueueReplenishment"] = runner.alpha_model.signal_queue_replenishment.compute
+  ```
+- Registration in `sub_sigs`:
+  ```python
+  sub_sigs["QueueReplenishment"] = 0.0
+  ```
 
 ## Code Layout
-- `engine/data_collector.py`: Owned exclusively by M1 Worker.
-- `scripts/replay_continuous_multiday_session.py`: Owned exclusively by M1 Worker.
-- `engine/backtester.py`: Owned exclusively by M2 Worker.
-- `signals/vpin.py`: Owned exclusively by M2 Worker.
-- `signals/voi.py`: Owned exclusively by M2 Worker.
-- `signals/momentum_expansion.py`: Owned exclusively by M2 Worker.
-- `signals/composite_alpha.py`: Owned exclusively by M2 Worker.
-- `core/orderbook.py`: Owned exclusively by M3 Worker.
-- `scripts/test_all_strategies_all_data.py`: Owned exclusively by M4 Worker.
-- `replay_performance_optimization_report.md`: Produced in M5.
+- `signals/queue_replenishment.py`: Owned exclusively by M1 Worker
+- `signals/composite_alpha.py`: Owned exclusively by M1 Worker
+- `strategies.json`: Owned exclusively by M2 Worker
+- `config.py`: Owned exclusively by M2 Worker
+- `engine/backtester.py`: Owned exclusively by M2 Worker
+- `main.py`: Owned exclusively by M2 Worker
+- `scripts/test_all_strategies_all_data.py`: Owned exclusively by M2 Worker
+- `audits/`: Owned exclusively by M3 Worker

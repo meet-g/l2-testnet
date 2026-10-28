@@ -1,0 +1,338 @@
+{
+  "total_duration": 4.687668800354004,
+  "sessions_count": 5,
+  "comb_trades": 93,
+  "comb_wins": 49,
+  "comb_losses": 44,
+  "comb_wr": 52.68817204301075,
+  "comb_gross": 257.67304030761244,
+  "comb_fees": 249.92166485295297,
+  "comb_net": 7.751375454659453,
+  "comb_pf": 2.048638710045242,
+  "comb_stops": 3,
+  "comb_hedges": 38,
+  "strat_totals": {
+    "Queue_Replenishment": {
+      "trades": 93,
+      "wins": 49,
+      "losses": 44,
+      "stops": 3,
+      "hedges": 38,
+      "gross_pnl": 257.67304030761244,
+      "fees": 249.92166485295297,
+      "net_pnl": 7.751375454659453,
+      "gw": 503.3945055170127,
+      "gl": 245.7214652094003
+    }
+  },
+  "coin_totals": {
+    "HYPE": {
+      "trades": 93,
+      "wins": 49,
+      "losses": 44,
+      "stops": 3,
+      "gross_pnl": 257.67304030761244,
+      "fees": 249.92166485295297,
+      "net_pnl": 7.751375454659453
+    }
+  },
+  "exit_totals": {
+    "DEFENSIVE_MAKER_HEDGE": [
+      38.0,
+      -301.32622004500183,
+      -354.5003987487844
+    ],
+    "TRAILING_STOP": [
+      34.0,
+      153.29761812175786,
+      180.34939171279393
+    ],
+    "TAKE_PROFIT": [
+      14.0,
+      222.37195296199877,
+      261.61457580093844
+    ],
+    "STOP_LOSS": [
+      3.0,
+      -58.96221188380744,
+      -69.36600009446619
+    ],
+    "SESSION_SHUTDOWN": [
+      2.0,
+      -2.08091325628742,
+      -2.448013844073519
+    ],
+    "PROFIT_DECAY_EXIT": [
+      2.0,
+      -5.548850444000488,
+      -6.527968307573081
+    ]
+  },
+  "results": [
+    {
+      "filename": "hl_hype_l2_20261013_0100.jsonl",
+      "filepath": "data\\hype\\hl_hype_l2_20261013_0100.jsonl",
+      "coin": "HYPE",
+      "size_mb": 14.763432502746582,
+      "events_count": 14317,
+      "elapsed_s": 2.396561622619629,
+      "file_net": 32.34122271657206,
+      "file_trades": 19,
+      "pid": 31204,
+      "error": null,
+      "strategies": {
+        "Queue_Replenishment": {
+          "trades": 19,
+          "wins": 10,
+          "losses": 9,
+          "stops": 0,
+          "hedges": 9,
+          "tps": 3,
+          "trails": 7,
+          "gross_pnl": 80.78392379700252,
+          "fees": 48.442701080430446,
+          "net_pnl": 32.34122271657206,
+          "gross_wins": 117.7867137970034,
+          "gross_losses": 37.0027900000009,
+          "profit_factor": 3.1831846678858686
+        }
+      },
+      "exit_stats": {
+        "DEFENSIVE_MAKER_HEDGE": [
+          9.0,
+          -59.95746591250089,
+          -70.53766334658978
+        ],
+        "TRAILING_STOP": [
+          7.0,
+          44.951772532574914,
+          52.88406419245971
+        ],
+        "TAKE_PROFIT": [
+          3.0,
+          47.34691609649805,
+          55.703416116533674
+        ]
+      },
+      "all_trades": []
+    },
+    {
+      "filename": "hl_hype_l2_20261015_1500.jsonl",
+      "filepath": "data\\hype\\hl_hype_l2_20261015_1500.jsonl",
+      "coin": "HYPE",
+      "size_mb": 16.476293563842773,
+      "events_count": 13774,
+      "elapsed_s": 2.4478416442871094,
+      "file_net": 37.1381127315423,
+      "file_trades": 23,
+      "pid": 29092,
+      "error": null,
+      "strategies": {
+        "Queue_Replenishment": {
+          "trades": 23,
+          "wins": 15,
+          "losses": 8,
+          "stops": 1,
+          "hedges": 7,
+          "tps": 4,
+          "trails": 10,
+          "gross_pnl": 100.89859497580579,
+          "fees": 63.760482244263514,
+          "net_pnl": 37.1381127315423,
+          "gross_wins": 154.83840615600622,
+          "gross_losses": 53.939811180200444,
+          "profit_factor": 2.870577459730567
+        }
+      },
+      "exit_stats": {
+        "TRAILING_STOP": [
+          10.0,
+          50.952236595624726,
+          59.94401540011467
+        ],
+        "TAKE_PROFIT": [
+          4.0,
+          62.855312320501746,
+          73.9468440300352
+        ],
+        "STOP_LOSS": [
+          1.0,
+          -14.047077373668143,
+          -16.526283705508668
+        ],
+        "DEFENSIVE_MAKER_HEDGE": [
+          7.0,
+          -62.8355381785012,
+          -73.92358396724549
+        ],
+        "SESSION_SHUTDOWN": [
+          1.0,
+          0.21317936758516964,
+          0.2507935378898886
+        ]
+      },
+      "all_trades": []
+    },
+    {
+      "filename": "hl_hype_l2_20261026_1700.jsonl",
+      "filepath": "data\\hype\\hl_hype_l2_20261026_1700.jsonl",
+      "coin": "HYPE",
+      "size_mb": 17.076441764831543,
+      "events_count": 13799,
+      "elapsed_s": 2.6599559783935547,
+      "file_net": 9.243461390875726,
+      "file_trades": 19,
+      "pid": 21048,
+      "error": null,
+      "strategies": {
+        "Queue_Replenishment": {
+          "trades": 19,
+          "wins": 11,
+          "losses": 8,
+          "stops": 0,
+          "hedges": 7,
+          "tps": 2,
+          "trails": 9,
+          "gross_pnl": 57.68737826000183,
+          "fees": 48.443916869126106,
+          "net_pnl": 9.243461390875726,
+          "gross_wins": 99.23176826000238,
+          "gross_losses": 41.544390000000554,
+          "profit_factor": 2.3885720372835193
+        }
+      },
+      "exit_stats": {
+        "TRAILING_STOP": [
+          9.0,
+          40.40897298687593,
+          47.539628416216786
+        ],
+        "DEFENSIVE_MAKER_HEDGE": [
+          7.0,
+          -58.741419961500526,
+          -69.10781951217734
+        ],
+        "PROFIT_DECAY_EXIT": [
+          1.0,
+          -3.1975653600000244,
+          -3.761896899884457
+        ],
+        "TAKE_PROFIT": [
+          2.0,
+          30.773473725500352,
+          36.20302112099159
+        ]
+      },
+      "all_trades": []
+    },
+    {
+      "filename": "hl_hype_l2_20261020_1500.jsonl",
+      "filepath": "data\\hype\\hl_hype_l2_20261020_1500.jsonl",
+      "coin": "HYPE",
+      "size_mb": 18.141480445861816,
+      "events_count": 17070,
+      "elapsed_s": 2.8458364009857178,
+      "file_net": 1.880621151971662,
+      "file_trades": 20,
+      "pid": 35652,
+      "error": null,
+      "strategies": {
+        "Queue_Replenishment": {
+          "trades": 20,
+          "wins": 10,
+          "losses": 10,
+          "stops": 0,
+          "hedges": 9,
+          "tps": 4,
+          "trails": 6,
+          "gross_pnl": 55.44155667540114,
+          "fees": 53.560935523429464,
+          "net_pnl": 1.880621151971662,
+          "gross_wins": 104.16869505999965,
+          "gross_losses": 48.7271383845985,
+          "profit_factor": 2.1377962776678245
+        }
+      },
+      "exit_stats": {
+        "DEFENSIVE_MAKER_HEDGE": [
+          9.0,
+          -74.48337120899899,
+          -87.62862010654463
+        ],
+        "TRAILING_STOP": [
+          6.0,
+          14.252039474844398,
+          16.76698333270227
+        ],
+        "TAKE_PROFIT": [
+          4.0,
+          64.40604550999885,
+          75.7737214426683
+        ],
+        "SESSION_SHUTDOWN": [
+          1.0,
+          -2.2940926238725896,
+          -2.6988073819634075
+        ]
+      },
+      "all_trades": []
+    },
+    {
+      "filename": "hl_hype_l2_20261008_1600.jsonl",
+      "filepath": "data\\hype\\hl_hype_l2_20261008_1600.jsonl",
+      "coin": "HYPE",
+      "size_mb": 19.312853813171387,
+      "events_count": 15778,
+      "elapsed_s": 2.9131603240966797,
+      "file_net": -72.8520425363023,
+      "file_trades": 12,
+      "pid": 28884,
+      "error": null,
+      "strategies": {
+        "Queue_Replenishment": {
+          "trades": 12,
+          "wins": 3,
+          "losses": 9,
+          "stops": 2,
+          "hedges": 6,
+          "tps": 1,
+          "trails": 2,
+          "gross_pnl": -37.138413400598836,
+          "fees": 35.713629135703464,
+          "net_pnl": -72.8520425363023,
+          "gross_wins": 27.368922244001055,
+          "gross_losses": 64.50733564459989,
+          "profit_factor": 0.424276122560523
+        }
+      },
+      "exit_stats": {
+        "PROFIT_DECAY_EXIT": [
+          1.0,
+          -2.351285084000463,
+          -2.7660714076886244
+        ],
+        "DEFENSIVE_MAKER_HEDGE": [
+          6.0,
+          -45.3084247835002,
+          -53.302711816227166
+        ],
+        "TRAILING_STOP": [
+          2.0,
+          2.732596531837874,
+          3.2147003713005033
+        ],
+        "TAKE_PROFIT": [
+          1.0,
+          16.990205309499782,
+          19.98757309070963
+        ],
+        "STOP_LOSS": [
+          2.0,
+          -44.915134510139296,
+          -52.83971638895752
+        ]
+      },
+      "all_trades": []
+    }
+  ]
+}

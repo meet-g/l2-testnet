@@ -25,7 +25,8 @@
       "max_holding_time_secs": 180,
       "exit_reversal_threshold": 0.85,
       "min_volatility_bps": 4.5,
-      "loss_cooldown_secs": 120
+      "loss_cooldown_secs": 60,
+      "coentry_group": "triad"
     },
     "Convexity_Cascade": {
       "enabled": true,
@@ -43,7 +44,8 @@
       "max_holding_time_secs": 180,
       "exit_reversal_threshold": 0.8,
       "min_volatility_bps": 4.5,
-      "loss_cooldown_secs": 120
+      "loss_cooldown_secs": 60,
+      "coentry_group": "triad"
     },
     "Momentum_Expansion": {
       "enabled": true,
@@ -61,7 +63,27 @@
       "max_holding_time_secs": 180,
       "exit_reversal_threshold": 0.65,
       "min_volatility_bps": 4.5,
-      "loss_cooldown_secs": 120
+      "loss_cooldown_secs": 60,
+      "coentry_group": "triad"
+    },
+    "Queue_Replenishment": {
+      "enabled": true,
+      "description": "Orthogonal queue replenishment dynamics with multi-tier cancellation asymmetry, depletion persistence, and defensive maker hedging",
+      "signal_key": "QueueReplenishment",
+      "execution_type": "HEDGED_MAKER",
+      "entry_threshold": 0.985,
+      "order_size_btc": 0.1,
+      "take_profit_bps": 30.0,
+      "stop_loss_bps": 8.0,
+      "trailing_stop_activation_bps": 4.0,
+      "trailing_stop_distance_bps": 1.5,
+      "hedge_trigger_loss_bps": -3.5,
+      "hedge_reversal_threshold": -0.15,
+      "max_holding_time_secs": 180,
+      "exit_reversal_threshold": 0.8,
+      "min_volatility_bps": 4.5,
+      "loss_cooldown_secs": 120,
+      "coentry_group": "queue_replenishment"
     },
     "QDAP_Maker": {
       "enabled": false,
@@ -226,6 +248,10 @@
     "HedgedConvexity": {
       "enabled": true,
       "description": "Hedged Convexity Alpha (depth curvature + order count dispersion + dynamic VPIN toxicity shielding & defensive maker hedge triggers)"
+    },
+    "QueueReplenishment": {
+      "enabled": true,
+      "description": "Dynamic L1/L3 queue replenishment delta, multi-tier cancellation asymmetry, and trade depletion persistence"
     }
   }
 }

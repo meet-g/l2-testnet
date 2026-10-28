@@ -112,6 +112,7 @@ class EdgeEvaluator:
                 "Hedged_Convexity": ("HedgedConvexity", "HEDGED_MAKER"),
                 "Convexity_Cascade": ("ConvexityCascade", "MAKER"),
                 "Momentum_Expansion": ("MomentumExpansion", "MAKER"),
+                "Queue_Replenishment": ("QueueReplenishment", "HEDGED_MAKER"),
                 "QDAP_Maker": ("QDAP", "MAKER"),
                 "AdaptiveML_Maker": ("AdaptiveML", "MAKER"),
                 "Composite_Maker": ("CompositeAlpha", "MAKER"),
@@ -140,7 +141,11 @@ class EdgeEvaluator:
 
         # Evaluations per horizon: signal_key -> horizon_secs -> list of (sig_val, return)
         unique_signals = set(sig_k for sig_k, _ in self.strategy_defs.values())
-        unique_signals.update(["WOBI", "VOI", "MicroPrice", "VPIN", "Absorption", "Sweep", "CompositeAlpha", "AdaptiveML", "QDAP", "MomentumExpansion", "ConvexityCascade", "HedgedConvexity"])
+        unique_signals.update([
+            "WOBI", "VOI", "MicroPrice", "VPIN", "Absorption", "Sweep",
+            "CompositeAlpha", "AdaptiveML", "QDAP", "MomentumExpansion",
+            "ConvexityCascade", "HedgedConvexity", "QueueReplenishment"
+        ])
 
         self.eval_data: Dict[str, Dict[int, Deque[Tuple[float, float]]]] = {
             s: {h: deque(maxlen=20000) for h in self.bt_cfg.horizons_seconds}
@@ -587,28 +592,32 @@ class EdgeEvaluator:
                 if state.last_exit_was_loss and (timestamp_ms - state.last_exit_time_ms) < loss_cooldown_ms:
                     continue
 
-                # Co-Entry Protection: If another strategy already holds a position in the same direction,
-                # require higher conviction (+0.04) or discount size to prevent double-dip leverage on traps
+                # Co-Entry Protection: If another strategy in the same coentry_group holds a position
+                # in the same direction, require higher conviction (+0.04) or discount size
                 is_bull_sig = score >= entry_thresh
                 is_bear_sig = score <= -entry_thresh
+                my_group = params.get("coentry_group", "triad" if s_name in ("Hedged_Convexity", "Convexity_Cascade", "Momentum_Expansion") else s_name)
                 same_dir_active = any(
                     other_s != s_name and other_st.is_in_position and (
+                        self.strategy_params.get(other_s, {}).get("coentry_group", "triad" if other_s in ("Hedged_Convexity", "Convexity_Cascade", "Momentum_Expansion") else other_s) == my_group
+                    ) and (
                         (other_st.position_btc > 0 and is_bull_sig) or (other_st.position_btc < 0 and is_bear_sig)
                     )
                     for other_s, other_st in self.strategies.items()
                 )
                 if same_dir_active:
-                    # Require elevated conviction hurdle (+0.04) to join an existing position
-                    hurdle = entry_thresh + 0.04
-                    if (is_bull_sig and score < hurdle) or (is_bear_sig and score > -hurdle):
+                    # Require elevated conviction hurdle (+0.04) with epsilon tolerance
+                    hurdle = round(entry_thresh + 0.04, 6)
+                    if (is_bull_sig and score < hurdle - 1e-7) or (is_bear_sig and score > -hurdle + 1e-7):
                         continue
 
                 sz = self.strategy_params.get(s_name, {}).get("order_size_btc", self.bt_cfg.order_size_btc)
+                is_coin_units = (sz > 1.0)
                 if same_dir_active:
-                    sz = sz * 0.5  # 50% size discount on co-entry
-                if self.market_cfg.coin.upper() != "BTC" and mid_price > 0 and sz <= 1.0:
+                    sz = sz * 0.5  # 50% size discount on co-entry within the same group
+                if self.market_cfg.coin.upper() != "BTC" and mid_price > 0 and not is_coin_units:
                     sz = round(sz * (85000.0 / mid_price), 2)
-                elif sz > 1.0:
+                else:
                     sz = round(sz, 2)
 
 
@@ -924,3 +933,7 @@ class EdgeEvaluator:
     def get_recent_position_events(self, limit: int = 15) -> List[Dict[str, Any]]:
         """Returns the most recent position lifecycle events (OPEN & CLOSE)."""
         return list(self.position_events)[-limit:]
+
+
+# Backwards compatibility alias
+BacktesterEngine = EdgeEvaluator
