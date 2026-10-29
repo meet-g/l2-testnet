@@ -209,24 +209,24 @@ class L2EngineRunner:
                     # 1. If holding an active position, preserve the owning strategy
                     if abs(self.live_executor.cached_position) > 1e-6 and self.live_executor.position_strategy:
                         strat_to_use = self.live_executor.position_strategy
-                        active_strat = self.config.strategies.execution_strategies.get(strat_to_use)
+                        active_strat = self.config.strategies.get_strategy(strat_to_use)
                         sig_score = scores.get(active_strat.signal_key, 0.0) if active_strat else 0.0
                     # 2. If an entry order is resting on the book, preserve its owning strategy
                     elif self.live_executor.active_order and self.live_executor.active_order.get("strategy_name"):
                         strat_to_use = self.live_executor.active_order.get("strategy_name")
-                        active_strat = self.config.strategies.execution_strategies.get(strat_to_use)
+                        active_strat = self.config.strategies.get_strategy(strat_to_use)
                         sig_score = scores.get(active_strat.signal_key, 0.0) if active_strat else 0.0
                     # 3. When completely flat with no resting order, dispatch across enabled strategies
                     else:
                         active_name = self.config.strategies.live_execution.active_strategy
-                        active_strat = self.config.strategies.execution_strategies.get(active_name)
+                        active_strat = self.config.strategies.get_strategy(active_name)
 
                         strat_to_use = active_name
                         sig_score = scores.get(active_strat.signal_key, 0.0) if (active_strat and active_strat.enabled) else 0.0
                         threshold = active_strat.entry_threshold if active_strat else 0.85
 
                         if abs(sig_score) < threshold:
-                            for s_name, s_def in self.config.strategies.execution_strategies.items():
+                            for s_name, s_def in self.config.strategies.all_strategies.items():
                                 if s_def.enabled and s_name != active_name:
                                     s_score = scores.get(s_def.signal_key, 0.0)
                                     if abs(s_score) >= s_def.entry_threshold and abs(s_score) > abs(sig_score):
@@ -1187,25 +1187,26 @@ def print_strategies_status(cfg: Optional[AppConfig] = None, console: Optional[C
     console.print("[bold cyan]================================================================================[/bold cyan]\n")
 
     active_live = strat_cfg.live_execution.active_strategy
-    active_strat = strat_cfg.execution_strategies.get(active_live)
+    active_strat = strat_cfg.get_strategy(active_live)
     live_status = "[bold green]ENABLED[/bold green]" if (active_strat and active_strat.enabled) else "[bold red]DISABLED[/bold red]"
+    active_category = "Primary Execution Strategy" if strat_cfg.is_execution_strategy(active_live) else ("Scalping Strategy" if strat_cfg.is_scalping_strategy(active_live) else "Custom Strategy")
     coin = cfg.market.coin.upper()
-    console.print(f"Active Live Strategy:    [bold yellow]{active_live}[/bold yellow] ({live_status})")
+    console.print(f"Active Live Strategy:    [bold yellow]{active_live}[/bold yellow] ({live_status}) - [dim cyan]{active_category}[/dim cyan]")
     console.print(f"Default Live Order Size: [white]{strat_cfg.live_execution.order_size_btc} {coin}[/white]")
     console.print(f"Max Position Guardrail:  [white]{strat_cfg.live_execution.max_position_btc} {coin}[/white]\n")
 
-    table_strat = Table(title="Execution Strategies (Paper Simulation & Live Execution)", header_style="bold cyan")
-    table_strat.add_column("Strategy Name", justify="left", style="bold")
-    table_strat.add_column("Status", justify="center")
-    table_strat.add_column("Type", justify="center", style="dim")
-    table_strat.add_column("Underlying Signal", justify="left")
-    table_strat.add_column("Threshold", justify="right")
-    table_strat.add_column(f"Size ({coin})", justify="right")
-    table_strat.add_column("Description", justify="left", style="dim")
+    table_exec = Table(title="Primary Execution Strategies (4 New Core Microstructure Strategies)", header_style="bold cyan")
+    table_exec.add_column("Strategy Name", justify="left", style="bold")
+    table_exec.add_column("Status", justify="center")
+    table_exec.add_column("Type", justify="center", style="dim")
+    table_exec.add_column("Underlying Signal", justify="left")
+    table_exec.add_column("Threshold", justify="right")
+    table_exec.add_column(f"Size ({coin})", justify="right")
+    table_exec.add_column("Description", justify="left", style="dim")
 
     for s_name, s in strat_cfg.execution_strategies.items():
         status = "[bold green]ENABLED[/bold green]" if s.enabled else "[dim red]DISABLED[/dim red]"
-        table_strat.add_row(
+        table_exec.add_row(
             s_name,
             status,
             s.execution_type,
@@ -1214,7 +1215,30 @@ def print_strategies_status(cfg: Optional[AppConfig] = None, console: Optional[C
             f"{s.order_size_btc:.4f}",
             s.description,
         )
-    console.print(table_strat)
+    console.print(table_exec)
+    console.print("\n")
+
+    table_scalp = Table(title="Scalping Strategies (Legacy Micro-Scalp Maker & Taker Strategies)", header_style="bold yellow")
+    table_scalp.add_column("Strategy Name", justify="left", style="bold")
+    table_scalp.add_column("Status", justify="center")
+    table_scalp.add_column("Type", justify="center", style="dim")
+    table_scalp.add_column("Underlying Signal", justify="left")
+    table_scalp.add_column("Threshold", justify="right")
+    table_scalp.add_column(f"Size ({coin})", justify="right")
+    table_scalp.add_column("Description", justify="left", style="dim")
+
+    for s_name, s in strat_cfg.scalping_strategies.items():
+        status = "[bold green]ENABLED[/bold green]" if s.enabled else "[dim red]DISABLED[/dim red]"
+        table_scalp.add_row(
+            s_name,
+            status,
+            s.execution_type,
+            s.signal_key,
+            f"{s.entry_threshold:.2f}",
+            f"{s.order_size_btc:.4f}",
+            s.description,
+        )
+    console.print(table_scalp)
     console.print("\n")
 
     table_alpha = Table(title="Microstructure Alpha Signals (Predictive Factors)", header_style="bold magenta")
@@ -1572,20 +1596,46 @@ def main():
     parser.add_argument("--repair", action="store_true", help="Repair and backfill stalled audit manifests from trade CSVs")
     parser.add_argument("--include-empty", action="store_true", help="Include 0-trade sessions in audit listing")
     parser.add_argument("--no-audit", action="store_true", help="Disable audit recording in live/replay")
+    parser.add_argument(
+        "--scalping",
+        nargs="?",
+        const="true",
+        default=None,
+        type=str,
+        help="Toggle scalping mode: --scalping true (or --scalping) enables all 8 scalping strategies and disables the 4 core execution strategies; --scalping false enables core strategies and disables scalping strategies.",
+    )
+    parser.add_argument(
+        "--save-config",
+        action="store_true",
+        help="Persist modified strategy configuration to strategies.json",
+    )
     args = parser.parse_args()
 
     cfg = AppConfig()
     if args.strategies_config:
         from config import StrategiesConfig
         cfg.strategies = StrategiesConfig.load(args.strategies_config)
+
+    if args.scalping is not None:
+        scalp_flag = str(args.scalping).strip().lower() in ("true", "1", "yes", "t", "on")
+        cfg.strategies.set_scalping_mode(enabled=scalp_flag, save=args.save_config)
+        console = Console()
+        if scalp_flag:
+            save_msg = f" (Saved to {cfg.strategies.filepath})" if args.save_config else ""
+            console.print(f"[bold yellow]⚡ Scalping Mode Activated (--scalping true): 8 scalping strategies ENABLED, 4 core execution strategies DISABLED.{save_msg}[/bold yellow]")
+        else:
+            save_msg = f" (Saved to {cfg.strategies.filepath})" if args.save_config else ""
+            console.print(f"[bold cyan]🛡️ Core Mode Activated (--scalping false): Core execution strategies ENABLED, 8 scalping strategies DISABLED.{save_msg}[/bold cyan]")
+
     if args.strategy:
         strat_name = args.strategy.strip()
-        valid_strats = list(cfg.strategies.execution_strategies.keys())
+        valid_strats = list(cfg.strategies.all_strategies.keys())
         if args.mode not in ("audit",) and strat_name not in valid_strats:
             Console().print(f"[bold red]Error: Unknown strategy '{strat_name}'. Valid strategies: {', '.join(valid_strats)}[/bold red]")
             sys.exit(1)
-        if strat_name in cfg.strategies.execution_strategies:
-            cfg.strategies.execution_strategies[strat_name].enabled = True
+        strat_obj = cfg.strategies.get_strategy(strat_name)
+        if strat_obj:
+            strat_obj.enabled = True
         cfg.strategies.live_execution.active_strategy = strat_name
 
     if args.use_testnet is not None:
@@ -1685,9 +1735,14 @@ def main():
         console.print(f"[bold green]✓ Cancelled {cnt} open orders on {cfg.market.coin}.[/bold green]")
 
     elif args.mode == "live":
-        en_strats = list(cfg.strategies.get_enabled_strategy_defs().keys())
-        dis_strats = [s for s in cfg.strategies.execution_strategies if s not in en_strats]
-        console.print(f"[bold cyan]Strategies Configuration ({cfg.strategies.filepath}):[/bold cyan] [green]{len(en_strats)} active[/green] ({', '.join(en_strats)}) | [dim red]{len(dis_strats)} deselected[/dim red]")
+        en_exec = list(cfg.strategies.get_enabled_execution_strategy_defs().keys())
+        en_scalp = list(cfg.strategies.get_enabled_scalping_strategy_defs().keys())
+        dis_exec = [s for s in cfg.strategies.execution_strategies if s not in en_exec]
+        dis_scalp = [s for s in cfg.strategies.scalping_strategies if s not in en_scalp]
+        en_strats = en_exec + en_scalp
+        console.print(f"[bold cyan]Strategies Configuration ({cfg.strategies.filepath}):[/bold cyan]")
+        console.print(f"  • [bold cyan]Core Execution (4 New):[/bold cyan] [green]{len(en_exec)} active[/green] ({', '.join(en_exec) if en_exec else 'none'}) | [dim red]{len(dis_exec)} deselected[/dim red]")
+        console.print(f"  • [bold yellow]Scalping (Legacy):[/bold yellow] [green]{len(en_scalp)} active[/green] ({', '.join(en_scalp) if en_scalp else 'none'}) | [dim red]{len(dis_scalp)} deselected[/dim red]")
         ui_label = {
             "cli": "CLI (Interactive Terminal Dashboard)",
             "browser": f"BROWSER (Web Dashboard running on http://localhost:{args.port})",

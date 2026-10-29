@@ -14,7 +14,7 @@ from typing import Any, Deque, Dict, List, Optional, Tuple
 import numpy as np
 from scipy import stats
 
-from config import BacktestConfig, MarketConfig
+from config import BacktestConfig, MarketConfig, NEW_EXECUTION_STRATEGIES, LEGACY_SCALPING_STRATEGIES
 
 
 @dataclass
@@ -43,6 +43,7 @@ class StrategyState:
     entry_price: float = 0.0
     entry_time_ms: int = 0
     cash_usd: float = 10_000.0
+    category: str = "execution"  # 'execution' for 4 new strategies or 'scalping' for legacy strategies
     trades: List[TradeRecord] = field(default_factory=list)
     peak_equity: float = 10_000.0
     max_drawdown_usd: float = 0.0
@@ -132,6 +133,7 @@ class EdgeEvaluator:
                 execution_type=self.strategy_defs[s][1],
                 signal_key=self.strategy_defs[s][0],
                 cash_usd=self.bt_cfg.initial_cash_usd,
+                category="scalping" if s in LEGACY_SCALPING_STRATEGIES else "execution",
             )
             for s in self.strategy_names
         }
@@ -903,6 +905,16 @@ class EdgeEvaluator:
             "position_btc": state.position_btc,
             "avg_return_bps": avg_return_bps,
         }
+
+    @property
+    def execution_strategy_names(self) -> List[str]:
+        """Returns list of the 4 new primary execution strategy names currently active in evaluator."""
+        return [s for s in self.strategy_names if getattr(self.strategies.get(s), "category", "execution") == "execution"]
+
+    @property
+    def scalping_strategy_names(self) -> List[str]:
+        """Returns list of legacy scalping strategy names currently active in evaluator."""
+        return [s for s in self.strategy_names if getattr(self.strategies.get(s), "category", "execution") == "scalping"]
 
     def get_active_positions(self, current_price: float, now_ms: Optional[int] = None) -> List[Dict[str, Any]]:
         """Returns details on all currently open strategy positions."""

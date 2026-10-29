@@ -63,7 +63,7 @@ def _init_worker(strategies_path: str = "strategies.json", active_strats: Option
         for sig_name in _GLOBAL_STRATEGIES_CFG.alpha_signals:
             if sig_name not in needed_sigs:
                 _GLOBAL_STRATEGIES_CFG.alpha_signals[sig_name].enabled = False
-    elif "AdaptiveML" in _GLOBAL_STRATEGIES_CFG.alpha_signals:
+    elif "AdaptiveML" not in needed_sigs and "AdaptiveML" in _GLOBAL_STRATEGIES_CFG.alpha_signals:
         _GLOBAL_STRATEGIES_CFG.alpha_signals["AdaptiveML"].enabled = False
 
     # Avoid redundant UI dashboard and rich console initializations inside replay worker processes
@@ -286,6 +286,7 @@ def replay_single_dataset(arg: Any) -> Dict[str, Any]:
         for s_name in cfg.strategies.execution_strategies:
             cfg.strategies.execution_strategies[s_name].enabled = (s_name in enabled_strategies_list)
 
+    active_strats = [s for s, st in cfg.strategies.execution_strategies.items() if st.enabled]
     runner = L2EngineRunner(config=cfg, record_data=False, enable_audit=False)
     # Explicit OrderBook History Bypass (F11)
     runner.book.enable_history = False
@@ -308,6 +309,20 @@ def replay_single_dataset(arg: Any) -> Dict[str, Any]:
         active_sig_callers["MomentumExpansion"] = runner.alpha_model.signal_mom.compute
     if hasattr(runner.alpha_model, "signal_queue_replenishment") and runner.alpha_model.signal_queue_replenishment:
         active_sig_callers["QueueReplenishment"] = runner.alpha_model.signal_queue_replenishment.compute
+    if hasattr(runner.alpha_model, "signal_qdap") and runner.alpha_model.signal_qdap:
+        active_sig_callers["QDAP"] = runner.alpha_model.signal_qdap.compute
+    if hasattr(runner.alpha_model, "signal_wobi") and runner.alpha_model.signal_wobi:
+        active_sig_callers["WOBI"] = runner.alpha_model.signal_wobi.compute
+    if hasattr(runner.alpha_model, "signal_microprice") and runner.alpha_model.signal_microprice:
+        active_sig_callers["MicroPrice"] = runner.alpha_model.signal_microprice.compute
+    if hasattr(runner.alpha_model, "signal_absorption") and runner.alpha_model.signal_absorption:
+        active_sig_callers["Absorption"] = runner.alpha_model.signal_absorption.compute
+    if hasattr(runner.alpha_model, "signal_adaptive") and runner.alpha_model.signal_adaptive:
+        active_sig_callers["AdaptiveML"] = runner.alpha_model.signal_adaptive.compute
+    if hasattr(runner.alpha_model, "signal_voi") and runner.alpha_model.signal_voi:
+        active_sig_callers["VOI"] = runner.alpha_model.signal_voi.compute
+    if hasattr(runner.alpha_model, "compute") and any(s in active_strats for s in ("Composite_Maker", "Composite_Taker")):
+        active_sig_callers["CompositeAlpha"] = runner.alpha_model.compute
 
     call_hedged = active_sig_callers.get("HedgedConvexity")
     call_convexity = active_sig_callers.get("ConvexityCascade")
@@ -324,6 +339,12 @@ def replay_single_dataset(arg: Any) -> Dict[str, Any]:
         "MomentumExpansion": 0.0,
         "QueueReplenishment": 0.0,
         "CompositeAlpha": 0.0,
+        "QDAP": 0.0,
+        "WOBI": 0.0,
+        "MicroPrice": 0.0,
+        "Absorption": 0.0,
+        "AdaptiveML": 0.0,
+        "VOI": 0.0,
     }
 
     t0 = time.time()

@@ -28,6 +28,11 @@ class StrategyToggleRequest(BaseModel):
     enabled: bool
 
 
+class ScalpingModeRequest(BaseModel):
+    scalping: bool
+    save: bool = True
+
+
 class OrderSizeRequest(BaseModel):
     order_size_btc: Optional[float] = None
     order_size: Optional[float] = None
@@ -148,9 +153,12 @@ def create_web_app(runner_ref: Any, broadcaster: TelemetryBroadcaster) -> FastAP
 
         enabled_defs = runner.config.strategies.get_enabled_strategy_defs()
         all_defs = {}
+        exec_defs = {}
+        scalp_defs = {}
+
         for name, strat in runner.config.strategies.execution_strategies.items():
             exec_type = getattr(strat, "execution_type", getattr(strat, "execution_style", "MAKER"))
-            all_defs[name] = {
+            info = {
                 "enabled": strat.enabled,
                 "signal_key": strat.signal_key,
                 "execution_style": exec_type,
@@ -158,11 +166,101 @@ def create_web_app(runner_ref: Any, broadcaster: TelemetryBroadcaster) -> FastAP
                 "exit_reversal_threshold": getattr(strat, "exit_reversal_threshold", None),
                 "take_profit_bps": strat.take_profit_bps,
                 "stop_loss_bps": strat.stop_loss_bps,
+                "category": "execution",
             }
+            exec_defs[name] = info
+            all_defs[name] = info
+
+        for name, strat in runner.config.strategies.scalping_strategies.items():
+            exec_type = getattr(strat, "execution_type", getattr(strat, "execution_style", "MAKER"))
+            info = {
+                "enabled": strat.enabled,
+                "signal_key": strat.signal_key,
+                "execution_style": exec_type,
+                "entry_threshold": strat.entry_threshold,
+                "exit_reversal_threshold": getattr(strat, "exit_reversal_threshold", None),
+                "take_profit_bps": strat.take_profit_bps,
+                "stop_loss_bps": strat.stop_loss_bps,
+                "category": "scalping",
+            }
+            scalp_defs[name] = info
+            all_defs[name] = info
 
         return {
             "strategies": all_defs,
-            "active_live_strategy": getattr(runner.config.strategies.live_execution, "active_strategy", "Convexity_Cascade"),
+            "execution_strategies": exec_defs,
+            "scalping_strategies": scalp_defs,
+            "is_scalping_mode": runner.config.strategies.is_scalping_mode_active,
+            "active_live_strategy": getattr(runner.config.strategies.live_execution, "active_strategy", "Hedged_Convexity"),
+        }
+
+    @app.post("/api/strategies/mode/scalping")
+    async def set_scalping_mode(req: ScalpingModeRequest):
+        runner = runner_ref()
+        if not runner:
+            raise HTTPException(status_code=503, detail="Engine runner unavailable")
+
+        runner.config.strategies.set_scalping_mode(enabled=req.scalping, save=req.save)
+
+        # Synchronize evaluator strategy definitions and close positions of newly disabled strategies
+        if hasattr(runner, "evaluator") and runner.evaluator:
+            evaluator = runner.evaluator
+            if hasattr(evaluator, "strategies"):
+                mid_px = runner.book.mid_price if hasattr(runner, "book") else 0.0
+                now_ms = int(time.time() * 1000)
+                for s_name, s_state in evaluator.strategies.items():
+                    strat_cfg = runner.config.strategies.get_strategy(s_name)
+                    if strat_cfg and not strat_cfg.enabled and s_state.is_in_position:
+                        evaluator.close_open_positions(
+                            mid_px,
+                            now_ms,
+                            reason=f"STRATEGY_DISABLED:{s_name}",
+                        )
+
+            # Rebuild strategy_defs and strategy_names
+            if hasattr(evaluator, "strategy_defs"):
+                evaluator.strategy_defs.clear()
+            if hasattr(evaluator, "strategy_names"):
+                evaluator.strategy_names.clear()
+
+            for s_name, strat_cfg in runner.config.strategies.all_strategies.items():
+                if strat_cfg.enabled:
+                    exec_type = getattr(strat_cfg, "execution_type", getattr(strat_cfg, "execution_style", "MAKER"))
+                    if hasattr(evaluator, "strategy_defs"):
+                        evaluator.strategy_defs[s_name] = (strat_cfg.signal_key, exec_type)
+                    if hasattr(evaluator, "strategy_names"):
+                        evaluator.strategy_names.append(s_name)
+                    if hasattr(evaluator, "strategies") and s_name not in evaluator.strategies:
+                        from engine.backtester import StrategyState
+                        init_cash = getattr(getattr(evaluator, "bt_cfg", None), "initial_cash_usd", 10000.0)
+                        category = "scalping" if getattr(strat_cfg, "is_scalping", False) else "execution"
+                        evaluator.strategies[s_name] = StrategyState(
+                            name=s_name,
+                            execution_type=exec_type,
+                            signal_key=strat_cfg.signal_key,
+                            cash_usd=init_cash,
+                            category=category,
+                        )
+
+        # Cancel resting live order if active order's strategy is now disabled
+        if hasattr(runner, "live_executor") and runner.live_executor:
+            executor = runner.live_executor
+            if executor.active_order:
+                act_strat = executor.active_order.get("strategy_name")
+                if act_strat and not runner.config.strategies.is_strategy_enabled(act_strat):
+                    executor.cancel_order(executor.active_order["oid"])
+
+        mode_desc = "Scalping Mode (8 scalping ON, 4 core OFF)" if req.scalping else "Core Mode (4 core ON, scalping OFF)"
+        logger.info(f"Switched strategy preset to: {mode_desc} (Config saved: {req.save})")
+
+        return {
+            "status": "ok",
+            "scalping_mode": req.scalping,
+            "is_scalping_mode": runner.config.strategies.is_scalping_mode_active,
+            "active_live_strategy": getattr(runner.config.strategies.live_execution, "active_strategy", "Hedged_Convexity"),
+            "enabled_count": sum(1 for s in runner.config.strategies.all_strategies.values() if s.enabled),
+            "disabled_count": sum(1 for s in runner.config.strategies.all_strategies.values() if not s.enabled),
+            "message": f"Successfully activated {mode_desc}",
         }
 
     @app.post("/api/strategy/toggle")
@@ -172,11 +270,17 @@ def create_web_app(runner_ref: Any, broadcaster: TelemetryBroadcaster) -> FastAP
             raise HTTPException(status_code=503, detail="Engine runner unavailable")
 
         strat_name = req.strategy
-        strat_cfg = runner.config.strategies.execution_strategies.get(strat_name)
+        strat_cfg = runner.config.strategies.get_strategy(strat_name)
         if not strat_cfg:
             raise HTTPException(status_code=404, detail=f"Strategy '{strat_name}' not found")
 
         strat_cfg.enabled = req.enabled
+
+        # Persist change to strategies.json so it survives restart / reload
+        try:
+            runner.config.strategies.save()
+        except Exception as e:
+            logger.warning(f"Failed to auto-save strategies.json on toggle: {e}")
 
         # Update evaluator strategy definition
         if hasattr(runner, "evaluator"):
@@ -187,15 +291,18 @@ def create_web_app(runner_ref: Any, broadcaster: TelemetryBroadcaster) -> FastAP
                     evaluator.strategy_defs[strat_name] = (strat_cfg.signal_key, exec_type)
                 if hasattr(evaluator, "strategy_names") and strat_name not in evaluator.strategy_names:
                     evaluator.strategy_names.append(strat_name)
-                if hasattr(evaluator, "strategies") and strat_name not in evaluator.strategies:
-                    from engine.backtester import StrategyState
-                    init_cash = getattr(getattr(evaluator, "bt_cfg", None), "initial_cash_usd", 10000.0)
-                    evaluator.strategies[strat_name] = StrategyState(
-                        name=strat_name,
-                        execution_type=exec_type,
-                        signal_key=strat_cfg.signal_key,
-                        cash_usd=init_cash,
-                    )
+                if hasattr(evaluator, "strategies"):
+                    if strat_name not in evaluator.strategies:
+                        from engine.backtester import StrategyState
+                        init_cash = getattr(getattr(evaluator, "bt_cfg", None), "initial_cash_usd", 10000.0)
+                        category = "scalping" if getattr(strat_cfg, "is_scalping", False) else "execution"
+                        evaluator.strategies[strat_name] = StrategyState(
+                            name=strat_name,
+                            execution_type=exec_type,
+                            signal_key=strat_cfg.signal_key,
+                            cash_usd=init_cash,
+                            category=category,
+                        )
             else:
                 # If disabling, close any open position first
                 if hasattr(evaluator, "strategies") and strat_name in evaluator.strategies:
@@ -210,7 +317,24 @@ def create_web_app(runner_ref: Any, broadcaster: TelemetryBroadcaster) -> FastAP
                 if hasattr(evaluator, "strategy_names") and strat_name in evaluator.strategy_names:
                     evaluator.strategy_names.remove(strat_name)
 
-        return {"status": "ok", "strategy": strat_name, "enabled": req.enabled}
+        # Cancel any resting live order for this strategy if disabled
+        if hasattr(runner, "live_executor") and runner.live_executor:
+            executor = runner.live_executor
+            if not req.enabled:
+                if executor.active_order and executor.active_order.get("strategy_name") == strat_name:
+                    executor.cancel_order(executor.active_order["oid"])
+
+        category = runner.config.strategies.get_strategy_category(strat_name)
+        action_verb = "ENABLED" if req.enabled else "DISABLED"
+        logger.info(f"Strategy '{strat_name}' ({category}) {action_verb} (Config saved to {runner.config.strategies.filepath})")
+
+        return {
+            "status": "ok",
+            "strategy": strat_name,
+            "enabled": req.enabled,
+            "category": category,
+            "message": f"Strategy {strat_name} successfully {action_verb.lower()}",
+        }
 
     @app.post("/api/emergency/flatten")
     async def emergency_flatten():
@@ -382,54 +506,70 @@ class DashboardWebServer:
             elif isinstance(v, (int, float)):
                 signals_data[k] = round(float(v), 4)
 
-        # 3. Strategy Telemetry
+        # 3. Strategy Telemetry (Encompasses ALL configured strategies: Core Execution + Scalping)
         strategies_data = {}
         total_realized_pnl = 0.0
         total_unrealized_pnl = 0.0
         total_trades_count = 0
 
-        if evaluator and hasattr(evaluator, "strategy_names"):
-            mid_px = float(getattr(book, "mid_price", 0.0))
-            for s_name in evaluator.strategy_names:
-                state = evaluator.strategies.get(s_name)
-                perf = evaluator.get_strategy_performance(s_name, mid_px) if hasattr(evaluator, "get_strategy_performance") else {}
+        mid_px = float(getattr(book, "mid_price", 0.0))
+        runner_obj = self.runner
+        all_configured = runner_obj.config.strategies.all_strategies if (runner_obj and hasattr(runner_obj, "config") and hasattr(runner_obj.config, "strategies")) else {}
 
-                in_pos = bool(state.is_in_position) if state else False
-                pos_btc = float(state.position_btc) if state else 0.0
-                entry_px = float(state.entry_price) if state else 0.0
+        # Fallback to evaluator.strategies if runner.config is somehow not available
+        if not all_configured and evaluator and hasattr(evaluator, "strategies"):
+            all_configured = {name: None for name in evaluator.strategies.keys()}
 
-                pos_info = None
-                if in_pos:
-                    unrealized_usd = pos_btc * (mid_px - entry_px)
-                    unrealized_bps = (unrealized_usd / (abs(pos_btc) * entry_px)) * 10_000.0 if (abs(pos_btc) * entry_px) > 0 else 0.0
-                    hold_secs = (now_ms - state.entry_time_ms) / 1000.0 if state else 0.0
-                    pos_info = {
-                        "side": "LONG" if pos_btc > 0 else "SHORT",
-                        "size_btc": round(abs(pos_btc), 4),
-                        "entry_price": round(entry_px, 2),
-                        "unrealized_usd": round(unrealized_usd, 3),
-                        "unrealized_bps": round(unrealized_bps, 1),
-                        "stop_price": round(float(state.stop_price), 2),
-                        "trailing_active": getattr(state, "trailing_stop_active", False),
-                        "hold_secs": round(hold_secs, 1),
-                    }
-                    total_unrealized_pnl += unrealized_usd
+        for s_name, s_cfg in all_configured.items():
+            state = evaluator.strategies.get(s_name) if (evaluator and hasattr(evaluator, "strategies")) else None
+            perf = evaluator.get_strategy_performance(s_name, mid_px) if (evaluator and hasattr(evaluator, "get_strategy_performance") and state) else {}
 
-                realized_pnl = float(perf.get("realized_pnl_usd", 0.0))
-                total_realized_pnl += realized_pnl
-                total_trades_count += int(perf.get("trades", 0))
+            in_pos = bool(state.is_in_position) if state else False
+            pos_btc = float(state.position_btc) if state else 0.0
+            entry_px = float(state.entry_price) if state else 0.0
 
-                strategies_data[s_name] = {
-                    "enabled": True,
-                    "in_position": in_pos,
-                    "position": pos_info,
-                    "trades": perf.get("trades", 0),
-                    "win_rate": round(float(perf.get("win_rate_pct", 0.0)), 1),
-                    "profit_factor": round(float(perf.get("profit_factor", 0.0)), 2),
-                    "realized_pnl": round(realized_pnl, 2),
-                    "fees_paid": round(float(perf.get("fees_paid_usd", 0.0)), 3),
-                    "drawdown": round(float(perf.get("max_drawdown_usd", 0.0)), 2),
+            pos_info = None
+            if in_pos:
+                unrealized_usd = pos_btc * (mid_px - entry_px)
+                unrealized_bps = (unrealized_usd / (abs(pos_btc) * entry_px)) * 10_000.0 if (abs(pos_btc) * entry_px) > 0 else 0.0
+                hold_secs = (now_ms - state.entry_time_ms) / 1000.0 if state else 0.0
+                pos_info = {
+                    "side": "LONG" if pos_btc > 0 else "SHORT",
+                    "size_btc": round(abs(pos_btc), 4),
+                    "entry_price": round(entry_px, 2),
+                    "unrealized_usd": round(unrealized_usd, 3),
+                    "unrealized_bps": round(unrealized_bps, 1),
+                    "stop_price": round(float(state.stop_price), 2),
+                    "trailing_active": getattr(state, "trailing_stop_active", False),
+                    "hold_secs": round(hold_secs, 1),
                 }
+                total_unrealized_pnl += unrealized_usd
+
+            realized_pnl = float(perf.get("realized_pnl_usd", 0.0))
+            total_realized_pnl += realized_pnl
+            total_trades_count += int(perf.get("trades", 0))
+
+            category = "scalping" if (s_cfg and getattr(s_cfg, "is_scalping", False)) else "execution"
+            if state and hasattr(state, "category"):
+                category = state.category
+
+            is_enabled = bool(s_cfg.enabled) if s_cfg else (s_name in getattr(evaluator, "strategy_names", []))
+
+            strategies_data[s_name] = {
+                "enabled": is_enabled,
+                "category": category,
+                "in_position": in_pos,
+                "position": pos_info,
+                "trades": perf.get("trades", 0),
+                "win_rate": round(float(perf.get("win_rate_pct", 0.0)), 1),
+                "profit_factor": round(float(perf.get("profit_factor", 0.0)), 2),
+                "realized_pnl": round(realized_pnl, 2),
+                "fees_paid": round(float(perf.get("fees_paid_usd", 0.0)), 3),
+                "drawdown": round(float(perf.get("max_drawdown_usd", 0.0)), 2),
+                "signal_key": getattr(s_cfg, "signal_key", "CompositeAlpha") if s_cfg else getattr(state, "signal_key", "CompositeAlpha"),
+                "entry_threshold": getattr(s_cfg, "entry_threshold", 0.8) if s_cfg else 0.8,
+                "execution_style": getattr(s_cfg, "execution_type", "MAKER") if s_cfg else getattr(state, "execution_type", "MAKER"),
+            }
 
         # 4. Recent Closed Trades (last 15)
         recent_trades = []

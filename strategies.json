@@ -1,7 +1,7 @@
 {
   "_comment": "Hyperliquid L2 Microstructure Alpha Engine - Strategy & Signal Configuration",
-  "_instructions": "Set 'enabled': true or false to select/deselect any execution strategy or alpha signal.",
-  "version": "1.0",
+  "_instructions": "Execution Strategies contains the 4 new primary execution strategies (Hedged_Convexity, Convexity_Cascade, Momentum_Expansion, Queue_Replenishment). Scalping Strategies contains the older legacy micro-scalping strategies (QDAP_Maker, Composite_Maker, AdaptiveML_Maker, WOBI_Maker, MicroPrice_Maker, Absorption_Fade, AdaptiveML_Taker, Composite_Taker). Set 'enabled': true or false to select/deselect any strategy.",
+  "version": "1.1",
   "live_execution": {
     "_comment": "Configuration for live exchange execution when running with --live-orders",
     "active_strategy": "Hedged_Convexity",
@@ -84,7 +84,9 @@
       "min_volatility_bps": 4.5,
       "loss_cooldown_secs": 120,
       "coentry_group": "queue_replenishment"
-    },
+    }
+  },
+  "scalping_strategies": {
     "QDAP_Maker": {
       "enabled": false,
       "description": "Passive quoting targeting depleted queue imbalances with order count anti-spoofing",

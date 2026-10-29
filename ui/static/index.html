@@ -58,6 +58,9 @@
 </head>
 <body class="flex flex-col min-h-screen">
 
+  <!-- Floating Toast Notifications -->
+  <div id="toast-container" class="fixed top-4 right-4 z-[9999] flex flex-col space-y-2 pointer-events-none"></div>
+
   <!-- Top Navigation Bar -->
   <header class="border-b border-dark-border bg-dark-card/80 backdrop-blur px-4 py-2.5 flex items-center justify-between sticky top-0 z-50">
     <div class="flex items-center space-x-3">
@@ -245,14 +248,45 @@
         </div>
       </div>
 
-      <!-- Active Strategies & Telemetry -->
+      <!-- Strategy Control & Telemetry -->
       <div class="bg-dark-card border border-dark-border rounded-lg p-3 shadow-lg flex flex-col">
         <div class="flex items-center justify-between mb-2">
-          <h2 class="text-xs uppercase tracking-wider font-semibold text-slate-300">Active Strategies</h2>
-          <span class="text-xs font-mono text-slate-400">Real-Time Risk</span>
+          <div class="flex items-center space-x-2">
+            <h2 class="text-xs uppercase tracking-wider font-semibold text-slate-300">Strategy Control</h2>
+            <span id="strategy-count-badge" class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-cyan-950 text-cyan-300 border border-cyan-800">-- ACTIVE</span>
+          </div>
+          <span class="text-xs font-mono text-slate-400">Live Quoting</span>
         </div>
 
-        <div id="strategies-list" class="flex flex-col space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+        <!-- Mode Preset Quick Switcher -->
+        <div class="flex items-center justify-between bg-dark-bg/80 border border-dark-border/80 rounded px-2 py-1.5 mb-2">
+          <div class="flex items-center space-x-1.5">
+            <span class="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Preset:</span>
+            <span id="current-mode-indicator" class="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700">CUSTOM</span>
+          </div>
+          <div class="flex space-x-1">
+            <button id="btn-mode-core" onclick="setScalpingMode(false)"
+                    title="Enable primary Core execution strategies and disable Scalping strategies"
+                    class="px-2 py-0.5 rounded text-[10px] font-mono transition-all border border-cyan-800 bg-cyan-950/60 text-cyan-300 hover:bg-cyan-900/60 font-semibold">
+              ⚡ Core (4)
+            </button>
+            <button id="btn-mode-scalping" onclick="setScalpingMode(true)"
+                    title="Enable all 8 Scalping strategies and disable Core execution strategies"
+                    class="px-2 py-0.5 rounded text-[10px] font-mono transition-all border border-amber-800 bg-amber-950/60 text-amber-300 hover:bg-amber-900/60 font-semibold">
+              🎯 Scalping (8)
+            </button>
+          </div>
+        </div>
+
+        <!-- Strategy Category Filters -->
+        <div class="flex space-x-1 mb-2.5 border-b border-dark-border/60 pb-1.5 text-[11px] font-mono">
+          <button id="filter-all" onclick="setStrategyFilter('all')" class="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 transition-colors font-semibold">All (12)</button>
+          <button id="filter-core" onclick="setStrategyFilter('core')" class="px-2 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200 transition-colors">Core (4)</button>
+          <button id="filter-scalping" onclick="setStrategyFilter('scalping')" class="px-2 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200 transition-colors">Scalping (8)</button>
+          <button id="filter-active" onclick="setStrategyFilter('active')" class="px-2 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200 transition-colors">Active Only</button>
+        </div>
+
+        <div id="strategies-list" class="flex flex-col space-y-2 max-h-[420px] overflow-y-auto pr-1">
           <div class="text-center text-slate-600 py-4 text-xs font-mono">Initializing strategies...</div>
         </div>
       </div>
@@ -628,21 +662,142 @@
       bidsEl.innerHTML = bidsHtml || '<div class="text-center text-slate-600 py-2">No bids</div>';
     }
 
+    let currentStrategyFilter = 'all';
+    let cachedStrategies = {};
+
+    function setStrategyFilter(filter) {
+      currentStrategyFilter = filter;
+      ['all', 'core', 'scalping', 'active'].forEach(f => {
+        const el = document.getElementById(`filter-${f}`);
+        if (!el) return;
+        if (f === filter) {
+          el.className = 'px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 transition-colors font-semibold';
+        } else {
+          el.className = 'px-2 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200 transition-colors';
+        }
+      });
+      renderStrategies(cachedStrategies);
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+
+      const toast = document.createElement('div');
+      const bgColors = {
+        success: 'bg-emerald-950/95 text-emerald-200 border-emerald-800 shadow-emerald-950/50',
+        warn: 'bg-amber-950/95 text-amber-200 border-amber-800 shadow-amber-950/50',
+        error: 'bg-rose-950/95 text-rose-200 border-rose-800 shadow-rose-950/50',
+        info: 'bg-slate-900/95 text-slate-200 border-slate-700 shadow-slate-950/50'
+      };
+      const icons = {
+        success: '✓',
+        warn: '⏸',
+        error: '✕',
+        info: 'ℹ'
+      };
+      const color = bgColors[type] || bgColors.info;
+      const icon = icons[type] || icons.info;
+
+      toast.className = `flex items-center space-x-2.5 px-3.5 py-2.5 rounded-lg shadow-2xl border text-xs font-mono pointer-events-auto backdrop-blur transition-all duration-300 transform translate-y-[-10px] opacity-0 ${color}`;
+      toast.innerHTML = `<span class="font-bold text-sm">${icon}</span><span class="leading-tight">${message}</span>`;
+
+      container.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-[-10px]', 'opacity-0');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-[-10px]');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
     function renderStrategies(strats) {
+      cachedStrategies = strats || {};
       const container = document.getElementById('strategies-list');
-      const names = Object.keys(strats);
-      if (names.length === 0) {
-        container.innerHTML = '<div class="text-center text-slate-600 py-4 text-xs font-mono">No active strategies</div>';
+      const countBadge = document.getElementById('strategy-count-badge');
+      const allNames = Object.keys(cachedStrategies);
+
+      if (allNames.length === 0) {
+        container.innerHTML = '<div class="text-center text-slate-600 py-6 text-xs font-mono">No strategies configured</div>';
+        if (countBadge) countBadge.innerText = '0 ACTIVE';
+        return;
+      }
+
+      const activeCount = allNames.filter(n => cachedStrategies[n].enabled).length;
+      if (countBadge) {
+        countBadge.innerText = `${activeCount}/${allNames.length} ACTIVE`;
+        countBadge.className = activeCount > 0
+          ? 'px-1.5 py-0.5 rounded text-[10px] font-mono bg-cyan-950 text-cyan-300 border border-cyan-800'
+          : 'px-1.5 py-0.5 rounded text-[10px] font-mono bg-rose-950 text-rose-300 border border-rose-800';
+      }
+
+      // Update preset indicator badge and button styling
+      const coreAny = Object.entries(cachedStrategies).some(([k, s]) => s.category !== 'scalping' && s.enabled);
+      const scalpAny = Object.entries(cachedStrategies).some(([k, s]) => s.category === 'scalping' && s.enabled);
+      const ind = document.getElementById('current-mode-indicator');
+      const btnCore = document.getElementById('btn-mode-core');
+      const btnScalp = document.getElementById('btn-mode-scalping');
+
+      if (ind) {
+        if (scalpAny && !coreAny) {
+          ind.innerText = 'SCALPING';
+          ind.className = 'text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800 font-bold';
+        } else if (coreAny && !scalpAny) {
+          ind.innerText = 'CORE';
+          ind.className = 'text-[10px] font-mono px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 font-bold';
+        } else {
+          ind.innerText = 'CUSTOM';
+          ind.className = 'text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700';
+        }
+      }
+
+      if (btnCore && btnScalp) {
+        if (scalpAny && !coreAny) {
+          btnScalp.className = 'px-2 py-0.5 rounded text-[10px] font-mono transition-all border border-amber-500 bg-amber-500/25 text-amber-300 font-bold shadow-sm';
+          btnCore.className = 'px-2 py-0.5 rounded text-[10px] font-mono transition-all border border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200';
+        } else if (coreAny && !scalpAny) {
+          btnCore.className = 'px-2 py-0.5 rounded text-[10px] font-mono transition-all border border-cyan-500 bg-cyan-500/25 text-cyan-300 font-bold shadow-sm';
+          btnScalp.className = 'px-2 py-0.5 rounded text-[10px] font-mono transition-all border border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200';
+        } else {
+          btnCore.className = 'px-2 py-0.5 rounded text-[10px] font-mono transition-all border border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200';
+          btnScalp.className = 'px-2 py-0.5 rounded text-[10px] font-mono transition-all border border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200';
+        }
+      }
+
+      // Filter names based on current filter
+      const filteredNames = allNames.filter(name => {
+        const s = cachedStrategies[name];
+        if (currentStrategyFilter === 'core') return s.category !== 'scalping';
+        if (currentStrategyFilter === 'scalping') return s.category === 'scalping';
+        if (currentStrategyFilter === 'active') return s.enabled;
+        return true;
+      });
+
+      // Sort: Enabled strategies first, then Core over Scalping, then alphabetical
+      filteredNames.sort((a, b) => {
+        const sa = cachedStrategies[a];
+        const sb = cachedStrategies[b];
+        if (sa.enabled !== sb.enabled) return sa.enabled ? -1 : 1;
+        if (sa.category !== sb.category) return sa.category === 'execution' ? -1 : 1;
+        return a.localeCompare(b);
+      });
+
+      if (filteredNames.length === 0) {
+        container.innerHTML = `<div class="text-center text-slate-600 py-6 text-xs font-mono">No strategies matching '${currentStrategyFilter}' filter</div>`;
         return;
       }
 
       let html = '';
-      for (const name of names) {
-        const s = strats[name];
+      for (const name of filteredNames) {
+        const s = cachedStrategies[name];
+        const isEnabled = Boolean(s.enabled);
         const pos = s.position;
         const inPos = s.in_position && pos;
 
-        let badgeStatus = '<span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 border border-slate-700">IDLE</span>';
+        let badgeStatus = '';
         let positionInfo = '';
 
         if (inPos) {
@@ -660,26 +815,48 @@
               <div><span class="text-slate-500">Stop Px:</span> <span class="text-yellow-400">${stopPxStr}</span></div>
             </div>
           `;
+        } else if (isEnabled) {
+          badgeStatus = '<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/80">QUOTING</span>';
+        } else {
+          badgeStatus = '<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-900 text-slate-500 border border-slate-800">OFF</span>';
         }
 
         const cleanName = name.replace(/_/g, ' ');
+        const catBadge = (s.category === 'scalping')
+          ? '<span class="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-amber-950/80 text-amber-300 border border-amber-800">SCALPING</span>'
+          : '<span class="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-cyan-950/80 text-cyan-300 border border-cyan-800">CORE</span>';
+
+        const cardBg = isEnabled
+          ? 'bg-dark-bg/90 border border-dark-border hover:border-cyan-800/70 shadow-sm'
+          : 'bg-dark-bg/30 border border-slate-800/60 opacity-60 hover:opacity-100';
+
+        // Modern animated toggle switch
+        const toggleButton = `
+          <div class="flex items-center space-x-1.5">
+            <span class="text-[10px] font-mono font-bold ${isEnabled ? 'text-emerald-400' : 'text-slate-500'}">${isEnabled ? 'ON' : 'OFF'}</span>
+            <button onclick="toggleStrategy('${name}', ${!isEnabled})"
+                    title="Click to turn ${isEnabled ? 'OFF' : 'ON'}"
+                    class="w-8 h-4.5 flex items-center rounded-full p-0.5 cursor-pointer transition-colors duration-200 ${isEnabled ? 'bg-emerald-500' : 'bg-slate-700'}">
+              <div class="bg-white w-3.5 h-3.5 rounded-full shadow transform transition-transform duration-200 ${isEnabled ? 'translate-x-3.5' : 'translate-x-0'}"></div>
+            </button>
+          </div>
+        `;
 
         html += `
-          <div class="bg-dark-bg/80 border border-dark-border rounded p-2.5 flex flex-col">
+          <div class="${cardBg} rounded p-2.5 flex flex-col transition-all">
             <div class="flex items-center justify-between">
               <div class="flex items-center space-x-2">
-                <span class="font-bold text-xs text-slate-200 tracking-wide">${cleanName}</span>
+                <span class="font-bold text-xs ${isEnabled ? 'text-slate-200' : 'text-slate-400'} tracking-wide">${cleanName}</span>
+                ${catBadge}
                 ${badgeStatus}
               </div>
-              <button onclick="toggleStrategy('${name}', ${!s.enabled})" class="text-[10px] font-mono px-2 py-0.5 rounded ${s.enabled ? 'bg-cyan-950 text-cyan-400 border border-cyan-800' : 'bg-slate-800 text-slate-500'}">
-                ${s.enabled ? 'ENABLED' : 'PAUSED'}
-              </button>
+              ${toggleButton}
             </div>
             <div class="grid grid-cols-4 gap-1 text-[11px] font-mono mt-2 text-slate-400">
-              <div>Trades: <span class="text-slate-200">${s.trades}</span></div>
-              <div>Win: <span class="text-emerald-400">${s.win_rate}%</span></div>
-              <div>PF: <span class="text-cyan-400">${s.profit_factor}</span></div>
-              <div>PnL: <span class="${s.realized_pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'} font-bold">${s.realized_pnl >= 0 ? '+' : ''}$${s.realized_pnl.toFixed(2)}</span></div>
+              <div>Trades: <span class="text-slate-200">${s.trades || 0}</span></div>
+              <div>Win: <span class="text-emerald-400">${s.win_rate || 0}%</span></div>
+              <div>PF: <span class="text-cyan-400">${s.profit_factor || 0}</span></div>
+              <div>PnL: <span class="${(s.realized_pnl || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'} font-bold">${(s.realized_pnl || 0) >= 0 ? '+' : ''}$${(s.realized_pnl || 0).toFixed(2)}</span></div>
             </div>
             ${positionInfo}
           </div>
@@ -719,6 +896,12 @@
 
     // Toggle strategy API call
     async function toggleStrategy(stratName, enable) {
+      // Optimistic update so UI responds instantly
+      if (cachedStrategies[stratName]) {
+        cachedStrategies[stratName].enabled = enable;
+        renderStrategies(cachedStrategies);
+      }
+
       try {
         const res = await fetch('/api/strategy/toggle', {
           method: 'POST',
@@ -726,9 +909,55 @@
           body: JSON.stringify({ strategy: stratName, enabled: enable })
         });
         const data = await res.json();
-        console.log("Toggle result:", data);
+        if (!res.ok) {
+          throw new Error(data.detail || "Server error");
+        }
+        showToast(`Strategy '${stratName.replace(/_/g, ' ')}' turned ${enable ? 'ON' : 'OFF'} (Saved)`, enable ? 'success' : 'warn');
       } catch (e) {
-        alert("Failed to toggle strategy: " + e);
+        // Rollback optimistic update
+        if (cachedStrategies[stratName]) {
+          cachedStrategies[stratName].enabled = !enable;
+          renderStrategies(cachedStrategies);
+        }
+        showToast("Failed to toggle strategy: " + e.message, "error");
+      }
+    }
+
+    // Bulk Mode API call (Core vs Scalping)
+    async function setScalpingMode(isScalping) {
+      // Optimistic update
+      const previousState = JSON.parse(JSON.stringify(cachedStrategies));
+      for (const name in cachedStrategies) {
+        const s = cachedStrategies[name];
+        if (isScalping) {
+          s.enabled = (s.category === 'scalping');
+        } else {
+          s.enabled = (s.category !== 'scalping' && name !== 'Queue_Replenishment');
+        }
+      }
+      renderStrategies(cachedStrategies);
+
+      try {
+        const res = await fetch('/api/strategies/mode/scalping', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scalping: isScalping, save: true })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.detail || "Server error");
+        }
+        showToast(
+          isScalping
+            ? "Activated Scalping Mode (8 scalping strategies active, 4 core disabled)"
+            : "Activated Core Mode (Core execution strategies active, scalping disabled)",
+          "success"
+        );
+      } catch (e) {
+        // Rollback optimistic update
+        cachedStrategies = previousState;
+        renderStrategies(cachedStrategies);
+        showToast("Failed to switch preset mode: " + e.message, "error");
       }
     }
 

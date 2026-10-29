@@ -178,13 +178,32 @@ class BacktestConfig:
     taker_exit_as_maker_on_tp: bool = True           # Post passive limit order on Take Profit (pays 1.5 bps maker fee instead of 4.5 bps)
 
 
+NEW_EXECUTION_STRATEGIES: Tuple[str, ...] = (
+    "Hedged_Convexity",
+    "Convexity_Cascade",
+    "Momentum_Expansion",
+    "Queue_Replenishment",
+)
+
+LEGACY_SCALPING_STRATEGIES: Tuple[str, ...] = (
+    "QDAP_Maker",
+    "Composite_Maker",
+    "AdaptiveML_Maker",
+    "WOBI_Maker",
+    "MicroPrice_Maker",
+    "Absorption_Fade",
+    "AdaptiveML_Taker",
+    "Composite_Taker",
+)
+
+
 DEFAULT_STRATEGIES_JSON = {
     "_comment": "Hyperliquid L2 Microstructure Alpha Engine - Strategy & Signal Configuration",
-    "_instructions": "Set 'enabled': true or false to select/deselect any execution strategy or alpha signal.",
-    "version": "1.0",
+    "_instructions": "Execution Strategies contains the 4 new primary execution strategies (Hedged_Convexity, Convexity_Cascade, Momentum_Expansion, Queue_Replenishment). Scalping Strategies contains the older legacy micro-scalping strategies (QDAP_Maker, Composite_Maker, AdaptiveML_Maker, WOBI_Maker, MicroPrice_Maker, Absorption_Fade, AdaptiveML_Taker, Composite_Taker). Set 'enabled': true or false to select/deselect any strategy.",
+    "version": "1.1",
     "live_execution": {
         "_comment": "Configuration for live exchange execution when running with --live-orders",
-        "active_strategy": "Composite_Maker",
+        "active_strategy": "Hedged_Convexity",
         "order_size_btc": 0.0005,
         "max_position_btc": 0.05,
     },
@@ -196,12 +215,12 @@ DEFAULT_STRATEGIES_JSON = {
             "execution_type": "HEDGED_MAKER",
             "entry_threshold": 0.86,
             "order_size_btc": 0.1,
-            "take_profit_bps": 18.0,
-            "stop_loss_bps": 12.0,
-            "trailing_stop_activation_bps": 3.5,
-            "trailing_stop_distance_bps": 1.2,
-            "hedge_trigger_loss_bps": -5.5,
-            "hedge_reversal_threshold": -0.40,
+            "take_profit_bps": 20.0,
+            "stop_loss_bps": 8.0,
+            "trailing_stop_activation_bps": 5.0,
+            "trailing_stop_distance_bps": 2.0,
+            "hedge_trigger_loss_bps": -3.5,
+            "hedge_reversal_threshold": 0.20,
             "max_holding_time_secs": 180,
             "exit_reversal_threshold": 0.85,
             "min_volatility_bps": 4.5,
@@ -213,16 +232,17 @@ DEFAULT_STRATEGIES_JSON = {
             "description": "Multi-tier order book convexity and liquidity hole cascade with order count dispersion and trade flow impulse",
             "signal_key": "ConvexityCascade",
             "execution_type": "HEDGED_MAKER",
-            "entry_threshold": 0.75,
+            "entry_threshold": 0.80,
             "order_size_btc": 0.1,
-            "take_profit_bps": 18.0,
-            "stop_loss_bps": 12.0,
-            "trailing_stop_activation_bps": 4.5,
-            "trailing_stop_distance_bps": 1.5,
-            "hedge_trigger_loss_bps": -5.5,
-            "hedge_reversal_threshold": -0.45,
-            "max_holding_time_secs": 120,
-            "exit_reversal_threshold": 0.85,
+            "take_profit_bps": 20.0,
+            "stop_loss_bps": 8.0,
+            "trailing_stop_activation_bps": 6.0,
+            "trailing_stop_distance_bps": 2.5,
+            "hedge_trigger_loss_bps": -4.0,
+            "hedge_reversal_threshold": 0.15,
+            "max_holding_time_secs": 180,
+            "exit_reversal_threshold": 0.80,
+            "min_volatility_bps": 4.5,
             "loss_cooldown_secs": 60,
             "coentry_group": "triad",
         },
@@ -231,16 +251,17 @@ DEFAULT_STRATEGIES_JSON = {
             "description": "Multi-minute structural trend expansion entering on order book queue exhaustion, 25-level depth support, and CVD acceleration with absorption trap shielding",
             "signal_key": "MomentumExpansion",
             "execution_type": "HEDGED_MAKER",
-            "entry_threshold": 0.75,
+            "entry_threshold": 0.70,
             "order_size_btc": 0.1,
             "take_profit_bps": 20.0,
-            "stop_loss_bps": 12.0,
-            "trailing_stop_activation_bps": 4.5,
-            "trailing_stop_distance_bps": 1.5,
-            "hedge_trigger_loss_bps": -5.5,
-            "hedge_reversal_threshold": -0.45,
-            "max_holding_time_secs": 120,
-            "exit_reversal_threshold": 0.70,
+            "stop_loss_bps": 8.0,
+            "trailing_stop_activation_bps": 5.0,
+            "trailing_stop_distance_bps": 2.0,
+            "hedge_trigger_loss_bps": -3.5,
+            "hedge_reversal_threshold": 0.20,
+            "max_holding_time_secs": 180,
+            "exit_reversal_threshold": 0.65,
+            "min_volatility_bps": 4.5,
             "loss_cooldown_secs": 60,
             "coentry_group": "triad",
         },
@@ -263,69 +284,119 @@ DEFAULT_STRATEGIES_JSON = {
             "loss_cooldown_secs": 120,
             "coentry_group": "queue_replenishment",
         },
+    },
+    "scalping_strategies": {
         "QDAP_Maker": {
-            "enabled": True,
+            "enabled": False,
             "description": "Passive quoting targeting depleted queue imbalances with order count anti-spoofing",
             "signal_key": "QDAP",
             "execution_type": "MAKER",
-            "entry_threshold": 0.35,
+            "entry_threshold": 0.75,
             "order_size_btc": 0.1,
+            "take_profit_bps": 18.0,
+            "stop_loss_bps": 12.0,
+            "trailing_stop_activation_bps": 2.5,
+            "trailing_stop_distance_bps": 1.0,
+            "max_holding_time_secs": 180,
+            "min_volatility_bps": 3.8,
         },
         "Composite_Maker": {
-            "enabled": True,
+            "enabled": False,
             "description": "Passive Avellaneda-Stoikov spread capture and maker rebate quoting off Composite Alpha ensemble",
             "signal_key": "CompositeAlpha",
             "execution_type": "MAKER",
-            "entry_threshold": 0.35,
+            "entry_threshold": 0.75,
             "order_size_btc": 0.1,
+            "take_profit_bps": 18.0,
+            "stop_loss_bps": 12.0,
+            "trailing_stop_activation_bps": 2.5,
+            "trailing_stop_distance_bps": 1.0,
+            "max_holding_time_secs": 180,
+            "min_volatility_bps": 3.8,
         },
         "AdaptiveML_Maker": {
-            "enabled": True,
+            "enabled": False,
             "description": "Passive maker execution driven by machine-learning online feature drift prediction",
             "signal_key": "AdaptiveML",
             "execution_type": "MAKER",
-            "entry_threshold": 0.35,
+            "entry_threshold": 0.65,
             "order_size_btc": 0.1,
+            "take_profit_bps": 18.0,
+            "stop_loss_bps": 12.0,
+            "trailing_stop_activation_bps": 2.5,
+            "trailing_stop_distance_bps": 1.0,
+            "max_holding_time_secs": 180,
+            "min_volatility_bps": 3.8,
         },
         "WOBI_Maker": {
-            "enabled": True,
+            "enabled": False,
             "description": "Passive quoting biased by anti-spoofed Weighted Order Book Imbalance",
             "signal_key": "WOBI",
             "execution_type": "MAKER",
-            "entry_threshold": 0.35,
+            "entry_threshold": 0.75,
             "order_size_btc": 0.1,
+            "take_profit_bps": 18.0,
+            "stop_loss_bps": 12.0,
+            "trailing_stop_activation_bps": 2.5,
+            "trailing_stop_distance_bps": 1.0,
+            "max_holding_time_secs": 180,
+            "min_volatility_bps": 3.8,
         },
         "MicroPrice_Maker": {
-            "enabled": True,
+            "enabled": False,
             "description": "Passive quoting tracking Stoikov MicroPrice fair value drift",
             "signal_key": "MicroPrice",
             "execution_type": "MAKER",
-            "entry_threshold": 0.35,
+            "entry_threshold": 0.75,
             "order_size_btc": 0.1,
+            "take_profit_bps": 18.0,
+            "stop_loss_bps": 12.0,
+            "trailing_stop_activation_bps": 2.5,
+            "trailing_stop_distance_bps": 1.0,
+            "max_holding_time_secs": 180,
+            "min_volatility_bps": 3.8,
         },
         "Absorption_Fade": {
-            "enabled": True,
+            "enabled": False,
             "description": "Passive fade strategy entering when aggressive market orders are absorbed by resting limit walls",
             "signal_key": "Absorption",
             "execution_type": "MAKER",
-            "entry_threshold": 0.30,
+            "entry_threshold": 0.70,
             "order_size_btc": 0.1,
+            "take_profit_bps": 18.0,
+            "stop_loss_bps": 12.0,
+            "trailing_stop_activation_bps": 2.5,
+            "trailing_stop_distance_bps": 1.0,
+            "max_holding_time_secs": 180,
+            "min_volatility_bps": 3.8,
         },
         "AdaptiveML_Taker": {
-            "enabled": True,
+            "enabled": False,
             "description": "Aggressive market entry on strong ML model conviction with trailing stop",
             "signal_key": "AdaptiveML",
             "execution_type": "SMART_TAKER",
-            "entry_threshold": 0.50,
+            "entry_threshold": 0.75,
             "order_size_btc": 0.1,
+            "take_profit_bps": 22.0,
+            "stop_loss_bps": 12.0,
+            "trailing_stop_activation_bps": 3.5,
+            "trailing_stop_distance_bps": 1.2,
+            "max_holding_time_secs": 120,
+            "min_volatility_bps": 4.5,
         },
         "Composite_Taker": {
-            "enabled": True,
+            "enabled": False,
             "description": "Aggressive market entry on extreme multi-factor composite dislocation",
             "signal_key": "CompositeAlpha",
             "execution_type": "SMART_TAKER",
-            "entry_threshold": 0.50,
+            "entry_threshold": 0.80,
             "order_size_btc": 0.1,
+            "take_profit_bps": 22.0,
+            "stop_loss_bps": 12.0,
+            "trailing_stop_activation_bps": 3.5,
+            "trailing_stop_distance_bps": 1.2,
+            "max_holding_time_secs": 120,
+            "min_volatility_bps": 4.5,
         },
     },
     "alpha_signals": {
@@ -407,6 +478,13 @@ class ExecutionStrategyConfig:
     min_volatility_bps: Optional[float] = None
     loss_cooldown_secs: Optional[int] = None
     coentry_group: Optional[str] = None
+    is_scalping: bool = False
+
+
+@dataclass
+class ScalpingStrategyConfig(ExecutionStrategyConfig):
+    """Configuration dataclass specifically for legacy micro-scalping strategies."""
+    is_scalping: bool = True
 
 
 @dataclass
@@ -465,10 +543,16 @@ class LiveExecutionConfig:
 
 @dataclass
 class StrategiesConfig:
-    """Manages strategy selection, enabling/disabling, and weight parameters from strategies.json."""
+    """Manages strategy selection, enabling/disabling, and weight parameters from strategies.json.
+    
+    Provides explicit distinction between the 4 new primary execution strategies
+    (Hedged_Convexity, Convexity_Cascade, Momentum_Expansion, Queue_Replenishment)
+    and older legacy scalping strategies (QDAP_Maker, Composite_Maker, AdaptiveML_Maker, etc.).
+    """
     filepath: str = "strategies.json"
     live_execution: LiveExecutionConfig = field(default_factory=LiveExecutionConfig)
     execution_strategies: Dict[str, ExecutionStrategyConfig] = field(default_factory=dict)
+    scalping_strategies: Dict[str, ScalpingStrategyConfig] = field(default_factory=dict)
     alpha_signals: Dict[str, AlphaSignalConfig] = field(default_factory=dict)
     queue_replenishment: QueueReplenishmentConfig = field(default_factory=QueueReplenishmentConfig)
 
@@ -491,21 +575,16 @@ class StrategiesConfig:
         # Parse live_execution
         live_raw = raw_data.get("live_execution", {})
         live_cfg = LiveExecutionConfig(
-            active_strategy=live_raw.get("active_strategy", "Composite_Maker"),
+            active_strategy=live_raw.get("active_strategy", "Hedged_Convexity"),
             order_size_btc=float(live_raw.get("order_size_btc", 0.0005)),
             max_position_btc=float(live_raw.get("max_position_btc", 0.05)),
         )
 
-        # Parse execution_strategies
-        exec_strategies: Dict[str, ExecutionStrategyConfig] = {}
-        defaults_exec = DEFAULT_STRATEGIES_JSON["execution_strategies"]
-        exec_raw = raw_data.get("execution_strategies", defaults_exec)
-
-        for s_name, s_info in exec_raw.items():
-            fallback = defaults_exec.get(s_name, {})
-            exec_strategies[s_name] = ExecutionStrategyConfig(
+        def _parse_strat_item(s_name: str, s_info: dict, fallback: dict, is_scalp: bool = False) -> ExecutionStrategyConfig:
+            cfg_cls = ScalpingStrategyConfig if is_scalp else ExecutionStrategyConfig
+            return cfg_cls(
                 name=s_name,
-                enabled=bool(s_info.get("enabled", fallback.get("enabled", True))),
+                enabled=bool(s_info.get("enabled", fallback.get("enabled", False))),
                 description=str(s_info.get("description", fallback.get("description", ""))),
                 signal_key=str(s_info.get("signal_key", fallback.get("signal_key", "CompositeAlpha"))),
                 execution_type=str(s_info.get("execution_type", fallback.get("execution_type", "MAKER"))),
@@ -522,7 +601,51 @@ class StrategiesConfig:
                 min_volatility_bps=float(s_info["min_volatility_bps"]) if "min_volatility_bps" in s_info else fallback.get("min_volatility_bps"),
                 loss_cooldown_secs=int(s_info["loss_cooldown_secs"]) if "loss_cooldown_secs" in s_info else fallback.get("loss_cooldown_secs"),
                 coentry_group=str(s_info["coentry_group"]) if "coentry_group" in s_info else fallback.get("coentry_group"),
+                is_scalping=is_scalp,
             )
+
+        # Parse execution_strategies (The 4 New Primary Execution Strategies)
+        exec_strategies: Dict[str, ExecutionStrategyConfig] = {}
+        defaults_exec = DEFAULT_STRATEGIES_JSON["execution_strategies"]
+        exec_raw = raw_data.get("execution_strategies", defaults_exec)
+
+        # Parse scalping_strategies (Legacy Scalping Strategies)
+        scalp_strategies: Dict[str, ScalpingStrategyConfig] = {}
+        defaults_scalp = DEFAULT_STRATEGIES_JSON.get("scalping_strategies", {})
+        scalp_raw = raw_data.get("scalping_strategies", {})
+
+        # Handle backward-compatibility: if legacy scalping strategies were under execution_strategies
+        migrated_legacy_from_exec: Dict[str, dict] = {}
+        cleaned_exec_raw: Dict[str, dict] = {}
+        for s_name, s_info in exec_raw.items():
+            if s_name in LEGACY_SCALPING_STRATEGIES and s_name not in scalp_raw:
+                migrated_legacy_from_exec[s_name] = s_info
+            elif s_name not in LEGACY_SCALPING_STRATEGIES:
+                cleaned_exec_raw[s_name] = s_info
+
+        # Populate execution strategies (4 new strategies)
+        for s_name, s_info in cleaned_exec_raw.items():
+            fallback = defaults_exec.get(s_name, {})
+            exec_strategies[s_name] = _parse_strat_item(s_name, s_info, fallback, is_scalp=False)
+
+        # Populate scalping strategies (legacy strategies)
+        combined_scalp_raw = {}
+        for k in LEGACY_SCALPING_STRATEGIES:
+            if k in scalp_raw:
+                combined_scalp_raw[k] = scalp_raw[k]
+            elif k in migrated_legacy_from_exec:
+                combined_scalp_raw[k] = migrated_legacy_from_exec[k]
+            elif k in defaults_scalp:
+                combined_scalp_raw[k] = defaults_scalp[k]
+
+        # In case raw has any extra custom scalping strategies
+        for k, v in scalp_raw.items():
+            if k not in combined_scalp_raw:
+                combined_scalp_raw[k] = v
+
+        for s_name, s_info in combined_scalp_raw.items():
+            fallback = defaults_scalp.get(s_name, {})
+            scalp_strategies[s_name] = _parse_strat_item(s_name, s_info, fallback, is_scalp=True)
 
         # Parse alpha_signals
         alpha_signals: Dict[str, AlphaSignalConfig] = {}
@@ -542,29 +665,121 @@ class StrategiesConfig:
             filepath=filepath,
             live_execution=live_cfg,
             execution_strategies=exec_strategies,
+            scalping_strategies=scalp_strategies,
             alpha_signals=alpha_signals,
         )
 
+    @property
+    def all_strategies(self) -> Dict[str, ExecutionStrategyConfig]:
+        """Returns union mapping of both 4 new execution strategies and legacy scalping strategies."""
+        combined = dict(self.execution_strategies)
+        combined.update(self.scalping_strategies)
+        return combined
+
+    def is_execution_strategy(self, name: str) -> bool:
+        """Returns True if the strategy belongs to the 4 new primary execution strategies."""
+        return name in self.execution_strategies
+
+    def is_scalping_strategy(self, name: str) -> bool:
+        """Returns True if the strategy belongs to the legacy scalping strategies list."""
+        return name in self.scalping_strategies
+
+    @property
+    def is_scalping_mode_active(self) -> bool:
+        """Returns True if any scalping strategy is enabled and all 4 core strategies are disabled."""
+        scalp_any = any(s.enabled for s in self.scalping_strategies.values())
+        core_any = any(s.enabled for s in self.execution_strategies.values())
+        return scalp_any and not core_any
+
+    def set_scalping_mode(self, enabled: bool = True, save: bool = False) -> None:
+        """Selects all scalping strategies and disables the 4 core execution strategies (or vice versa).
+
+        Args:
+            enabled: If True, enables all 8 legacy scalping strategies and disables the 4 core execution strategies.
+                     If False, enables the primary core execution strategies and disables all scalping strategies.
+            save: If True, immediately persists changes to strategies.json.
+        """
+        if enabled:
+            # Enable all 8 legacy scalping strategies
+            for s in self.scalping_strategies.values():
+                s.enabled = True
+            # Disable the 4 core execution strategies
+            for s in self.execution_strategies.values():
+                s.enabled = False
+            # Switch active live strategy to primary scalping strategy if it was core
+            if self.is_execution_strategy(self.live_execution.active_strategy):
+                self.live_execution.active_strategy = "Composite_Maker"
+        else:
+            # Enable core execution strategies (Triad active, Queue Replenishment off)
+            for name, s in self.execution_strategies.items():
+                s.enabled = (name != "Queue_Replenishment")
+            # Disable all legacy scalping strategies
+            for s in self.scalping_strategies.values():
+                s.enabled = False
+            # Switch active live strategy to core if it was scalping
+            if self.is_scalping_strategy(self.live_execution.active_strategy):
+                self.live_execution.active_strategy = "Hedged_Convexity"
+
+        if save:
+            self.save()
+
+    def get_strategy(self, name: str) -> Optional[ExecutionStrategyConfig]:
+        """Lookup strategy in execution_strategies first, then scalping_strategies."""
+        return self.execution_strategies.get(name) or self.scalping_strategies.get(name)
+
+    def get_strategy_category(self, name: str) -> str:
+        """Returns 'execution' for 4 new strategies, 'scalping' for legacy scalping strategies, or 'unknown'."""
+        if self.is_execution_strategy(name):
+            return "execution"
+        if self.is_scalping_strategy(name):
+            return "scalping"
+        return "unknown"
+
     def is_strategy_enabled(self, name: str) -> bool:
-        s = self.execution_strategies.get(name)
+        """Checks enabled state across either execution or scalping strategies."""
+        s = self.get_strategy(name)
         return s.enabled if s else False
 
     def is_signal_enabled(self, name: str) -> bool:
         s = self.alpha_signals.get(name)
         return s.enabled if s else False
 
-    def get_enabled_strategy_defs(self) -> Dict[str, Tuple[str, str]]:
-        """Returns dict of {strategy_name: (signal_key, execution_type)} for enabled strategies."""
+    def get_enabled_execution_strategy_defs(self) -> Dict[str, Tuple[str, str]]:
+        """Returns dict of {strategy_name: (signal_key, execution_type)} for enabled 4 new execution strategies."""
         return {
             s.name: (s.signal_key, s.execution_type)
             for s in self.execution_strategies.values()
             if s.enabled
         }
 
-    def get_strategy_params(self) -> Dict[str, Dict[str, Any]]:
-        """Returns dict of custom per-strategy parameters."""
+    def get_enabled_scalping_strategy_defs(self) -> Dict[str, Tuple[str, str]]:
+        """Returns dict of {strategy_name: (signal_key, execution_type)} for enabled legacy scalping strategies."""
+        return {
+            s.name: (s.signal_key, s.execution_type)
+            for s in self.scalping_strategies.values()
+            if s.enabled
+        }
+
+    def get_enabled_strategy_defs(self, include_scalping: bool = True) -> Dict[str, Tuple[str, str]]:
+        """Returns dict of {strategy_name: (signal_key, execution_type)} for enabled strategies.
+        
+        Args:
+            include_scalping: If True (default), includes enabled legacy scalping strategies
+                              in addition to primary execution strategies.
+        """
+        defs = self.get_enabled_execution_strategy_defs()
+        if include_scalping:
+            defs.update(self.get_enabled_scalping_strategy_defs())
+        return defs
+
+    def get_strategy_params(self, include_scalping: bool = True) -> Dict[str, Dict[str, Any]]:
+        """Returns dict of custom per-strategy parameters across execution and optionally scalping strategies."""
         res = {}
-        for s in self.execution_strategies.values():
+        strats_to_process = list(self.execution_strategies.values())
+        if include_scalping:
+            strats_to_process.extend(self.scalping_strategies.values())
+
+        for s in strats_to_process:
             p = {
                 "entry_threshold": s.entry_threshold,
                 "order_size_btc": s.order_size_btc,
@@ -595,6 +810,105 @@ class StrategiesConfig:
                 p["coentry_group"] = s.coentry_group
             res[s.name] = p
         return res
+
+    def get_execution_strategy_params(self) -> Dict[str, Dict[str, Any]]:
+        """Returns dict of custom per-strategy parameters specifically for the 4 new execution strategies."""
+        return self.get_strategy_params(include_scalping=False)
+
+    def get_scalping_strategy_params(self) -> Dict[str, Dict[str, Any]]:
+        """Returns dict of custom per-strategy parameters specifically for legacy scalping strategies."""
+        res = self.get_strategy_params(include_scalping=True)
+        return {k: v for k, v in res.items() if k in self.scalping_strategies}
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serializes current configuration preserving execution_strategies and scalping_strategies separation."""
+        exec_dict = {}
+        for k, v in self.execution_strategies.items():
+            exec_dict[k] = {
+                "enabled": v.enabled,
+                "description": v.description,
+                "signal_key": v.signal_key,
+                "execution_type": v.execution_type,
+                "entry_threshold": v.entry_threshold,
+                "order_size_btc": v.order_size_btc,
+            }
+            if v.take_profit_bps is not None:
+                exec_dict[k]["take_profit_bps"] = v.take_profit_bps
+            if v.stop_loss_bps is not None:
+                exec_dict[k]["stop_loss_bps"] = v.stop_loss_bps
+            if v.trailing_stop_activation_bps is not None:
+                exec_dict[k]["trailing_stop_activation_bps"] = v.trailing_stop_activation_bps
+            if v.trailing_stop_distance_bps is not None:
+                exec_dict[k]["trailing_stop_distance_bps"] = v.trailing_stop_distance_bps
+            if v.max_holding_time_secs is not None:
+                exec_dict[k]["max_holding_time_secs"] = v.max_holding_time_secs
+            if v.exit_reversal_threshold is not None:
+                exec_dict[k]["exit_reversal_threshold"] = v.exit_reversal_threshold
+            if v.hedge_trigger_loss_bps is not None:
+                exec_dict[k]["hedge_trigger_loss_bps"] = v.hedge_trigger_loss_bps
+            if v.hedge_reversal_threshold is not None:
+                exec_dict[k]["hedge_reversal_threshold"] = v.hedge_reversal_threshold
+            if v.min_volatility_bps is not None:
+                exec_dict[k]["min_volatility_bps"] = v.min_volatility_bps
+            if v.loss_cooldown_secs is not None:
+                exec_dict[k]["loss_cooldown_secs"] = v.loss_cooldown_secs
+            if v.coentry_group is not None:
+                exec_dict[k]["coentry_group"] = v.coentry_group
+
+        scalp_dict = {}
+        for k, v in self.scalping_strategies.items():
+            scalp_dict[k] = {
+                "enabled": v.enabled,
+                "description": v.description,
+                "signal_key": v.signal_key,
+                "execution_type": v.execution_type,
+                "entry_threshold": v.entry_threshold,
+                "order_size_btc": v.order_size_btc,
+            }
+            if v.take_profit_bps is not None:
+                scalp_dict[k]["take_profit_bps"] = v.take_profit_bps
+            if v.stop_loss_bps is not None:
+                scalp_dict[k]["stop_loss_bps"] = v.stop_loss_bps
+            if v.trailing_stop_activation_bps is not None:
+                scalp_dict[k]["trailing_stop_activation_bps"] = v.trailing_stop_activation_bps
+            if v.trailing_stop_distance_bps is not None:
+                scalp_dict[k]["trailing_stop_distance_bps"] = v.trailing_stop_distance_bps
+            if v.max_holding_time_secs is not None:
+                scalp_dict[k]["max_holding_time_secs"] = v.max_holding_time_secs
+            if v.exit_reversal_threshold is not None:
+                scalp_dict[k]["exit_reversal_threshold"] = v.exit_reversal_threshold
+            if v.min_volatility_bps is not None:
+                scalp_dict[k]["min_volatility_bps"] = v.min_volatility_bps
+
+        alpha_dict = {
+            k: {
+                "enabled": v.enabled,
+                "weight": v.weight,
+                "description": v.description,
+            }
+            for k, v in self.alpha_signals.items()
+        }
+
+        return {
+            "_comment": "Hyperliquid L2 Microstructure Alpha Engine - Strategy & Signal Configuration",
+            "_instructions": "Set 'enabled': true or false to select/deselect any execution strategy, scalping strategy, or alpha signal.",
+            "version": "1.1",
+            "live_execution": {
+                "active_strategy": self.live_execution.active_strategy,
+                "order_size_btc": self.live_execution.order_size_btc,
+                "max_position_btc": self.live_execution.max_position_btc,
+            },
+            "execution_strategies": exec_dict,
+            "scalping_strategies": scalp_dict,
+            "alpha_signals": alpha_dict,
+        }
+
+    def save(self, filepath: Optional[str] = None):
+        """Saves configuration to JSON preserving execution and scalping distinction."""
+        target_path = filepath or self.filepath
+        data = self.to_dict()
+        with open(target_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
 
     def get_enabled_signals_map(self) -> Dict[str, bool]:
         """Returns map of {signal_name: bool_is_enabled}."""
