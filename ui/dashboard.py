@@ -369,7 +369,7 @@ if __name__ == "__main__":
     from main import L2EngineRunner
 
     cfg = AppConfig()
-    cfg.market.coin = args.coin.upper()
+    cfg.market.configure_for_coin(args.coin)
     if args.testnet:
         cfg.hyperliquid.use_testnet = True
     elif args.mainnet:

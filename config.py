@@ -78,7 +78,10 @@ XYZ_STOCK_MAKER_REBATE_BPS: float = 0.30
 # Known stock/equity symbols listed on Hyperliquid under XYZ
 XYZ_STOCKS: Tuple[str, ...] = (
     "SKHYNIX",
+    "SKHY",
+    "SKHX",
     "XYZ",
+    "XYZ100",
     "SAMSUNG",
     "NVDA",
     "TSLA",
@@ -92,19 +95,63 @@ XYZ_STOCKS: Tuple[str, ...] = (
     "MSTR",
     "SPY",
     "QQQ",
+    "META",
+    "TSM",
+    "BABA",
 )
+
+
+def canonicalize_coin_symbol(coin: str) -> str:
+    """Canonicalizes asset ticker symbols to their exact on-chain Hyperliquid identifier.
+
+    HIP-3 builder assets (e.g. XYZ equities) strictly require lowercase prefix 'xyz:'
+    and uppercase asset ticker (e.g. 'xyz:SKHY', 'xyz:SKHX', 'xyz:NVDA').
+    Passing uppercase 'XYZ:' or omitting the prefix for known XYZ stocks leads to WebSocket disconnection.
+
+    SK Hynix canonical mappings:
+      - 'SKHYNIX', 'xyz:SKHYNIX', 'SKHY', 'xyz:SKHY' -> 'xyz:SKHY' (Standard SK Hynix Perp)
+      - 'SKHX', 'xyz:SKHX'                          -> 'xyz:SKHX' (SK Hynix ADS Perp)
+    """
+    if not coin:
+        return "BTC"
+    c = coin.strip()
+    c_upper = c.upper()
+
+    # Explicit aliases for SK Hynix
+    if c_upper in ("SKHYNIX", "XYZ:SKHYNIX", "XYZ-SKHYNIX", "SKHY", "XYZ:SKHY", "XYZ-SKHY"):
+        return "xyz:SKHY"
+    if c_upper in ("SKHX", "XYZ:SKHX", "XYZ-SKHX"):
+        return "xyz:SKHX"
+
+    # Check if prefixed with xyz (in any case / delimiter)
+    if c_upper.startswith("XYZ:") or c_upper.startswith("XYZ-") or c.lower().startswith("xyz:"):
+        ticker = c[4:].strip().upper()
+        if ticker in ("SKHYNIX", "SKHY"):
+            return "xyz:SKHY"
+        if ticker == "SKHX":
+            return "xyz:SKHX"
+        return f"xyz:{ticker}"
+
+    # Auto-prefix known XYZ stock tickers if passed directly (e.g. NVDA -> xyz:NVDA)
+    if c_upper in XYZ_STOCKS:
+        return f"xyz:{c_upper}"
+
+    return c_upper
 
 
 def is_xyz_stock_symbol(coin: str) -> bool:
     """Returns True if the coin symbol represents an XYZ-listed stock/equity on Hyperliquid."""
     if not coin:
         return False
-    c = coin.strip().upper()
-    if c in XYZ_STOCKS:
+    c = coin.strip()
+    c_upper = c.upper()
+    if c.lower().startswith("xyz:") or c_upper.startswith("XYZ:") or c_upper.startswith("XYZ-") or c_upper.startswith("@XYZ"):
         return True
-    if c.startswith("XYZ:") or c.startswith("XYZ-") or c.startswith("@XYZ"):
+    if c_upper.endswith(":XYZ") or ":XYZ" in c_upper:
         return True
-    if c.endswith(":XYZ") or ":XYZ" in c:
+    if c_upper in ("SKHYNIX", "SKHY", "SKHX"):
+        return True
+    if c_upper in XYZ_STOCKS:
         return True
     return False
 
@@ -124,7 +171,14 @@ class MarketConfig:
     maker_rebate_bps: float = 1.5  # Positive fee paid on standard VIP 0 tier
     is_xyz_stock: bool = False
 
+    @property
+    def safe_coin(self) -> str:
+        """Filesystem-safe coin identifier (replaces ':' with '_', e.g. 'xyz_SKHY')."""
+        return self.coin.replace(":", "_")
+
     def __post_init__(self):
+        if self.coin:
+            self.coin = canonicalize_coin_symbol(self.coin)
         if self.coin and is_xyz_stock_symbol(self.coin):
             self.configure_for_coin(self.coin, is_stock=True)
 
@@ -137,7 +191,7 @@ class MarketConfig:
     ) -> None:
         """Configures market specifications and fee schedules for the designated asset.
 
-        For XYZ stocks (such as SKHYNIX):
+        For XYZ stocks (such as SKHYNIX / xyz:SKHY):
             - Taker Fee: 0.0090% (0.90 bps)
             - Maker Fee: 0.0030% (0.30 bps)
             - Default tick size: $0.01
@@ -146,7 +200,8 @@ class MarketConfig:
             - Taker Fee: 0.0450% (4.50 bps)
             - Maker Fee: 0.0150% (1.50 bps)
         """
-        self.coin = coin.strip().upper()
+        canonical_coin = canonicalize_coin_symbol(coin)
+        self.coin = canonical_coin
         if is_stock is not None:
             self.is_xyz_stock = bool(is_stock)
         else:
@@ -1031,6 +1086,7 @@ class AppConfig:
 
     @property
     def coin_data_dir(self) -> str:
-        """Returns the coin-specific data directory (e.g. data/btc)."""
-        return os.path.join(self.data_dir, self.market.coin.lower())
+        """Returns the coin-specific data directory (e.g. data/btc or data/xyz_skhy)."""
+        safe_coin = self.market.safe_coin.lower()
+        return os.path.join(self.data_dir, safe_coin)
 

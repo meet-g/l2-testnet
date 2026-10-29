@@ -695,9 +695,10 @@ async def test_hyperliquid_connection(
     console.print(f"[bold cyan]1. Checking REST API & Market Metadata...[/bold cyan]")
     try:
         t0 = time.perf_counter()
+        payload = {"type": "metaAndAssetCtxs", "dex": "xyz"} if coin.startswith("xyz:") else {"type": "metaAndAssetCtxs"}
         resp = requests.post(
             rest_url,
-            json={"type": "metaAndAssetCtxs"},
+            json=payload,
             timeout=8,
         )
         latency_meta_ms = (time.perf_counter() - t0) * 1000
@@ -714,6 +715,21 @@ async def test_hyperliquid_connection(
                 coin_meta = meta
                 coin_ctx = contexts[i] if i < len(contexts) else {}
                 break
+
+        if not coin_meta and not coin.startswith("xyz:"):
+            try:
+                resp_xyz = requests.post(rest_url, json={"type": "metaAndAssetCtxs", "dex": "xyz"}, timeout=8)
+                if resp_xyz.ok:
+                    data_xyz = resp_xyz.json()
+                    u_xyz = data_xyz[0].get("universe", [])
+                    ctx_xyz = data_xyz[1] if len(data_xyz) > 1 else []
+                    for i, meta in enumerate(u_xyz):
+                        if meta.get("name") in (coin, f"xyz:{coin}"):
+                            coin_meta = meta
+                            coin_ctx = ctx_xyz[i] if i < len(ctx_xyz) else {}
+                            break
+            except Exception:
+                pass
 
         if coin_meta:
             mark_px = float(coin_ctx.get("markPx", 0.0))
@@ -1672,6 +1688,15 @@ def main():
         maker_fee_bps=args.maker_fee,
     )
 
+    if cfg.market.is_xyz_stock:
+        console = Console()
+        console.print(
+            f"[bold cyan]Resolved XYZ Market:[/bold cyan] '{args.coin}' -> canonical Hyperliquid ticker '[bold green]{cfg.market.coin}[/bold green]' "
+            f"(Fees: [bold yellow]{cfg.market.maker_fee_bps:.2f} bps maker / {cfg.market.taker_fee_bps:.2f} bps taker[/bold yellow])"
+        )
+        if cfg.market.coin == "xyz:SKHY":
+            console.print("   [dim cyan]ℹ Note: Hyperliquid also supports 'xyz:SKHX' (SK Hynix ADS contract).[/dim cyan]")
+
     if args.capital > 0:
         args.cash = args.capital
     cfg.backtest.initial_cash_usd = args.cash
@@ -1711,7 +1736,6 @@ def main():
                 args.order_size = 1.0  # 1.0 share default for live execution
             if args.size == 0.1:
                 args.size = 50.0       # 50 shares default for simulated backtesting (~$5,000-$10,000 notional)
-                args.size = 95.0       # 95.0 HYPE (~$8,550 notional, matching 0.1 BTC baseline)
 
     cfg.backtest.order_size_btc = args.size
 

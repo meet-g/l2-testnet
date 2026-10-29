@@ -9,6 +9,7 @@ from config import (
     CRYPTO_MAKER_FEE_BPS,
     CRYPTO_TAKER_FEE_BPS,
     is_xyz_stock_symbol,
+    canonicalize_coin_symbol,
 )
 from engine.backtester import EdgeEvaluator, TradeRecord
 
@@ -16,12 +17,41 @@ from engine.backtester import EdgeEvaluator, TradeRecord
 class TestXYZStockFees(unittest.TestCase):
     """Verifies that stocks listed under XYZ (e.g. SKHYNIX) calculate fees and PnL correctly."""
 
+    def test_canonicalize_coin_symbol(self):
+        """Verifies canonicalize_coin_symbol maps aliases to exact lowercase 'xyz:' format."""
+        # SK Hynix standard and ADS contracts
+        self.assertEqual(canonicalize_coin_symbol("SKHYNIX"), "xyz:SKHY")
+        self.assertEqual(canonicalize_coin_symbol("skhynix"), "xyz:SKHY")
+        self.assertEqual(canonicalize_coin_symbol("xyz:SKHYNIX"), "xyz:SKHY")
+        self.assertEqual(canonicalize_coin_symbol("XYZ:SKHYNIX"), "xyz:SKHY")
+        self.assertEqual(canonicalize_coin_symbol("SKHY"), "xyz:SKHY")
+        self.assertEqual(canonicalize_coin_symbol("xyz:skhy"), "xyz:SKHY")
+        self.assertEqual(canonicalize_coin_symbol("XYZ:SKHY"), "xyz:SKHY")
+        self.assertEqual(canonicalize_coin_symbol("SKHX"), "xyz:SKHX")
+        self.assertEqual(canonicalize_coin_symbol("xyz:skhx"), "xyz:SKHX")
+        self.assertEqual(canonicalize_coin_symbol("XYZ:SKHX"), "xyz:SKHX")
+
+        # Other equities auto-prefixed with lowercase 'xyz:'
+        self.assertEqual(canonicalize_coin_symbol("NVDA"), "xyz:NVDA")
+        self.assertEqual(canonicalize_coin_symbol("xyz:nvda"), "xyz:NVDA")
+        self.assertEqual(canonicalize_coin_symbol("XYZ:NVDA"), "xyz:NVDA")
+        self.assertEqual(canonicalize_coin_symbol("TSLA"), "xyz:TSLA")
+
+        # Crypto assets retain standard ticker without 'xyz:'
+        self.assertEqual(canonicalize_coin_symbol("BTC"), "BTC")
+        self.assertEqual(canonicalize_coin_symbol("eth"), "ETH")
+        self.assertEqual(canonicalize_coin_symbol("HYPE"), "HYPE")
+        self.assertEqual(canonicalize_coin_symbol("sol"), "SOL")
+
     def test_stock_symbol_detection(self):
         """Verifies is_xyz_stock_symbol detects SKHYNIX and XYZ-prefixed assets."""
         self.assertTrue(is_xyz_stock_symbol("SKHYNIX"))
         self.assertTrue(is_xyz_stock_symbol("skhynix"))
+        self.assertTrue(is_xyz_stock_symbol("SKHY"))
+        self.assertTrue(is_xyz_stock_symbol("SKHX"))
         self.assertTrue(is_xyz_stock_symbol("XYZ"))
         self.assertTrue(is_xyz_stock_symbol("XYZ:SKHYNIX"))
+        self.assertTrue(is_xyz_stock_symbol("xyz:SKHY"))
         self.assertTrue(is_xyz_stock_symbol("xyz-NVDA"))
         self.assertTrue(is_xyz_stock_symbol("NVDA"))
         self.assertTrue(is_xyz_stock_symbol("TSLA"))
@@ -36,6 +66,7 @@ class TestXYZStockFees(unittest.TestCase):
         """Verifies MarketConfig automatically applies 0.009% taker and 0.003% maker fees to SKHYNIX."""
         m_cfg = MarketConfig(coin="SKHYNIX")
 
+        self.assertEqual(m_cfg.coin, "xyz:SKHY")
         self.assertTrue(m_cfg.is_xyz_stock)
         self.assertEqual(m_cfg.taker_fee_bps, 0.90)  # 0.0090%
         self.assertEqual(m_cfg.maker_fee_bps, 0.30)  # 0.0030%

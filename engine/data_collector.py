@@ -35,12 +35,13 @@ class L2DataRecorder:
         self.coin = coin
         self.rotate_hourly = rotate_hourly
         
-        # Ensure coin data is stored in its own folder: e.g. data/btc/
+        # Ensure coin data is stored in its own folder: e.g. data/btc/ or data/xyz_skhy/
+        self.safe_coin = coin.replace(":", "_").lower()
         base_name = os.path.basename(os.path.normpath(output_dir)).lower()
-        if base_name == coin.lower():
+        if base_name == self.safe_coin:
             self.output_dir = output_dir
         else:
-            self.output_dir = os.path.join(output_dir, coin.lower())
+            self.output_dir = os.path.join(output_dir, self.safe_coin)
 
         os.makedirs(self.output_dir, exist_ok=True)
 
@@ -57,12 +58,13 @@ class L2DataRecorder:
         self._rotate_if_needed()
 
     def _get_filename_for_now(self) -> str:
+        safe_coin = getattr(self, "safe_coin", self.coin.replace(":", "_").lower())
         if self.rotate_hourly:
             hour_str = time.strftime("%Y%m%d_%H00")
-            return os.path.join(self.output_dir, f"hl_{self.coin.lower()}_l2_{hour_str}.jsonl")
+            return os.path.join(self.output_dir, f"hl_{safe_coin}_l2_{hour_str}.jsonl")
         else:
             session_str = time.strftime("%Y%m%d_%H%M%S")
-            return os.path.join(self.output_dir, f"hl_{self.coin.lower()}_l2_{session_str}.jsonl")
+            return os.path.join(self.output_dir, f"hl_{safe_coin}_l2_{session_str}.jsonl")
 
     def _rotate_if_needed(self) -> None:
         now_sec = time.time()

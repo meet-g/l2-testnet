@@ -97,22 +97,35 @@ class LiveOrderExecutor:
 
         try:
             wallet = eth_account.Account.from_key(self.secret_key)
-            self.info = Info(self.base_url, skip_ws=True)
+            perp_dexs = ["", "xyz"] if self.coin.startswith("xyz:") else None
+            self.info = Info(self.base_url, skip_ws=True, perp_dexs=perp_dexs)
             self.exchange = Exchange(
                 wallet=wallet,
                 base_url=self.base_url,
                 account_address=self.account_address if self.account_address else None,
+                perp_dexs=perp_dexs,
             )
 
             # Retrieve asset decimals and specifications from exchange metadata
             try:
-                meta = self.info.meta()
+                if self.coin.startswith("xyz:"):
+                    meta = self.info.meta(dex="xyz")
+                else:
+                    meta = self.info.meta()
                 universe = meta.get("universe", [])
                 coin_meta = next((c for c in universe if c.get("name") == self.coin), None)
+                if not coin_meta and not self.coin.startswith("xyz:"):
+                    # Check builder DEX 'xyz' as fallback
+                    try:
+                        meta_xyz = self.info.meta(dex="xyz")
+                        coin_meta = next((c for c in meta_xyz.get("universe", []) if c.get("name") in (self.coin, f"xyz:{self.coin}")), None)
+                    except Exception:
+                        pass
+
                 if coin_meta:
-                    self.sz_decimals = int(coin_meta.get("szDecimals", 5))
+                    self.sz_decimals = int(coin_meta.get("szDecimals", 2 if self.coin.startswith("xyz:") else 5))
                     self.max_price_decimals = max(0, 6 - self.sz_decimals)
-                    self.max_leverage = int(coin_meta.get("maxLeverage", 40))
+                    self.max_leverage = int(coin_meta.get("maxLeverage", 10 if self.coin.startswith("xyz:") else 40))
             except Exception as meta_err:
                 logging.warning(f"[LiveExecutor] Could not retrieve meta specifications for {self.coin}: {meta_err}")
 
