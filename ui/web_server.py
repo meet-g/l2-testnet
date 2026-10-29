@@ -496,6 +496,9 @@ class DashboardWebServer:
             "cvd": round(float(getattr(trades, "total_cvd", 0.0)), 4),
             "vpin": round(float(vpin_val), 3) if vpin_val is not None else None,
             "updates": getattr(book, "update_count", 0),
+            "is_xyz_stock": bool(getattr(getattr(self.runner, "config", None), "market", None) and getattr(self.runner.config.market, "is_xyz_stock", False)),
+            "taker_fee_bps": float(getattr(getattr(self.runner, "config", None), "market", None) and getattr(self.runner.config.market, "taker_fee_bps", 4.5) or 4.5),
+            "maker_fee_bps": float(getattr(getattr(self.runner, "config", None), "market", None) and getattr(self.runner.config.market, "maker_fee_bps", 1.5) or 1.5),
         }
 
         # 2. Signals

@@ -1609,6 +1609,24 @@ def main():
         action="store_true",
         help="Persist modified strategy configuration to strategies.json",
     )
+    parser.add_argument(
+        "--stock", "--xyz-stock",
+        dest="xyz_stock",
+        action="store_true",
+        help="Flag asset as an XYZ stock/equity on Hyperliquid (auto-configures 0.009% taker and 0.003% maker fees)",
+    )
+    parser.add_argument(
+        "--taker-fee",
+        type=float,
+        default=None,
+        help="Custom taker fee in bps (e.g. 0.9 for 0.009% on XYZ stocks like SKHYNIX, 4.5 for crypto)",
+    )
+    parser.add_argument(
+        "--maker-fee",
+        type=float,
+        default=None,
+        help="Custom maker fee in bps (e.g. 0.3 for 0.003% on XYZ stocks like SKHYNIX, 1.5 for crypto)",
+    )
     args = parser.parse_args()
 
     cfg = AppConfig()
@@ -1644,7 +1662,16 @@ def main():
         cfg.account.account_address = args.account.strip()
     if args.secret_key:
         cfg.account.secret_key = args.secret_key.strip()
-    cfg.market.coin = args.coin.upper()
+    
+    # Configure asset and fee schedule (auto-detects XYZ stocks like SKHYNIX)
+    is_stock_override = True if args.xyz_stock else None
+    cfg.market.configure_for_coin(
+        args.coin,
+        is_stock=is_stock_override,
+        taker_fee_bps=args.taker_fee,
+        maker_fee_bps=args.maker_fee,
+    )
+
     if args.capital > 0:
         args.cash = args.capital
     cfg.backtest.initial_cash_usd = args.cash
@@ -1668,11 +1695,22 @@ def main():
             args.size = round(50.0 * ratio, 2)
         elif cfg.market.coin == "ETH" and args.size == 0.1:
             args.size = round(3.0 * ratio, 4)
+        elif cfg.market.is_xyz_stock:
+            if args.size == 0.1:
+                args.size = round(50.0 * ratio, 2)
+            if args.order_size == 0.0005:
+                args.order_size = max(1.0, round(25.0 * ratio * args.allocation, 2))
     else:
         if cfg.market.coin == "HYPE":
             if args.order_size == 0.0005:
                 args.order_size = 1.0  # 1.0 HYPE (~$90 notional, exceeds $10 minimum)
             if args.size == 0.1:
+                args.size = 95.0       # 95.0 HYPE (~$8,550 notional, matching 0.1 BTC baseline)
+        elif cfg.market.is_xyz_stock:
+            if args.order_size == 0.0005:
+                args.order_size = 1.0  # 1.0 share default for live execution
+            if args.size == 0.1:
+                args.size = 50.0       # 50 shares default for simulated backtesting (~$5,000-$10,000 notional)
                 args.size = 95.0       # 95.0 HYPE (~$8,550 notional, matching 0.1 BTC baseline)
 
     cfg.backtest.order_size_btc = args.size
@@ -1749,6 +1787,8 @@ def main():
             "no-ui": "NO-UI (Headless Background Mode)",
         }.get(ui_mode, ui_mode.upper())
         console.print(f"[bold cyan]Interface Mode:[/bold cyan] [bold green]{ui_label}[/bold green]")
+        fee_profile_name = "XYZ Stock / Equities" if cfg.market.is_xyz_stock else "Crypto Perps"
+        console.print(f"[bold cyan]Asset & Fees:[/bold cyan] [bold green]{cfg.market.coin}[/bold green] ([yellow]{fee_profile_name}[/yellow]) | Maker: [green]{cfg.market.maker_fee_bps:.2f} bps[/green] ({cfg.market.maker_fee_bps/100:.4f}%) | Taker: [yellow]{cfg.market.taker_fee_bps:.2f} bps[/yellow] ({cfg.market.taker_fee_bps/100:.4f}%)")
         if args.live_orders:
             cfg.backtest.order_size_btc = args.order_size
             net = cfg.hyperliquid.network_name.upper()
@@ -1787,6 +1827,8 @@ def main():
             "no-ui": "NO-UI (Headless Background Mode)",
         }.get(ui_mode, ui_mode.upper())
         console.print(f"[bold cyan]Interface Mode:[/bold cyan] [bold green]{ui_label}[/bold green]")
+        fee_profile_name = "XYZ Stock / Equities" if cfg.market.is_xyz_stock else "Crypto Perps"
+        console.print(f"[bold cyan]Asset & Fees:[/bold cyan] [bold green]{cfg.market.coin}[/bold green] ([yellow]{fee_profile_name}[/yellow]) | Maker: [green]{cfg.market.maker_fee_bps:.2f} bps[/green] ({cfg.market.maker_fee_bps/100:.4f}%) | Taker: [yellow]{cfg.market.taker_fee_bps:.2f} bps[/yellow] ({cfg.market.taker_fee_bps/100:.4f}%)")
         runner = L2EngineRunner(
             config=cfg,
             record_data=True,

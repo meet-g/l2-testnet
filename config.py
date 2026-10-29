@@ -63,6 +63,52 @@ class HyperliquidConfig:
         return "Testnet" if self.use_testnet else "Mainnet"
 
 
+# Real On-Chain Fee Schedules on Hyperliquid
+# 1. Standard Crypto Perps (Hyperliquid VIP 0 Tier)
+CRYPTO_TAKER_FEE_BPS: float = 4.50   # 0.0450% real live taker fee
+CRYPTO_MAKER_FEE_BPS: float = 1.50   # 0.0150% real live maker fee
+CRYPTO_MAKER_REBATE_BPS: float = 1.50
+
+# 2. Stocks & Equities listed under XYZ on Hyperliquid (e.g. SKHYNIX)
+# Verified Hyperliquid XYZ fee tier: 0.0090% taker fee (0.90 bps) and 0.0030% maker fee (0.30 bps)
+XYZ_STOCK_TAKER_FEE_BPS: float = 0.90   # 0.0090% taker fee
+XYZ_STOCK_MAKER_FEE_BPS: float = 0.30   # 0.0030% maker fee
+XYZ_STOCK_MAKER_REBATE_BPS: float = 0.30
+
+# Known stock/equity symbols listed on Hyperliquid under XYZ
+XYZ_STOCKS: Tuple[str, ...] = (
+    "SKHYNIX",
+    "XYZ",
+    "SAMSUNG",
+    "NVDA",
+    "TSLA",
+    "AAPL",
+    "MSFT",
+    "PLTR",
+    "AMZN",
+    "GOOGL",
+    "AMD",
+    "COIN",
+    "MSTR",
+    "SPY",
+    "QQQ",
+)
+
+
+def is_xyz_stock_symbol(coin: str) -> bool:
+    """Returns True if the coin symbol represents an XYZ-listed stock/equity on Hyperliquid."""
+    if not coin:
+        return False
+    c = coin.strip().upper()
+    if c in XYZ_STOCKS:
+        return True
+    if c.startswith("XYZ:") or c.startswith("XYZ-") or c.startswith("@XYZ"):
+        return True
+    if c.endswith(":XYZ") or ":XYZ" in c:
+        return True
+    return False
+
+
 @dataclass
 class MarketConfig:
     coin: str = "BTC"
@@ -72,11 +118,56 @@ class MarketConfig:
     tick_size: float = 1.0  # Hyperliquid BTC tick size is $1.00
     lot_size: float = 0.0001  # Minimum BTC order size fraction
     
-    # Real On-Chain Fee Schedule (Hyperliquid VIP 0 Tier from account 0x76cf...2ff)
-    # Verified directly against live fills: 1.5000 bps Maker fee, 4.5000 bps Taker fee
+    # Real On-Chain Fee Schedule
     taker_fee_bps: float = 4.5  # 0.0450% real live taker fee
     maker_fee_bps: float = 1.5  # 0.0150% real live maker fee (positive = fee paid)
     maker_rebate_bps: float = 1.5  # Positive fee paid on standard VIP 0 tier
+    is_xyz_stock: bool = False
+
+    def __post_init__(self):
+        if self.coin and is_xyz_stock_symbol(self.coin):
+            self.configure_for_coin(self.coin, is_stock=True)
+
+    def configure_for_coin(
+        self,
+        coin: str,
+        is_stock: Optional[bool] = None,
+        taker_fee_bps: Optional[float] = None,
+        maker_fee_bps: Optional[float] = None,
+    ) -> None:
+        """Configures market specifications and fee schedules for the designated asset.
+
+        For XYZ stocks (such as SKHYNIX):
+            - Taker Fee: 0.0090% (0.90 bps)
+            - Maker Fee: 0.0030% (0.30 bps)
+            - Default tick size: $0.01
+            - Default lot size: 1.0 share
+        For Standard Crypto (such as BTC, ETH, SOL, HYPE):
+            - Taker Fee: 0.0450% (4.50 bps)
+            - Maker Fee: 0.0150% (1.50 bps)
+        """
+        self.coin = coin.strip().upper()
+        if is_stock is not None:
+            self.is_xyz_stock = bool(is_stock)
+        else:
+            self.is_xyz_stock = is_xyz_stock_symbol(self.coin)
+
+        if self.is_xyz_stock:
+            self.taker_fee_bps = XYZ_STOCK_TAKER_FEE_BPS if taker_fee_bps is None else float(taker_fee_bps)
+            self.maker_fee_bps = XYZ_STOCK_MAKER_FEE_BPS if maker_fee_bps is None else float(maker_fee_bps)
+            self.maker_rebate_bps = self.maker_fee_bps
+            self.tick_size = 0.01
+            self.lot_size = 1.0
+        else:
+            self.taker_fee_bps = CRYPTO_TAKER_FEE_BPS if taker_fee_bps is None else float(taker_fee_bps)
+            self.maker_fee_bps = CRYPTO_MAKER_FEE_BPS if maker_fee_bps is None else float(maker_fee_bps)
+            self.maker_rebate_bps = self.maker_fee_bps
+            if self.coin == "BTC":
+                self.tick_size = 1.0
+                self.lot_size = 0.0001
+            elif self.coin in ("ETH", "HYPE", "SOL"):
+                self.tick_size = 0.01
+                self.lot_size = 0.01
 
 
 @dataclass

@@ -250,6 +250,7 @@ class EdgeEvaluator:
         taker_fee_pct = self.market_cfg.taker_fee_bps / 10_000.0
         maker_fee_pct = getattr(self.market_cfg, "maker_fee_bps", 1.5) / 10_000.0
         maker_rebate_pct = getattr(self.market_cfg, "maker_rebate_bps", 1.5) / 10_000.0
+        fee_hurdle_bps = getattr(self.market_cfg, "taker_fee_bps", 4.5)
         slippage_pct = self.bt_cfg.slippage_bps / 10_000.0
         spread_bps = ((best_ask - best_bid) / mid_price) * 10_000.0 if mid_price > 0 else 1.0
 
@@ -333,7 +334,7 @@ class EdgeEvaluator:
                         exit_reason = "DEFENSIVE_MAKER_HEDGE"
                     elif mid_price <= state.stop_price:
                         exit_reason = "TRAILING_STOP" if state.trailing_stop_active else "STOP_LOSS"
-                    elif score <= -reversal_thresh and (gain_bps >= 4.5 or gain_bps <= -8.0):
+                    elif score <= -reversal_thresh and (gain_bps >= fee_hurdle_bps or gain_bps <= -8.0):
                         exit_reason = "SIGNAL_REVERSAL"
                     elif state.peak_unrealized_bps >= 4.0 and gain_bps <= 0.5 and score <= 0.0:
                         exit_reason = "PROFIT_DECAY_EXIT"  # Was profitable, decayed back to breakeven
@@ -470,7 +471,7 @@ class EdgeEvaluator:
                         exit_reason = "DEFENSIVE_MAKER_HEDGE"
                     elif mid_price >= state.stop_price:
                         exit_reason = "TRAILING_STOP" if state.trailing_stop_active else "STOP_LOSS"
-                    elif score >= reversal_thresh and (gain_bps >= 4.5 or gain_bps <= -8.0):
+                    elif score >= reversal_thresh and (gain_bps >= fee_hurdle_bps or gain_bps <= -8.0):
                         exit_reason = "SIGNAL_REVERSAL"
                     elif state.peak_unrealized_bps >= 4.0 and gain_bps <= 0.5 and score >= 0.0:
                         exit_reason = "PROFIT_DECAY_EXIT"  # Was profitable, decayed back to breakeven
