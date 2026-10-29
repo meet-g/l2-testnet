@@ -184,6 +184,42 @@ class TestStrategyDistinction(unittest.TestCase):
             self.assertTrue(cfg.execution_strategies[name].enabled, f"{name} should be enabled in core mode")
         self.assertEqual(cfg.live_execution.active_strategy, "Hedged_Convexity")
 
+    def test_scalping_session_ended_then_normal_session_runs(self):
+        """Verifies that when a scalping session ends, a subsequent normal session has scalping strategies disabled."""
+        # 1. Simulate starting a scalping session via CLI (transient in-memory override)
+        scalp_session_cfg = StrategiesConfig.load("strategies.json")
+        scalp_session_cfg.set_scalping_mode(enabled=True, save=False)
+
+        # Confirm scalping session had scalping enabled
+        self.assertTrue(scalp_session_cfg.is_scalping_mode_active)
+        for s in LEGACY_SCALPING_STRATEGIES:
+            self.assertTrue(scalp_session_cfg.scalping_strategies[s].enabled)
+        for s in NEW_EXECUTION_STRATEGIES:
+            self.assertFalse(scalp_session_cfg.execution_strategies[s].enabled)
+
+        # 2. Scalping session ends. User now starts a normal session:
+        # Normal session loads strategies.json without --scalping override
+        normal_session_cfg = StrategiesConfig.load("strategies.json")
+
+        # Confirm scalping strategies are strictly DISABLED in normal session
+        self.assertFalse(normal_session_cfg.is_scalping_mode_active)
+        for s in LEGACY_SCALPING_STRATEGIES:
+            self.assertFalse(
+                normal_session_cfg.scalping_strategies[s].enabled,
+                f"Scalping strategy {s} must be disabled when normal session runs"
+            )
+
+        # Confirm core execution strategies are active
+        for s in ("Hedged_Convexity", "Convexity_Cascade", "Momentum_Expansion"):
+            self.assertTrue(
+                normal_session_cfg.execution_strategies[s].enabled,
+                f"Core execution strategy {s} must be active in normal session"
+            )
+
+        # Active live strategy must be a core strategy (Hedged_Convexity)
+        self.assertEqual(normal_session_cfg.live_execution.active_strategy, "Hedged_Convexity")
+        self.assertTrue(normal_session_cfg.is_execution_strategy(normal_session_cfg.live_execution.active_strategy))
+
 
 if __name__ == "__main__":
     unittest.main()
