@@ -83,6 +83,9 @@ class TestWebServerStrategyToggle(unittest.TestCase):
         for name in res["scalping_strategies"]:
             self.assertEqual(res["strategies"][name]["category"], "scalping")
 
+        self.assertIn("is_scalping_mode", res)
+        self.assertFalse(res["is_scalping_mode"])
+
     def test_toggle_strategy_off_and_persistence(self):
         """Verifies turning a strategy off updates memory, config file, and preserves state."""
         toggle_endpoint = self._get_route_endpoint("/api/strategy/toggle", "POST")
@@ -177,6 +180,8 @@ class TestWebServerStrategyToggle(unittest.TestCase):
         self.assertIn("WOBI_Maker", strats)
         self.assertTrue(strats["WOBI_Maker"]["enabled"])
         self.assertEqual(strats["WOBI_Maker"]["category"], "scalping")
+
+        self.assertIn("is_scalping_mode", snap)
 
     def test_bulk_scalping_mode_endpoint(self):
         """Verifies POST /api/strategies/mode/scalping bulk toggles strategies and persists."""

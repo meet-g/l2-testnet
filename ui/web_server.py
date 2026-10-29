@@ -612,6 +612,11 @@ class DashboardWebServer:
             },
             "recent_trades": recent_trades,
             "is_live_orders": getattr(self.runner, "live_orders", False),
+            "is_scalping_mode": (
+                getattr(self.runner.config.strategies, "is_scalping_mode_active", False)
+                if hasattr(self.runner, "config") and hasattr(self.runner.config, "strategies")
+                else False
+            ),
         }
 
         await self.broadcaster.broadcast_snapshot(snapshot)

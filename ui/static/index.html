@@ -71,6 +71,12 @@
       <span id="badge-network" class="px-2 py-0.5 text-xs font-semibold rounded bg-cyan-950 text-cyan-300 border border-cyan-800">TESTNET</span>
       <span id="badge-coin" class="px-2 py-0.5 text-xs font-semibold rounded bg-slate-800 text-yellow-400 border border-slate-700">--</span>
       <span id="badge-mode" class="px-2 py-0.5 text-xs font-semibold rounded bg-purple-950 text-purple-300 border border-purple-800">PAPER</span>
+      <button id="nav-scalping-toggle-btn" onclick="toggleMasterScalpingMode()"
+              title="Click to toggle Scalping mode ON / OFF"
+              class="flex items-center space-x-1.5 px-2.5 py-0.5 text-xs font-mono font-bold rounded-full border transition-all cursor-pointer bg-slate-900 border-slate-700 text-slate-400 hover:text-white">
+        <span id="nav-scalping-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+        <span id="nav-scalping-label">NORMAL MODE</span>
+      </button>
     </div>
 
     <!-- Live Telemetry Quick Pills -->
@@ -256,6 +262,31 @@
             <span id="strategy-count-badge" class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-cyan-950 text-cyan-300 border border-cyan-800">-- ACTIVE</span>
           </div>
           <span class="text-xs font-mono text-slate-400">Live Quoting</span>
+        </div>
+
+        <!-- Master Scalping vs Normal Mode ON/OFF Switch -->
+        <div class="bg-dark-bg/90 border border-dark-border rounded-lg p-2.5 mb-2.5 shadow-sm">
+          <div class="flex items-center justify-between">
+            <div class="flex flex-col">
+              <div class="flex items-center space-x-1.5">
+                <span class="text-xs font-bold text-slate-200 tracking-wide">Scalping Mode</span>
+                <span id="scalping-mode-badge" class="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold bg-cyan-950 text-cyan-300 border border-cyan-800">NORMAL (CORE)</span>
+              </div>
+              <span id="scalping-mode-subtitle" class="text-[10px] text-slate-400 font-mono mt-0.5">Core 4 strategies active</span>
+            </div>
+
+            <!-- Animated Master ON/OFF Switch -->
+            <div class="flex items-center space-x-2">
+              <span id="scalping-switch-text" class="text-xs font-mono font-bold text-slate-400">OFF</span>
+              <button id="btn-master-scalping-switch"
+                      onclick="toggleMasterScalpingMode()"
+                      title="Turn Scalping ON (8 scalping strategies) or OFF (4 core strategies)"
+                      class="w-12 h-6 flex items-center rounded-full p-0.5 cursor-pointer transition-colors duration-200 bg-slate-700 focus:outline-none">
+                <div id="scalping-switch-circle"
+                     class="bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-200 translate-x-0"></div>
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Mode Preset Quick Switcher -->
@@ -577,7 +608,7 @@
       }
 
       // 5. Active Strategies List
-      renderStrategies(data.strategies || {});
+      renderStrategies(data.strategies || {}, data.is_scalping_mode);
 
       // 6. Recent Trades Feed
       if (data.recent_trades && data.recent_trades.length > 0) {
@@ -714,27 +745,68 @@
       }, 3500);
     }
 
-    function renderStrategies(strats) {
-      cachedStrategies = strats || {};
-      const container = document.getElementById('strategies-list');
-      const countBadge = document.getElementById('strategy-count-badge');
-      const allNames = Object.keys(cachedStrategies);
+    let isScalpingModeActive = false;
 
-      if (allNames.length === 0) {
-        container.innerHTML = '<div class="text-center text-slate-600 py-6 text-xs font-mono">No strategies configured</div>';
-        if (countBadge) countBadge.innerText = '0 ACTIVE';
-        return;
+    function toggleMasterScalpingMode() {
+      // Toggle between Scalping (ON) and Normal (OFF)
+      setScalpingMode(!isScalpingModeActive);
+    }
+
+    function updateModeSwitchUI(isScalp) {
+      isScalpingModeActive = isScalp;
+
+      // 1. Master On/Off Switch in Strategy Control
+      const switchBtn = document.getElementById('btn-master-scalping-switch');
+      const switchCircle = document.getElementById('scalping-switch-circle');
+      const switchText = document.getElementById('scalping-switch-text');
+      const badgeEl = document.getElementById('scalping-mode-badge');
+      const subtitleEl = document.getElementById('scalping-mode-subtitle');
+
+      if (switchBtn && switchCircle && switchText) {
+        if (isScalp) {
+          switchBtn.className = 'w-12 h-6 flex items-center rounded-full p-0.5 cursor-pointer transition-colors duration-200 bg-amber-500 focus:outline-none ring-2 ring-amber-500/40 shadow-sm';
+          switchCircle.className = 'bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-200 translate-x-6';
+          switchText.innerText = 'ON';
+          switchText.className = 'text-xs font-mono font-bold text-amber-400';
+          if (badgeEl) {
+            badgeEl.innerText = 'SCALPING (8 ACTIVE)';
+            badgeEl.className = 'text-[9px] font-mono px-1.5 py-0.5 rounded font-bold bg-amber-950 text-amber-300 border border-amber-800';
+          }
+          if (subtitleEl) {
+            subtitleEl.innerText = '8 legacy scalping strategies active, 4 core disabled';
+          }
+        } else {
+          switchBtn.className = 'w-12 h-6 flex items-center rounded-full p-0.5 cursor-pointer transition-colors duration-200 bg-slate-700 focus:outline-none hover:bg-slate-600';
+          switchCircle.className = 'bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-200 translate-x-0';
+          switchText.innerText = 'OFF';
+          switchText.className = 'text-xs font-mono font-bold text-slate-400';
+          if (badgeEl) {
+            badgeEl.innerText = 'NORMAL (CORE)';
+            badgeEl.className = 'text-[9px] font-mono px-1.5 py-0.5 rounded font-bold bg-cyan-950 text-cyan-300 border border-cyan-800';
+          }
+          if (subtitleEl) {
+            subtitleEl.innerText = 'Core execution strategies active, scalping disabled';
+          }
+        }
       }
 
-      const activeCount = allNames.filter(n => cachedStrategies[n].enabled).length;
-      if (countBadge) {
-        countBadge.innerText = `${activeCount}/${allNames.length} ACTIVE`;
-        countBadge.className = activeCount > 0
-          ? 'px-1.5 py-0.5 rounded text-[10px] font-mono bg-cyan-950 text-cyan-300 border border-cyan-800'
-          : 'px-1.5 py-0.5 rounded text-[10px] font-mono bg-rose-950 text-rose-300 border border-rose-800';
+      // 2. Navigation bar header pill button
+      const navBtn = document.getElementById('nav-scalping-toggle-btn');
+      const navDot = document.getElementById('nav-scalping-dot');
+      const navLabel = document.getElementById('nav-scalping-label');
+      if (navBtn && navDot && navLabel) {
+        if (isScalp) {
+          navBtn.className = 'flex items-center space-x-1.5 px-2.5 py-0.5 text-xs font-mono font-bold rounded-full border transition-all cursor-pointer bg-amber-950/80 border-amber-700 text-amber-300 shadow-sm';
+          navDot.className = 'w-2 h-2 rounded-full bg-amber-400 live-pulse';
+          navLabel.innerText = 'SCALPING: ON';
+        } else {
+          navBtn.className = 'flex items-center space-x-1.5 px-2.5 py-0.5 text-xs font-mono font-bold rounded-full border transition-all cursor-pointer bg-slate-900 border-slate-700 text-slate-400 hover:text-white';
+          navDot.className = 'w-2 h-2 rounded-full bg-slate-500';
+          navLabel.innerText = 'NORMAL MODE';
+        }
       }
 
-      // Update preset indicator badge and button styling
+      // 3. Preset indicator and quick buttons
       const coreAny = Object.entries(cachedStrategies).some(([k, s]) => s.category !== 'scalping' && s.enabled);
       const scalpAny = Object.entries(cachedStrategies).some(([k, s]) => s.category === 'scalping' && s.enabled);
       const ind = document.getElementById('current-mode-indicator');
@@ -766,6 +838,38 @@
           btnScalp.className = 'px-2 py-0.5 rounded text-[10px] font-mono transition-all border border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200';
         }
       }
+    }
+
+    function renderStrategies(strats, isScalpModeFromServer) {
+      cachedStrategies = strats || {};
+      const container = document.getElementById('strategies-list');
+      const countBadge = document.getElementById('strategy-count-badge');
+      const allNames = Object.keys(cachedStrategies);
+
+      if (allNames.length === 0) {
+        container.innerHTML = '<div class="text-center text-slate-600 py-6 text-xs font-mono">No strategies configured</div>';
+        if (countBadge) countBadge.innerText = '0 ACTIVE';
+        return;
+      }
+
+      const activeCount = allNames.filter(n => cachedStrategies[n].enabled).length;
+      if (countBadge) {
+        countBadge.innerText = `${activeCount}/${allNames.length} ACTIVE`;
+        countBadge.className = activeCount > 0
+          ? 'px-1.5 py-0.5 rounded text-[10px] font-mono bg-cyan-950 text-cyan-300 border border-cyan-800'
+          : 'px-1.5 py-0.5 rounded text-[10px] font-mono bg-rose-950 text-rose-300 border border-rose-800';
+      }
+
+      // Determine scalping mode active status
+      let isScalp = false;
+      if (typeof isScalpModeFromServer === 'boolean') {
+        isScalp = isScalpModeFromServer;
+      } else {
+        const coreAny = Object.entries(cachedStrategies).some(([k, s]) => s.category !== 'scalping' && s.enabled);
+        const scalpAny = Object.entries(cachedStrategies).some(([k, s]) => s.category === 'scalping' && s.enabled);
+        isScalp = (scalpAny && !coreAny);
+      }
+      updateModeSwitchUI(isScalp);
 
       // Filter names based on current filter
       const filteredNames = allNames.filter(name => {
@@ -935,7 +1039,8 @@
           s.enabled = (s.category !== 'scalping' && name !== 'Queue_Replenishment');
         }
       }
-      renderStrategies(cachedStrategies);
+      updateModeSwitchUI(isScalping);
+      renderStrategies(cachedStrategies, isScalping);
 
       try {
         const res = await fetch('/api/strategies/mode/scalping', {
@@ -950,14 +1055,17 @@
         showToast(
           isScalping
             ? "Activated Scalping Mode (8 scalping strategies active, 4 core disabled)"
-            : "Activated Core Mode (Core execution strategies active, scalping disabled)",
+            : "Activated Normal Mode (Core execution strategies active, scalping disabled)",
           "success"
         );
       } catch (e) {
         // Rollback optimistic update
         cachedStrategies = previousState;
+        const scalpAny = Object.entries(cachedStrategies).some(([k, s]) => s.category === 'scalping' && s.enabled);
+        const coreAny = Object.entries(cachedStrategies).some(([k, s]) => s.category !== 'scalping' && s.enabled);
+        updateModeSwitchUI(scalpAny && !coreAny);
         renderStrategies(cachedStrategies);
-        showToast("Failed to switch preset mode: " + e.message, "error");
+        showToast("Failed to switch mode: " + e.message, "error");
       }
     }
 
@@ -1001,9 +1109,25 @@
       document.body.removeChild(link);
     }
 
+    // Initial strategy state loader
+    async function fetchStrategiesInitial() {
+      try {
+        const res = await fetch('/api/strategies');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.strategies) {
+            renderStrategies(data.strategies, data.is_scalping_mode);
+          }
+        }
+      } catch (e) {
+        // Telemetry WebSocket will populate immediately
+      }
+    }
+
     // Start everything on load
     window.addEventListener('DOMContentLoaded', () => {
       initCharts();
+      fetchStrategiesInitial();
       connectWebSocket();
     });
   </script>
