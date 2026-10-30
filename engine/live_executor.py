@@ -29,7 +29,7 @@ from hyperliquid.info import Info
 from hyperliquid.utils import constants
 from rich.console import Console
 
-from config import AppConfig
+from config import AppConfig, canonicalize_coin_symbol
 
 
 class LiveOrderExecutor:
@@ -59,7 +59,8 @@ class LiveOrderExecutor:
 
         self.account_address = self.config.account.account_address
         self.secret_key = self.config.account.secret_key
-        self.coin = self.config.market.coin
+        self.coin = canonicalize_coin_symbol(self.config.market.coin)
+        self.dex = self.coin.split(":")[0] if ":" in self.coin else ""
         self.base_url = (
             constants.TESTNET_API_URL
             if self.config.hyperliquid.use_testnet
@@ -77,12 +78,17 @@ class LiveOrderExecutor:
         self.max_price_decimals: int = 1
         self.max_leverage: int = 40
 
+        # Margin and account state
+        self.account_value: float = 0.0
+        self.available_margin: float = 0.0
+
         # Stateful local position & order management (prevents hot-loop REST blocking)
         self.cached_position: float = 0.0
         self.entry_price: float = 0.0
         self.peak_price: float = 0.0
         self.trough_price: float = 0.0
         self.trailing_stop_active: bool = False
+        self.stop_loss_trigger_time: float = 0.0
         self.last_sync_time: float = 0.0
         self.active_order: Optional[Dict[str, Any]] = None  # {"oid": int, "is_buy": bool, "price": float, "size": float, "time": float}
         self.position_strategy: Optional[str] = None  # Strategy that opened current position
@@ -185,12 +191,29 @@ class LiveOrderExecutor:
         self.last_sync_time = now
 
         try:
-            # Sync user position
-            user_state = self.info.user_state(self.account_address)
+            # Sync user position and margin summary
+            user_state = self.info.user_state(self.account_address, dex=self.dex) if self.dex else self.info.user_state(self.account_address)
+            if isinstance(user_state, dict):
+                margin_summary = user_state.get("marginSummary", {})
+                if isinstance(margin_summary, dict):
+                    try:
+                        self.account_value = float(margin_summary.get("accountValue", 0.0))
+                    except (ValueError, TypeError):
+                        pass
+                withdrawable_val = user_state.get("withdrawable")
+                if withdrawable_val is not None:
+                    try:
+                        self.available_margin = float(withdrawable_val)
+                    except (ValueError, TypeError):
+                        self.available_margin = self.account_value
+                elif self.account_value > 0:
+                    self.available_margin = self.account_value
+
             pos_found = False
-            for p in user_state.get("assetPositions", []):
-                pos = p.get("position", {})
-                if pos.get("coin") == self.coin:
+            raw_positions = user_state.get("assetPositions", []) if isinstance(user_state, dict) else (user_state.get("assetPositions", []) if hasattr(user_state, "get") else [])
+            for p in raw_positions:
+                pos = p.get("position", {}) if isinstance(p, dict) else (p.get("position", {}) if hasattr(p, "get") else {})
+                if isinstance(pos, dict) and pos.get("coin") == self.coin:
                     self.cached_position = float(pos.get("szi", 0.0))
                     entry_px = float(pos.get("entryPx", 0.0))
                     if entry_px > 0:
@@ -204,28 +227,29 @@ class LiveOrderExecutor:
                 self.trailing_stop_active = False
 
             # Sync open orders for this coin
-            open_orders = self.info.open_orders(self.account_address)
-            coin_orders = [o for o in open_orders if o.get("coin") == self.coin]
-            self.active_order_oids = [int(o["oid"]) for o in coin_orders]
+            open_orders = self.info.open_orders(self.account_address, dex=self.dex) if self.dex else self.info.open_orders(self.account_address)
+            if isinstance(open_orders, list):
+                coin_orders = [o for o in open_orders if isinstance(o, dict) and o.get("coin") == self.coin]
+                self.active_order_oids = [int(o["oid"]) for o in coin_orders if "oid" in o]
 
-            if not coin_orders:
-                self.active_order = None
-            else:
-                first_o = coin_orders[0]
-                oid_val = int(first_o["oid"])
-                is_buy_order = first_o.get("side", "B") == "B"
-                prev_strat = self.active_order.get("strategy_name", self.strategy_name) if (self.active_order and self.active_order.get("oid") == oid_val) else self.strategy_name
-                prev_is_exit = self.active_order.get("is_exit", abs(self.cached_position) > 1e-6) if (self.active_order and self.active_order.get("oid") == oid_val) else (abs(self.cached_position) > 1e-6)
-                prev_time = self.active_order.get("time", now) if (self.active_order and self.active_order.get("oid") == oid_val) else now
-                self.active_order = {
-                    "oid": oid_val,
-                    "is_buy": is_buy_order,
-                    "price": float(first_o.get("limitPx", 0.0)),
-                    "size": float(first_o.get("sz", 0.0)),
-                    "time": prev_time,
-                    "strategy_name": prev_strat,
-                    "is_exit": prev_is_exit,
-                }
+                if not coin_orders:
+                    self.active_order = None
+                else:
+                    first_o = coin_orders[0]
+                    oid_val = int(first_o["oid"])
+                    is_buy_order = first_o.get("side", "B") == "B"
+                    prev_strat = self.active_order.get("strategy_name", self.strategy_name) if (self.active_order and self.active_order.get("oid") == oid_val) else self.strategy_name
+                    prev_is_exit = self.active_order.get("is_exit", abs(self.cached_position) > 1e-6) if (self.active_order and self.active_order.get("oid") == oid_val) else (abs(self.cached_position) > 1e-6)
+                    prev_time = self.active_order.get("time", now) if (self.active_order and self.active_order.get("oid") == oid_val) else now
+                    self.active_order = {
+                        "oid": oid_val,
+                        "is_buy": is_buy_order,
+                        "price": float(first_o.get("limitPx", 0.0)),
+                        "size": float(first_o.get("sz", 0.0)),
+                        "time": prev_time,
+                        "strategy_name": prev_strat,
+                        "is_exit": prev_is_exit,
+                    }
         except Exception as e:
             logging.debug(f"[LiveExecutor] State sync exception: {e}")
 
@@ -234,9 +258,23 @@ class LiveOrderExecutor:
         if not self.info or not self.account_address:
             return []
         try:
-            return self.info.open_orders(self.account_address)
+            return self.info.open_orders(self.account_address, dex=self.dex) if self.dex else self.info.open_orders(self.account_address)
         except Exception:
             return []
+
+    def close_position(self, slippage: float = 0.05) -> Optional[Dict[str, Any]]:
+        """Closes any active live on-chain position immediately via market close order."""
+        if not self.is_initialized or not self.exchange:
+            return None
+        self.cancel_all_orders()
+        try:
+            res = self.exchange.market_close(self.coin, slippage=slippage)
+            self.sync_state(force=True)
+            self.console.print(f"[bold yellow][LiveExecutor] Closed live position on {self.coin}: {res}[/bold yellow]")
+            return res
+        except Exception as e:
+            self.console.print(f"[bold red][LiveExecutor] Failed to market close position on {self.coin}: {e}[/bold red]")
+            return None
 
     def get_current_position(self) -> float:
         """Returns the current net position size in asset units (from fast local cache or exchange)."""
@@ -298,9 +336,10 @@ class LiveOrderExecutor:
         post_only: bool = True,
         signal_score: float = 0.0,
         is_exit: bool = False,
+        reduce_only: Optional[bool] = None,
         **kwargs,
     ) -> Optional[Dict[str, Any]]:
-        """Places a limit order on Hyperliquid (Testnet or Mainnet) with post-only and cooldown protection."""
+        """Places a limit order on Hyperliquid (Testnet or Mainnet) with post-only, reduce-only, and cooldown protection."""
         if not self.is_initialized or not self.exchange:
             self.console.print("[dim red][LiveExecutor] Cannot place order: executor not initialized.[/dim red]")
             return None
@@ -323,10 +362,11 @@ class LiveOrderExecutor:
         side_str = "BUY" if is_buy else "SELL"
         side_color = "green" if is_buy else "red"
         net_label = "TESTNET" if self.config.hyperliquid.use_testnet else "MAINNET"
+        order_reduce_only = is_exit if reduce_only is None else bool(reduce_only)
 
         self.console.print(
             f"[bold {side_color}][LIVE {net_label} ORDER] [{self.strategy_name}] Submitting {side_str} {sz_fmt} {self.coin} @ ${px_fmt:,.4f} "
-            f"(${notional:,.2f} notional, TIF: {tif})...[/bold {side_color}]"
+            f"(${notional:,.2f} notional, TIF: {tif}{', ReduceOnly' if order_reduce_only else ''})...[/bold {side_color}]"
         )
 
         if self.auditor:
@@ -348,7 +388,7 @@ class LiveOrderExecutor:
                 sz=sz_fmt,
                 limit_px=px_fmt,
                 order_type={"limit": {"tif": tif}},
-                reduce_only=False,
+                reduce_only=order_reduce_only,
             )
             self.last_order_time = now
 
@@ -487,24 +527,37 @@ class LiveOrderExecutor:
         if abs(pos) > 1e-6 and not self.position_strategy:
             self.position_strategy = self.strategy_name
 
-        strat_cfg = self.config.strategies.execution_strategies.get(self.strategy_name) if hasattr(self.config, "strategies") else None
-        maker_threshold = strat_cfg.entry_threshold if strat_cfg else self.config.backtest.entry_threshold
-        hedge_rev = getattr(strat_cfg, "hedge_reversal_threshold", None) or -maker_threshold
-        tp_bps = getattr(strat_cfg, "take_profit_bps", 20.0)
-        sl_bps = getattr(strat_cfg, "stop_loss_bps", 8.0)
-        trail_act_bps = getattr(strat_cfg, "trailing_stop_activation_bps", 3.5)
-        trail_dist_bps = getattr(strat_cfg, "trailing_stop_distance_bps", 1.2)
+        strat_cfg = self.config.strategies.get_strategy(self.strategy_name) if hasattr(self.config, "strategies") else None
+        maker_threshold = strat_cfg.entry_threshold if (strat_cfg and strat_cfg.entry_threshold is not None) else self.config.backtest.entry_threshold
+        hedge_rev = getattr(strat_cfg, "hedge_reversal_threshold", None)
+        if hedge_rev is None:
+            hedge_rev = -maker_threshold
+        tp_bps = getattr(strat_cfg, "take_profit_bps", None) or self.config.backtest.take_profit_bps
+        sl_bps = getattr(strat_cfg, "stop_loss_bps", None) or self.config.backtest.stop_loss_bps
+        trail_act_bps = getattr(strat_cfg, "trailing_stop_activation_bps", None) or self.config.backtest.trailing_stop_activation_bps
+        trail_dist_bps = getattr(strat_cfg, "trailing_stop_distance_bps", None) or self.config.backtest.trailing_stop_distance_bps
+        reversal_thresh = getattr(strat_cfg, "exit_reversal_threshold", None)
+        if reversal_thresh is None:
+            reversal_thresh = getattr(self.config.backtest, "exit_reversal_threshold", 0.35)
+        hedge_loss_bps = getattr(strat_cfg, "hedge_trigger_loss_bps", -3.5)
+        fee_hurdle_bps = getattr(getattr(self.config, "market", None), "taker_fee_bps", 0.90 if getattr(getattr(self.config, "market", None), "is_xyz_stock", False) else 4.5)
 
         mid_price = (best_bid + best_ask) / 2.0 if (best_bid > 0 and best_ask > 0) else best_bid
         if self.capital_usd is not None and self.capital_usd > 0 and mid_price > 0:
             target_notional = self.capital_usd * self.allocation_pct
+            # Margin safety guard: Never attempt entry notional that exceeds 80% of maximum theoretical account leverage
+            if self.available_margin > 0 and self.max_leverage > 0:
+                max_safe_notional = self.available_margin * self.max_leverage * 0.80
+                if target_notional > max_safe_notional:
+                    target_notional = max_safe_notional
+
             computed_sz = self.format_size(target_notional / mid_price)
             order_size = self.ensure_min_notional(computed_sz, mid_price)
         else:
             order_size = self.ensure_min_notional(self.default_order_size_btc, mid_price)
 
         # ---------------------------------------------------------------------
-        # 1. POSITION MANAGEMENT (ACTIVE EXITS: TP, SL, TRAILING STOP, HEDGE)
+        # 1. POSITION MANAGEMENT (ACTIVE EXITS: TP, SL, TRAILING STOP, HEDGE, REVERSAL)
         # ---------------------------------------------------------------------
         if abs(pos) > 1e-6:
             # If an active resting order is NOT an exit quote (e.g. leftover entry quote), cancel it
@@ -517,6 +570,9 @@ class LiveOrderExecutor:
             if is_long:
                 self.peak_price = max(self.peak_price, mid_price)
                 gain_bps = ((mid_price - entry_px) / entry_px) * 10_000.0
+
+                exit_triggered = False
+                target_exit_px = self.format_price(best_ask)
 
                 # 1A. Emergency Stop Loss (Immediate Taker Sell at Best Bid)
                 if gain_bps <= -sl_bps:
@@ -547,6 +603,12 @@ class LiveOrderExecutor:
                 if not exit_triggered and signal_score <= hedge_rev:
                     self.console.print(f"[bold magenta][LiveExecutor] [{self.strategy_name}] Defensive Maker Hedge triggered (signal: {signal_score:.3f})![/bold magenta]")
                     exit_triggered = True
+
+                # 1E. Signal Reversal (Alpha Conviction Inverted: Quote Passive Maker Exit)
+                if not exit_triggered and reversal_thresh is not None and signal_score <= -reversal_thresh:
+                    if gain_bps >= fee_hurdle_bps or gain_bps <= -3.0:
+                        self.console.print(f"[bold cyan][LiveExecutor] [{self.strategy_name}] Signal Reversal triggered (signal: {signal_score:.3f} <= -{reversal_thresh:.2f}, gain: {gain_bps:+.1f} bps)! Quoting maker exit...[/bold cyan]")
+                        exit_triggered = True
 
                 if exit_triggered:
                     # Check resting exit order persistence
@@ -603,6 +665,12 @@ class LiveOrderExecutor:
                     self.console.print(f"[bold magenta][LiveExecutor] [{self.strategy_name}] Defensive Maker Hedge triggered (signal: {signal_score:.3f})![/bold magenta]")
                     exit_triggered = True
 
+                # 1E. Signal Reversal (Alpha Conviction Inverted: Quote Passive Maker Exit)
+                if not exit_triggered and reversal_thresh is not None and signal_score >= reversal_thresh:
+                    if gain_bps >= fee_hurdle_bps or gain_bps <= -3.0:
+                        self.console.print(f"[bold cyan][LiveExecutor] [{self.strategy_name}] Signal Reversal triggered (signal: {signal_score:.3f} >= +{reversal_thresh:.2f}, gain: {gain_bps:+.1f} bps)! Quoting maker exit...[/bold cyan]")
+                        exit_triggered = True
+
                 if exit_triggered:
                     # Check resting exit order persistence
                     if self.active_order and self.active_order.get("is_exit") and self.active_order.get("is_buy"):
@@ -630,6 +698,7 @@ class LiveOrderExecutor:
         # ---------------------------------------------------------------------
         self.entry_price = 0.0
         self.trailing_stop_active = False
+        self.stop_loss_trigger_time = 0.0
         self.position_strategy = None
 
         # Hysteresis parameters

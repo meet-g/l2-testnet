@@ -28,15 +28,18 @@ except ImportError:
 
 
 
+from config import canonicalize_coin_symbol
+
+
 class L2DataRecorder:
     """High-throughput L2 data recorder with automatic hourly file rotation and buffered disk writes."""
 
     def __init__(self, output_dir: str = "data", coin: str = "BTC", rotate_hourly: bool = True):
-        self.coin = coin
+        self.coin = canonicalize_coin_symbol(coin)
         self.rotate_hourly = rotate_hourly
         
         # Ensure coin data is stored in its own folder: e.g. data/btc/ or data/xyz_skhy/
-        self.safe_coin = coin.replace(":", "_").lower()
+        self.safe_coin = self.coin.replace(":", "_").lower()
         base_name = os.path.basename(os.path.normpath(output_dir)).lower()
         if base_name == self.safe_coin:
             self.output_dir = output_dir
@@ -134,8 +137,8 @@ class ContinuousCollectorDaemon:
 
     def __init__(self, ws_url: str = "wss://api.hyperliquid.xyz/ws", coin: str = "BTC", output_dir: str = "data"):
         self.ws_url = ws_url
-        self.coin = coin
-        self.recorder = L2DataRecorder(output_dir=output_dir, coin=coin, rotate_hourly=True)
+        self.coin = canonicalize_coin_symbol(coin)
+        self.recorder = L2DataRecorder(output_dir=output_dir, coin=self.coin, rotate_hourly=True)
         self.is_running = False
 
     async def run(self, max_duration_hours: float = 0.0) -> None:

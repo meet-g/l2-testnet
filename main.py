@@ -483,6 +483,9 @@ class L2EngineRunner:
                 net = self.config.hyperliquid.network_name
                 self.console.print(f"\n[bold yellow][LiveExecutor] Shutting down: cancelling all open {net} orders...[/bold yellow]")
                 self.live_executor.cancel_all_orders()
+                if abs(getattr(self.live_executor, "cached_position", 0.0)) > 1e-6:
+                    self.console.print(f"[bold yellow][LiveExecutor] Closing open {net} position ({self.live_executor.cached_position:.4f} {self.live_executor.coin})...[/bold yellow]")
+                    self.live_executor.close_position()
             if self.book.is_valid:
                 now_ms = int(time.time() * 1000)
                 self.evaluator.close_open_positions(self.book.mid_price, now_ms, reason="SESSION_SHUTDOWN")
@@ -1179,7 +1182,7 @@ def connect_testnet(coin: str = "BTC") -> bool:
     """Convenience synchronous function to test and establish connection to Hyperliquid Testnet."""
     cfg = AppConfig()
     cfg.hyperliquid.use_testnet = True
-    cfg.market.coin = coin
+    cfg.market.configure_for_coin(coin)
     return asyncio.run(test_hyperliquid_connection(cfg))
 
 
@@ -1187,7 +1190,7 @@ def connect_mainnet(coin: str = "BTC") -> bool:
     """Convenience synchronous function to test and establish connection to Hyperliquid Mainnet (Live)."""
     cfg = AppConfig()
     cfg.hyperliquid.use_testnet = False
-    cfg.market.coin = coin
+    cfg.market.configure_for_coin(coin)
     return asyncio.run(test_hyperliquid_connection(cfg))
 
 
@@ -1605,7 +1608,7 @@ def main():
     parser.add_argument("--size", type=float, default=0.1, help="Simulated order size in BTC (default: 0.1 BTC)")
     parser.add_argument("--cash", type=float, default=10000.0, help="Initial simulated account capital in USD (default: $10,000)")
     parser.add_argument("--capital", type=float, default=0.0, help="Total trading capital in USD to dynamically scale order sizes (e.g. 5000 for $5,000)")
-    parser.add_argument("--allocation", type=float, default=1.0, help="Fraction of capital per trade (default: 1.0 for 100%, 0.2 for 20%)")
+    parser.add_argument("--allocation", type=float, default=1.0, help="Fraction of capital per trade (default: 1.0 for 100%%, 0.2 for 20%%)")
     parser.add_argument("--save-model", type=str, default="models/l2_trained_weights.json", help="Model weights save path")
     parser.add_argument("--max-files", type=int, default=0, help="Maximum number of files to ingest for ML training (0 = all)")
     parser.add_argument("--prune-empty", action="store_true", help="Remove empty audit session directories (0 trades)")
@@ -1629,19 +1632,19 @@ def main():
         "--stock", "--xyz-stock",
         dest="xyz_stock",
         action="store_true",
-        help="Flag asset as an XYZ stock/equity on Hyperliquid (auto-configures 0.009% taker and 0.003% maker fees)",
+        help="Flag asset as an XYZ stock/equity on Hyperliquid (auto-configures 0.009%% taker and 0.003%% maker fees)",
     )
     parser.add_argument(
         "--taker-fee",
         type=float,
         default=None,
-        help="Custom taker fee in bps (e.g. 0.9 for 0.009% on XYZ stocks like SKHYNIX, 4.5 for crypto)",
+        help="Custom taker fee in bps (e.g. 0.9 for 0.009%% on XYZ stocks like SKHYNIX, 4.5 for crypto)",
     )
     parser.add_argument(
         "--maker-fee",
         type=float,
         default=None,
-        help="Custom maker fee in bps (e.g. 0.3 for 0.003% on XYZ stocks like SKHYNIX, 1.5 for crypto)",
+        help="Custom maker fee in bps (e.g. 0.3 for 0.003%% on XYZ stocks like SKHYNIX, 1.5 for crypto)",
     )
     args = parser.parse_args()
 
@@ -1694,8 +1697,10 @@ def main():
             f"[bold cyan]Resolved XYZ Market:[/bold cyan] '{args.coin}' -> canonical Hyperliquid ticker '[bold green]{cfg.market.coin}[/bold green]' "
             f"(Fees: [bold yellow]{cfg.market.maker_fee_bps:.2f} bps maker / {cfg.market.taker_fee_bps:.2f} bps taker[/bold yellow])"
         )
-        if cfg.market.coin == "xyz:SKHY":
-            console.print("   [dim cyan]ℹ Note: Hyperliquid also supports 'xyz:SKHX' (SK Hynix ADS contract).[/dim cyan]")
+        if cfg.market.coin == "xyz:SKHX":
+            console.print("   [dim cyan]ℹ Note: 'xyz:SKHX' is the SKHYNIX primary equity contract (~$1,075 mark px, $600M+ 24h vol). 'xyz:SKHY' is the ADS contract (~$154 mark px).[/dim cyan]")
+        elif cfg.market.coin == "xyz:SKHY":
+            console.print("   [dim cyan]ℹ Note: 'xyz:SKHY' is the SK Hynix ADS contract (~$154 mark px). 'xyz:SKHX' is the SKHYNIX primary equity contract (~$1,075 mark px).[/dim cyan]")
 
     if args.capital > 0:
         args.cash = args.capital
@@ -1721,10 +1726,11 @@ def main():
         elif cfg.market.coin == "ETH" and args.size == 0.1:
             args.size = round(3.0 * ratio, 4)
         elif cfg.market.is_xyz_stock:
+            base_shares = 8.0 if cfg.market.coin == "xyz:SKHX" else 50.0
             if args.size == 0.1:
-                args.size = round(50.0 * ratio, 2)
+                args.size = round(base_shares * ratio, 2)
             if args.order_size == 0.0005:
-                args.order_size = max(1.0, round(25.0 * ratio * args.allocation, 2))
+                args.order_size = max(0.1 if cfg.market.coin == "xyz:SKHX" else 1.0, round(base_shares * 0.5 * ratio * args.allocation, 2))
     else:
         if cfg.market.coin == "HYPE":
             if args.order_size == 0.0005:
@@ -1732,10 +1738,11 @@ def main():
             if args.size == 0.1:
                 args.size = 95.0       # 95.0 HYPE (~$8,550 notional, matching 0.1 BTC baseline)
         elif cfg.market.is_xyz_stock:
+            base_shares = 8.0 if cfg.market.coin == "xyz:SKHX" else 50.0
             if args.order_size == 0.0005:
-                args.order_size = 1.0  # 1.0 share default for live execution
+                args.order_size = 0.8 if cfg.market.coin == "xyz:SKHX" else 1.0
             if args.size == 0.1:
-                args.size = 50.0       # 50 shares default for simulated backtesting (~$5,000-$10,000 notional)
+                args.size = base_shares
 
     cfg.backtest.order_size_btc = args.size
 
@@ -1876,17 +1883,26 @@ def main():
             sys.exit(1)
         # Auto-detect coin from file path if not explicitly overridden
         fpath_lower = args.replay_file.lower().replace("\\", "/")
-        for c in ["btc", "hype", "sol", "eth"]:
-            if f"hl_{c}_" in fpath_lower or f"/{c}/" in fpath_lower:
-                cfg.market.coin = c.upper()
-                ratio = (cfg.backtest.capital_usd / 10000.0) if (cfg.backtest.capital_usd and cfg.backtest.capital_usd > 0) else 1.0
-                if c == "hype" and (args.size == 0.1 or args.size == 95.0):
-                    cfg.backtest.order_size_btc = round(95.0 * ratio, 2)
-                elif c == "sol" and (args.size == 0.1 or args.size == 50.0):
-                    cfg.backtest.order_size_btc = round(50.0 * ratio, 2)
-                elif c == "eth" and (args.size == 0.1 or args.size == 3.0):
-                    cfg.backtest.order_size_btc = round(3.0 * ratio, 4)
-                break
+        if args.coin == "BTC":
+            if any(k in fpath_lower for k in ("xyz_skhx", "skhx", "skhynix")):
+                cfg.market.configure_for_coin("xyz:SKHX", taker_fee_bps=args.taker_fee, maker_fee_bps=args.maker_fee)
+            elif any(k in fpath_lower for k in ("xyz_skhy", "skhy")):
+                cfg.market.configure_for_coin("xyz:SKHY", taker_fee_bps=args.taker_fee, maker_fee_bps=args.maker_fee)
+            else:
+                for c in ["btc", "hype", "sol", "eth"]:
+                    if f"hl_{c}_" in fpath_lower or f"/{c}/" in fpath_lower:
+                        cfg.market.coin = c.upper()
+                        break
+        ratio = (cfg.backtest.capital_usd / 10000.0) if (cfg.backtest.capital_usd and cfg.backtest.capital_usd > 0) else 1.0
+        if cfg.market.coin == "HYPE" and (args.size == 0.1 or args.size == 95.0):
+            cfg.backtest.order_size_btc = round(95.0 * ratio, 2)
+        elif cfg.market.coin == "SOL" and (args.size == 0.1 or args.size == 50.0):
+            cfg.backtest.order_size_btc = round(50.0 * ratio, 2)
+        elif cfg.market.coin == "ETH" and (args.size == 0.1 or args.size == 3.0):
+            cfg.backtest.order_size_btc = round(3.0 * ratio, 4)
+        elif cfg.market.is_xyz_stock and args.size == 0.1:
+            base_shares = 8.0 if cfg.market.coin == "xyz:SKHX" else 50.0
+            cfg.backtest.order_size_btc = round(base_shares * ratio, 2)
 
         # Offline replay
         runner = L2EngineRunner(config=cfg, record_data=False, enable_audit=not args.no_audit)

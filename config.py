@@ -105,32 +105,80 @@ def canonicalize_coin_symbol(coin: str) -> str:
     """Canonicalizes asset ticker symbols to their exact on-chain Hyperliquid identifier.
 
     HIP-3 builder assets (e.g. XYZ equities) strictly require lowercase prefix 'xyz:'
-    and uppercase asset ticker (e.g. 'xyz:SKHY', 'xyz:SKHX', 'xyz:NVDA').
+    and uppercase asset ticker (e.g. 'xyz:SKHX', 'xyz:SKHY', 'xyz:NVDA').
     Passing uppercase 'XYZ:' or omitting the prefix for known XYZ stocks leads to WebSocket disconnection.
 
-    SK Hynix canonical mappings:
-      - 'SKHYNIX', 'xyz:SKHYNIX', 'SKHY', 'xyz:SKHY' -> 'xyz:SKHY' (Standard SK Hynix Perp)
-      - 'SKHX', 'xyz:SKHX'                          -> 'xyz:SKHX' (SK Hynix ADS Perp)
+    SK Hynix contracts on Hyperliquid (Two distinct markets):
+      1. Primary SK Hynix Equity Contract (KRX underlying, Mark ~$1,075, 24h Vol ~$600M+):
+         - URL: 'https://app.hyperliquid.xyz/trade/xyz:SKHYNIX'
+         - Frontend Display: 'SKHYNIX-USDC'
+         - Hyperliquid On-Chain Ticker: 'xyz:SKHX'
+         - Aliases: 'SKHYNIX', 'xyz:SKHYNIX', 'SKHYNIX-USDC', 'SKHX', 'xyz:SKHX', 'SKHX-USDC' -> 'xyz:SKHX'
+
+      2. SK Hynix American Depositary Shares (ADS) Contract (Mark ~$154, 24h Vol ~$160M+):
+         - URL: 'https://app.hyperliquid.xyz/trade/xyz:SKHY'
+         - Frontend Display: 'SKHY-USDC'
+         - Hyperliquid On-Chain Ticker: 'xyz:SKHY'
+         - Aliases: 'SKHY', 'xyz:SKHY', 'SKHY-USDC', 'SKHY-PERP' -> 'xyz:SKHY'
+
+    Also extracts tickers from full trading URLs and strips quote suffixes (-USDC, /USDC, -PERP, etc.).
     """
     if not coin:
         return "BTC"
-    c = coin.strip()
+
+    c = coin.strip().strip("'\"")
+
+    # 1. Clean URLs (e.g. https://app.hyperliquid.xyz/trade/xyz:SKHYNIX, trade.xyz, etc.)
+    if "://" in c or "/trade/" in c or "trade.xyz" in c or "hyperliquid.xyz" in c:
+        if "/trade/" in c:
+            c = c.split("/trade/")[-1].split("?")[0].split("#")[0].strip("/")
+        elif "/" in c:
+            c = c.rstrip("/").split("/")[-1].split("?")[0].split("#")[0].strip()
+
+    # 2. Extract DEX prefix if present (e.g. 'xyz:SKHY', 'xyz-SKHY', 'XYZ:SKHYNIX')
     c_upper = c.upper()
+    has_xyz_prefix = False
+    prefix = ""
 
-    # Explicit aliases for SK Hynix
-    if c_upper in ("SKHYNIX", "XYZ:SKHYNIX", "XYZ-SKHYNIX", "SKHY", "XYZ:SKHY", "XYZ-SKHY"):
-        return "xyz:SKHY"
-    if c_upper in ("SKHX", "XYZ:SKHX", "XYZ-SKHX"):
-        return "xyz:SKHX"
-
-    # Check if prefixed with xyz (in any case / delimiter)
     if c_upper.startswith("XYZ:") or c_upper.startswith("XYZ-") or c.lower().startswith("xyz:"):
-        ticker = c[4:].strip().upper()
-        if ticker in ("SKHYNIX", "SKHY"):
-            return "xyz:SKHY"
-        if ticker == "SKHX":
-            return "xyz:SKHX"
-        return f"xyz:{ticker}"
+        has_xyz_prefix = True
+        prefix = "xyz:"
+        c = c[4:].strip()
+        c_upper = c.upper()
+    elif ":" in c or "-" in c:
+        # Check other builder DEX prefixes like flx:, vntl:, hyna:, etc.
+        parts = c.split(":", 1) if ":" in c else c.split("-", 1)
+        if len(parts) == 2 and parts[0].strip().lower() in ("flx", "vntl", "hyna", "km", "abcd", "cash", "para", "mkts", "io"):
+            prefix = f"{parts[0].strip().lower()}:"
+            c = parts[1].strip()
+            c_upper = c.upper()
+
+    # 3. Strip quote currency and contract suffixes (-USDC, /USDC, _USDC, -USD, -PERP, etc.)
+    for sfx in (
+        "-USDC", "/USDC", "_USDC", ":USDC",
+        "-USD", "/USD", "_USD", ":USD",
+        "-PERP", "/PERP", "_PERP", ":PERP",
+        "-USDT", "/USDT", "_USDT", ":USDT",
+        "-SPOT", "/SPOT", "_SPOT", ":SPOT",
+    ):
+        if c_upper.endswith(sfx):
+            c_upper = c_upper[:-len(sfx)].strip()
+            break
+
+    # 4. Canonicalize known aliases
+    # SK Hynix has two distinct contracts on Hyperliquid:
+    # 1. SKHYNIX / SKHX (URL: xyz:SKHYNIX, UI: SKHYNIX-USDC) -> on-chain contract 'xyz:SKHX' (~$1,075 mark px)
+    # 2. SKHY (URL: xyz:SKHY, UI: SKHY-USDC)                 -> on-chain contract 'xyz:SKHY' (~$154 mark px)
+    if c_upper in ("SKHYNIX", "SK-HYNIX", "SK_HYNIX", "SKHX", "SK-HX", "SK_HX"):
+        return "xyz:SKHX"
+    if c_upper in ("SKHY", "SK-HY", "SK_HY"):
+        return "xyz:SKHY"
+
+    # If an explicit builder DEX prefix was passed
+    if prefix:
+        return f"{prefix}{c_upper}"
+    if has_xyz_prefix:
+        return f"xyz:{c_upper}"
 
     # Auto-prefix known XYZ stock tickers if passed directly (e.g. NVDA -> xyz:NVDA)
     if c_upper in XYZ_STOCKS:
@@ -143,17 +191,8 @@ def is_xyz_stock_symbol(coin: str) -> bool:
     """Returns True if the coin symbol represents an XYZ-listed stock/equity on Hyperliquid."""
     if not coin:
         return False
-    c = coin.strip()
-    c_upper = c.upper()
-    if c.lower().startswith("xyz:") or c_upper.startswith("XYZ:") or c_upper.startswith("XYZ-") or c_upper.startswith("@XYZ"):
-        return True
-    if c_upper.endswith(":XYZ") or ":XYZ" in c_upper:
-        return True
-    if c_upper in ("SKHYNIX", "SKHY", "SKHX"):
-        return True
-    if c_upper in XYZ_STOCKS:
-        return True
-    return False
+    canon = canonicalize_coin_symbol(coin)
+    return canon.startswith("xyz:")
 
 
 @dataclass

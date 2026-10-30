@@ -352,16 +352,21 @@ def create_web_app(runner_ref: Any, broadcaster: TelemetryBroadcaster) -> FastAP
                 mid_px, now_ms, reason="EMERGENCY_FLATTEN_USER"
             )
 
-        # Cancel live orders if live executor is active
+        # Cancel live orders and market close live position if live executor is active
         cancelled_live = 0
+        closed_live = False
         if hasattr(runner, "live_executor") and runner.live_executor:
             cancelled_live = runner.live_executor.cancel_all_orders()
+            if abs(getattr(runner.live_executor, "cached_position", 0.0)) > 1e-6:
+                res = runner.live_executor.close_position()
+                closed_live = bool(res and res.get("status") == "ok")
 
         return {
             "status": "ok",
             "message": "Emergency flatten initiated",
             "paper_positions_closed": closed_paper,
             "live_orders_cancelled": cancelled_live,
+            "live_position_closed": closed_live,
             "price": mid_px,
         }
 
@@ -598,6 +603,28 @@ class DashboardWebServer:
                     "exit_time": time.strftime("%H:%M:%S", time.localtime(t.exit_time_ms / 1000.0)),
                 })
 
+        # 5. Live Exchange Position (if running in live orders mode)
+        live_position_data = None
+        if hasattr(self.runner, "live_executor") and self.runner.live_executor:
+            lx = self.runner.live_executor
+            live_pos = getattr(lx, "cached_position", 0.0)
+            in_pos = abs(live_pos) > 1e-6
+            live_entry = getattr(lx, "entry_price", mid_px) or mid_px
+            live_unrealized = live_pos * (mid_px - live_entry) if (mid_px > 0 and in_pos) else 0.0
+            live_bps = (live_unrealized / (abs(live_pos) * live_entry)) * 10_000.0 if (abs(live_pos) * live_entry > 0 and in_pos) else 0.0
+            live_position_data = {
+                "coin": getattr(lx, "coin", coin),
+                "in_position": in_pos,
+                "side": ("LONG" if live_pos > 0 else "SHORT") if in_pos else "FLAT",
+                "size": round(abs(live_pos), 4),
+                "entry_price": round(live_entry, 2),
+                "unrealized_usd": round(live_unrealized, 2),
+                "unrealized_bps": round(live_bps, 1),
+                "active_strategy": getattr(lx, "position_strategy", None) or getattr(lx, "strategy_name", "LiveExecution"),
+                "account_value": round(getattr(lx, "account_value", 0.0), 2),
+                "available_margin": round(getattr(lx, "available_margin", 0.0), 2),
+            }
+
         snapshot = {
             "timestamp": now_ms,
             "market": market_data,
@@ -614,6 +641,7 @@ class DashboardWebServer:
                 "total_trades": total_trades_count,
             },
             "recent_trades": recent_trades,
+            "live_position": live_position_data,
             "is_live_orders": getattr(self.runner, "live_orders", False),
             "is_scalping_mode": (
                 getattr(self.runner.config.strategies, "is_scalping_mode_active", False)

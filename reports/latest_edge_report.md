@@ -1,44 +1,40 @@
-# Hyperliquid L2 Alpha Edge & Performance Report (HYPE - Mainnet)
+# Hyperliquid L2 Alpha Edge & Performance Report (xyz:SKHX - Mainnet)
 
 - **Network**: Hyperliquid Mainnet
-- **Asset**: HYPE-PERP
-- **Timestamp**: 2026-10-29 11:28:45
-- **Mid Price**: $86.41
-- **Book Spread**: $0.00 (0.12 bps)
-- **Total Cumulative CVD**: +443004.9400 HYPE
+- **Asset**: xyz:SKHX-PERP
+- **Timestamp**: 2026-10-30 14:41:04
+- **Mid Price**: $1,049.45
+- **Book Spread**: $0.10 (0.95 bps)
+- **Total Cumulative CVD**: -1347.4180 XYZ:SKHX
 
 ## 1. Paper-Trading Performance Summary
 
 | Strategy | Trades | Win Rate | Gross PnL ($) | Net Fees ($) | Net PnL ($) | Profit Factor | Sharpe Ratio | Max Drawdown ($) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| Hedged_Convexity | 16 | 75.0% | $+145.81 | -$43.36 | $+102.45 | 3.12 | 284.78 | $41.71 |
-| Convexity_Cascade | 16 | 56.2% | $+73.05 | -$40.80 | $+32.25 | 1.73 | 134.97 | $20.83 |
-| Momentum_Expansion | 28 | 46.4% | $+7.92 | -$67.58 | $-59.65 | 0.52 | -124.55 | $86.65 |
+| MicroPrice_Maker | 35 | 77.1% | $+4.03 | -$1.03 | $+3.00 | 1.66 | 127.91 | $9500.00 |
 
 ## 2. Predictive Edge Matrix (Information Coefficient & Directional Hit Rate)
 
 | Signal Factor | 1s IC | 1s Hit% | 3s IC | 3s Hit% | 5s IC | 5s Hit% | 10s IC | 10s Hit% | 30s IC | 30s Hit% | 60s IC | 60s Hit% |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| Hedged_Convexity | +0.061 | 10.7% | +0.099 | 30.7% | +0.114 | 50.5% | +0.092 | 54.2% | +0.035 | 52.1% | -0.003 | 100.0% |
-| Convexity_Cascade | +0.020 | 10.2% | +0.042 | 29.5% | +0.054 | 48.6% | +0.048 | 51.9% | +0.027 | 53.1% | +0.007 | 100.0% |
-| Momentum_Expansion | -0.001 | 10.2% | -0.002 | 29.3% | +0.013 | 49.4% | +0.030 | 52.3% | -0.012 | 55.0% | -0.028 | 100.0% |
+| MicroPrice_Maker | +0.063 | 12.9% | +0.089 | 34.8% | +0.091 | 48.6% | +0.102 | 52.3% | +0.071 | 52.0% | +0.054 | 49.0% |
 
 ## 3. Position Trade Log (Executed Positions)
 
 | Exit Time | Strategy | Side & Size | Exit Price | Exec Type | Exit Reason | Net PnL ($) | Return (bps) |
 | :--- | :--- | :---: | :---: | :---: | :--- | :---: | :---: |
-| 10:34:36 | Hedged_Convexity | LONG 103.38 BTC | $82.4 | MAKER | TRAILING_STOP | $+11.30 | +13.3 bps |
-| 10:36:07 | Momentum_Expansion | SHORT 104.13 BTC | $81.9 | MAKER | DEFENSIVE_MAKER_HEDGE | $-32.44 | -38.2 bps |
-| 10:37:34 | Convexity_Cascade | LONG 103.72 BTC | $82.2 | MAKER | TAKE_PROFIT | $+20.27 | +23.8 bps |
-| 10:37:34 | Momentum_Expansion | LONG 51.86 BTC | $82.2 | MAKER | TAKE_PROFIT | $+10.13 | +23.8 bps |
-| 10:48:58 | Hedged_Convexity | LONG 99.75 BTC | $85.4 | MAKER | TAKE_PROFIT | $+17.10 | +20.1 bps |
-| 10:52:32 | Hedged_Convexity | LONG 98.54 BTC | $86.0 | TAKER | STOP_LOSS | $-25.66 | -30.2 bps |
-| 10:59:20 | Momentum_Expansion | LONG 99.96 BTC | $84.9 | TAKER | STOP_LOSS | $-18.36 | -21.6 bps |
-| 11:02:45 | Hedged_Convexity | LONG 98.96 BTC | $86.1 | MAKER | TAKE_PROFIT | $+16.74 | +19.7 bps |
-| 11:02:56 | Hedged_Convexity | LONG 98.72 BTC | $86.1 | MAKER | DEFENSIVE_MAKER_HEDGE | $-6.60 | -7.8 bps |
-| 11:09:39 | Hedged_Convexity | LONG 98.39 BTC | $86.5 | MAKER | TRAILING_STOP | $+5.04 | +5.9 bps |
-| 11:12:26 | Hedged_Convexity | LONG 98.38 BTC | $86.5 | MAKER | TRAILING_STOP | $+7.60 | +8.9 bps |
-| 11:15:23 | Hedged_Convexity | LONG 97.78 BTC | $87.0 | MAKER | TRAILING_STOP | $+7.62 | +9.0 bps |
-| 11:17:21 | Momentum_Expansion | SHORT 97.67 BTC | $86.9 | MAKER | TRAILING_STOP | $+9.18 | +10.8 bps |
-| 11:21:17 | Momentum_Expansion | LONG 97.83 BTC | $86.9 | MAKER | TRAILING_STOP | $+3.62 | +4.3 bps |
-| 11:28:28 | Hedged_Convexity | LONG 98.14 BTC | $86.6 | MAKER | DEFENSIVE_MAKER_HEDGE | $-7.55 | -8.9 bps |
+| 14:29:45 | MicroPrice_Maker | SHORT 0.41 BTC | $1,043.8 | TAKER | STOP_LOSS | $-0.67 | -15.8 bps |
+| 14:31:00 | MicroPrice_Maker | SHORT 0.41 BTC | $1,043.4 | MAKER | SIGNAL_REVERSAL | $+0.18 | +4.2 bps |
+| 14:32:15 | MicroPrice_Maker | LONG 0.41 BTC | $1,042.5 | TAKER | STOP_LOSS | $-0.63 | -14.8 bps |
+| 14:33:26 | MicroPrice_Maker | SHORT 0.41 BTC | $1,043.1 | MAKER | SIGNAL_REVERSAL | $-0.52 | -12.1 bps |
+| 14:35:39 | MicroPrice_Maker | LONG 0.41 BTC | $1,045.2 | MAKER | SIGNAL_REVERSAL | $+0.06 | +1.3 bps |
+| 14:36:06 | MicroPrice_Maker | SHORT 0.41 BTC | $1,045.0 | MAKER | TRAILING_STOP | $+0.07 | +1.7 bps |
+| 14:37:11 | MicroPrice_Maker | SHORT 0.41 BTC | $1,043.2 | MAKER | TRAILING_STOP | $+0.36 | +8.5 bps |
+| 14:37:43 | MicroPrice_Maker | LONG 0.41 BTC | $1,045.2 | MAKER | SIGNAL_REVERSAL | $+0.71 | +16.7 bps |
+| 14:38:15 | MicroPrice_Maker | LONG 0.41 BTC | $1,046.6 | MAKER | SIGNAL_REVERSAL | $+0.26 | +6.1 bps |
+| 14:38:32 | MicroPrice_Maker | LONG 0.41 BTC | $1,047.4 | MAKER | TRAILING_STOP | $+0.57 | +13.2 bps |
+| 14:38:37 | MicroPrice_Maker | LONG 0.41 BTC | $1,047.8 | MAKER | SIGNAL_REVERSAL | $+0.22 | +5.1 bps |
+| 14:38:58 | MicroPrice_Maker | SHORT 0.41 BTC | $1,048.6 | MAKER | SIGNAL_REVERSAL | $-0.35 | -8.2 bps |
+| 14:40:08 | MicroPrice_Maker | SHORT 0.41 BTC | $1,048.8 | MAKER | TRAILING_STOP | $+0.05 | +1.3 bps |
+| 14:40:18 | MicroPrice_Maker | SHORT 0.41 BTC | $1,046.9 | MAKER | TAKE_PROFIT | $+0.79 | +18.5 bps |
+| 14:40:34 | MicroPrice_Maker | SHORT 0.41 BTC | $1,047.6 | TAKER | STOP_LOSS | $-0.63 | -14.8 bps |
