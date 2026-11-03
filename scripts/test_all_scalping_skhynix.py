@@ -32,6 +32,14 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 
+# Force UTF-8 stdout/stderr on Windows
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # Add project root to sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -63,9 +71,16 @@ def get_all_skhynix_files() -> List[Tuple[str, str]]:
             files.append((f, "xyz:SKHY"))
 
     # 3. Snippets if substantial and not redundant
-    snippet_2300 = "data/xyz_skhy/snippets/hl_xyz_skhy_l2_20261029_2300.jsonl"
-    if os.path.isfile(snippet_2300) and os.path.getsize(snippet_2300) > 100000:
-        files.append((snippet_2300, "xyz:SKHY"))
+    existing_basenames = {os.path.basename(f) for f, _ in files}
+    for snip in sorted(glob.glob("data/xyz_skhx/snippets/hl_xyz_skhx_l2_*.jsonl")):
+        if os.path.basename(snip) not in existing_basenames and os.path.isfile(snip) and os.path.getsize(snip) > 100000:
+            files.append((snip, "xyz:SKHX"))
+            existing_basenames.add(os.path.basename(snip))
+
+    for snip in sorted(glob.glob("data/xyz_skhy/snippets/hl_xyz_skhy_l2_*.jsonl")):
+        if os.path.basename(snip) not in existing_basenames and os.path.isfile(snip) and os.path.getsize(snip) > 100000:
+            files.append((snip, "xyz:SKHY"))
+            existing_basenames.add(os.path.basename(snip))
 
     return files
 

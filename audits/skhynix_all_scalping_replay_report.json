@@ -1,31 +1,31 @@
 {
-  "timestamp": "2026-11-03 15:10:11",
-  "total_files": 29,
-  "total_size_mb": 94.85755825042725,
-  "total_events": 170406,
-  "wall_time_sec": 18.03408646583557,
+  "timestamp": "2026-11-03 16:49:30",
+  "total_files": 32,
+  "total_size_mb": 97.28501033782959,
+  "total_events": 174911,
+  "wall_time_sec": 21.324578762054443,
   "grand_total": {
     "QDAP_Maker": {
-      "trades": 92,
-      "wins": 74,
+      "trades": 93,
+      "wins": 75,
       "losses": 18,
-      "gross_pnl": 260.07133521901204,
-      "fees": 53.046512014888165,
-      "net_pnl": 207.02482320412386,
-      "gross_win": 498.5100753950027,
-      "gross_loss": 238.43874017599063,
+      "gross_pnl": 264.3372293690132,
+      "fees": 53.55645447806366,
+      "net_pnl": 210.78077489094946,
+      "gross_win": 502.7759695450038,
+      "gross_loss": 238.43874017599066,
       "max_drawdown": 52.06422439682319,
-      "weighted_dur_sum": 4651.943000000001,
+      "weighted_dur_sum": 4662.446000000002,
       "exit_reasons": {
-        "TRAILING_STOP": 38,
+        "TRAILING_STOP": 39,
         "TAKE_PROFIT": 7,
         "SIGNAL_REVERSAL": 33,
         "STOP_LOSS": 12,
         "TIME_LIMIT": 2
       },
-      "win_rate": 80.43478260869566,
-      "profit_factor": 2.0907260079761136,
-      "avg_holding_sec": 50.56459782608697
+      "win_rate": 80.64516129032258,
+      "profit_factor": 2.108616951984845,
+      "avg_holding_sec": 50.133827956989265
     },
     "Composite_Maker": {
       "trades": 4,
@@ -47,144 +47,144 @@
       "avg_holding_sec": 15.1705
     },
     "AdaptiveML_Maker": {
-      "trades": 325,
-      "wins": 253,
+      "trades": 328,
+      "wins": 256,
       "losses": 72,
-      "gross_pnl": 880.0639165060338,
-      "fees": 186.66852851132177,
-      "net_pnl": 693.3953879947119,
-      "gross_win": 1620.0512407780125,
+      "gross_pnl": 897.0829947060313,
+      "fees": 188.19854966366776,
+      "net_pnl": 708.8844450423634,
+      "gross_win": 1637.07031897801,
       "gross_loss": 739.9873242719791,
       "max_drawdown": 38.1223727471679,
-      "weighted_dur_sum": 8952.842999999999,
+      "weighted_dur_sum": 9012.028,
       "exit_reasons": {
-        "TRAILING_STOP": 147,
-        "SIGNAL_REVERSAL": 110,
+        "TRAILING_STOP": 149,
+        "SIGNAL_REVERSAL": 111,
         "STOP_LOSS": 38,
         "TAKE_PROFIT": 23,
         "TIME_LIMIT": 4,
         "SESSION_SHUTDOWN": 3
       },
-      "win_rate": 77.84615384615384,
-      "profit_factor": 2.1892959347268084,
-      "avg_holding_sec": 27.547209230769226
+      "win_rate": 78.04878048780488,
+      "profit_factor": 2.2122950830118704,
+      "avg_holding_sec": 27.47569512195122
     },
     "WOBI_Maker": {
-      "trades": 182,
-      "wins": 147,
+      "trades": 183,
+      "wins": 148,
       "losses": 35,
-      "gross_pnl": 750.0115525770226,
-      "fees": 107.11108465832716,
-      "net_pnl": 642.9004679186955,
-      "gross_win": 1177.7442045250077,
+      "gross_pnl": 754.2774467270236,
+      "fees": 107.62102712150266,
+      "net_pnl": 646.6564196055211,
+      "gross_win": 1182.0100986750092,
       "gross_loss": 428.20263014798655,
       "max_drawdown": 38.3402302449158,
-      "weighted_dur_sum": 9112.44,
+      "weighted_dur_sum": 9122.943,
       "exit_reasons": {
-        "TRAILING_STOP": 90,
+        "TRAILING_STOP": 91,
         "STOP_LOSS": 26,
         "SIGNAL_REVERSAL": 37,
         "TAKE_PROFIT": 25,
         "TIME_LIMIT": 2,
         "SESSION_SHUTDOWN": 2
       },
-      "win_rate": 80.76923076923077,
-      "profit_factor": 2.7504366428528946,
-      "avg_holding_sec": 50.06835164835165
+      "win_rate": 80.87431693989072,
+      "profit_factor": 2.7603989687464257,
+      "avg_holding_sec": 49.8521475409836
     },
     "MicroPrice_Maker": {
-      "trades": 1477,
-      "wins": 1158,
-      "losses": 319,
-      "gross_pnl": 2837.8903027570577,
-      "fees": 845.593832026479,
-      "net_pnl": 1992.2964707305784,
-      "gross_win": 6132.795267659004,
-      "gross_loss": 3298.6080724919516,
+      "trades": 1531,
+      "wins": 1203,
+      "losses": 328,
+      "gross_pnl": 3032.6020346470636,
+      "fees": 876.195866941684,
+      "net_pnl": 2156.406167705379,
+      "gross_win": 6415.8646521990095,
+      "gross_loss": 3387.4188294819483,
       "max_drawdown": 80.70990754799277,
-      "weighted_dur_sum": 41280.43300000001,
+      "weighted_dur_sum": 42282.00200000002,
       "exit_reasons": {
-        "TRAILING_STOP": 365,
-        "SIGNAL_REVERSAL": 868,
-        "STOP_LOSS": 166,
-        "TAKE_PROFIT": 51,
-        "SESSION_SHUTDOWN": 15,
+        "TRAILING_STOP": 381,
+        "SIGNAL_REVERSAL": 896,
+        "STOP_LOSS": 170,
+        "TAKE_PROFIT": 55,
+        "SESSION_SHUTDOWN": 17,
         "TIME_LIMIT": 12
       },
-      "win_rate": 78.40216655382532,
-      "profit_factor": 1.8592070148624689,
-      "avg_holding_sec": 27.948837508463107
+      "win_rate": 78.57609405617244,
+      "profit_factor": 1.8940275694163906,
+      "avg_holding_sec": 27.617244937949067
     },
     "MicroPrice_FastFill": {
-      "trades": 866,
-      "wins": 564,
-      "losses": 302,
-      "gross_pnl": 2017.49945678003,
-      "fees": 461.0431841220241,
-      "net_pnl": 1556.4562726580054,
-      "gross_win": 4072.6476018100198,
-      "gross_loss": 2055.1481450299907,
+      "trades": 894,
+      "wins": 584,
+      "losses": 310,
+      "gross_pnl": 2121.0653387800353,
+      "fees": 475.32384229899617,
+      "net_pnl": 1645.741496481039,
+      "gross_win": 4232.497483810026,
+      "gross_loss": 2111.4321450299917,
       "max_drawdown": 87.39146821199574,
-      "weighted_dur_sum": 32477.948999999997,
+      "weighted_dur_sum": 33149.241,
       "exit_reasons": {
-        "DEFENSIVE_MAKER_HEDGE": 224,
-        "PROFIT_DECAY_EXIT": 57,
-        "SIGNAL_REVERSAL": 311,
-        "TRAILING_STOP": 133,
+        "DEFENSIVE_MAKER_HEDGE": 230,
+        "PROFIT_DECAY_EXIT": 59,
+        "SIGNAL_REVERSAL": 320,
+        "TRAILING_STOP": 140,
         "STOP_LOSS": 28,
-        "TAKE_PROFIT": 91,
+        "TAKE_PROFIT": 95,
         "TIME_LIMIT": 12,
         "SESSION_SHUTDOWN": 10
       },
-      "win_rate": 65.1270207852194,
-      "profit_factor": 1.9816807910704597,
-      "avg_holding_sec": 37.50340531177829
+      "win_rate": 65.32438478747203,
+      "profit_factor": 2.0045623979784137,
+      "avg_holding_sec": 37.07968791946309
     },
     "Absorption_Fade": {
-      "trades": 823,
-      "wins": 612,
-      "losses": 211,
-      "gross_pnl": 2084.187304002069,
-      "fees": 473.76711860331,
-      "net_pnl": 1610.420185398759,
-      "gross_win": 4245.157316408038,
-      "gross_loss": 2162.6936280859723,
+      "trades": 843,
+      "wins": 626,
+      "losses": 217,
+      "gross_pnl": 2090.759561512069,
+      "fees": 485.4941197974069,
+      "net_pnl": 1605.2654417146623,
+      "gross_win": 4310.21998155804,
+      "gross_loss": 2221.184035725973,
       "max_drawdown": 57.40071992393314,
-      "weighted_dur_sum": 29044.650000000005,
+      "weighted_dur_sum": 29556.549000000006,
       "exit_reasons": {
-        "SIGNAL_REVERSAL": 168,
-        "TRAILING_STOP": 465,
+        "SIGNAL_REVERSAL": 172,
+        "TRAILING_STOP": 478,
         "TAKE_PROFIT": 73,
-        "STOP_LOSS": 101,
+        "STOP_LOSS": 104,
         "TIME_LIMIT": 11,
         "SESSION_SHUTDOWN": 5
       },
-      "win_rate": 74.36208991494532,
-      "profit_factor": 1.9629027714688783,
-      "avg_holding_sec": 35.29119076549211
+      "win_rate": 74.25860023724793,
+      "profit_factor": 1.9405055647040454,
+      "avg_holding_sec": 35.06114946619218
     },
     "AdaptiveML_Taker": {
-      "trades": 113,
-      "wins": 69,
+      "trades": 114,
+      "wins": 70,
       "losses": 44,
-      "gross_pnl": 122.34467089604183,
-      "fees": 124.95104790836784,
-      "net_pnl": -2.6063770123260346,
-      "gross_win": 470.09622611402614,
+      "gross_pnl": 124.53855745604275,
+      "fees": 125.97181477857745,
+      "net_pnl": -1.4332573225347107,
+      "gross_win": 472.29011267402706,
       "gross_loss": 353.3935189379805,
       "max_drawdown": 63.68968545880671,
-      "weighted_dur_sum": 3525.9680000000003,
+      "weighted_dur_sum": 3542.6240000000003,
       "exit_reasons": {
-        "TRAILING_STOP": 46,
+        "TRAILING_STOP": 47,
         "SIGNAL_REVERSAL": 39,
         "STOP_LOSS": 17,
         "TAKE_PROFIT": 6,
         "TIME_LIMIT": 3,
         "SESSION_SHUTDOWN": 2
       },
-      "win_rate": 61.06194690265486,
-      "profit_factor": 1.3302344296713788,
-      "avg_holding_sec": 31.203256637168145
+      "win_rate": 61.40350877192983,
+      "profit_factor": 1.3364424851178796,
+      "avg_holding_sec": 31.075649122807018
     },
     "Composite_Taker": {
       "trades": 0,
@@ -205,26 +205,26 @@
   },
   "skhx_total": {
     "QDAP_Maker": {
-      "trades": 54,
-      "wins": 44,
+      "trades": 55,
+      "wins": 45,
       "losses": 10,
-      "gross_pnl": 151.29916837000818,
-      "fees": 31.627986893914496,
-      "net_pnl": 119.67118147609366,
-      "gross_win": 297.3624208500017,
+      "gross_pnl": 155.56506252000932,
+      "fees": 32.137929357089995,
+      "net_pnl": 123.42713316291929,
+      "gross_win": 301.62831500000283,
       "gross_loss": 146.06325247999348,
       "max_drawdown": 52.06422439682319,
-      "weighted_dur_sum": 3694.859000000001,
+      "weighted_dur_sum": 3705.362000000001,
       "exit_reasons": {
-        "TRAILING_STOP": 24,
+        "TRAILING_STOP": 25,
         "TAKE_PROFIT": 4,
         "SIGNAL_REVERSAL": 16,
         "STOP_LOSS": 8,
         "TIME_LIMIT": 2
       },
-      "win_rate": 81.48148148148148,
-      "profit_factor": 2.035846907426164,
-      "avg_holding_sec": 68.42331481481483
+      "win_rate": 81.81818181818183,
+      "profit_factor": 2.065052707499563,
+      "avg_holding_sec": 67.3702181818182
     },
     "Composite_Maker": {
       "trades": 3,
@@ -245,144 +245,144 @@
       "avg_holding_sec": 12.686666666666667
     },
     "AdaptiveML_Maker": {
-      "trades": 215,
-      "wins": 167,
+      "trades": 218,
+      "wins": 170,
       "losses": 48,
-      "gross_pnl": 586.0431713200121,
-      "fees": 121.38240008584619,
-      "net_pnl": 464.6607712341658,
-      "gross_win": 1045.975064019998,
+      "gross_pnl": 603.0622495200096,
+      "fees": 122.9124212381922,
+      "net_pnl": 480.14982828181724,
+      "gross_win": 1062.9941422199954,
       "gross_loss": 459.93189269998607,
       "max_drawdown": 38.1223727471679,
-      "weighted_dur_sum": 6055.149,
+      "weighted_dur_sum": 6114.334000000001,
       "exit_reasons": {
-        "TRAILING_STOP": 101,
-        "SIGNAL_REVERSAL": 72,
+        "TRAILING_STOP": 103,
+        "SIGNAL_REVERSAL": 73,
         "STOP_LOSS": 21,
         "TAKE_PROFIT": 15,
         "TIME_LIMIT": 4,
         "SESSION_SHUTDOWN": 2
       },
-      "win_rate": 77.67441860465117,
-      "profit_factor": 2.2741955507362226,
-      "avg_holding_sec": 28.163483720930234
+      "win_rate": 77.98165137614679,
+      "profit_factor": 2.3111990255335204,
+      "avg_holding_sec": 28.047403669724773
     },
     "WOBI_Maker": {
-      "trades": 116,
-      "wins": 97,
+      "trades": 117,
+      "wins": 98,
       "losses": 19,
-      "gross_pnl": 555.647600980011,
-      "fees": 66.8148027761694,
-      "net_pnl": 488.83279820384166,
-      "gross_win": 778.9703810000013,
+      "gross_pnl": 559.913495130012,
+      "fees": 67.3247452393449,
+      "net_pnl": 492.5887498906673,
+      "gross_win": 783.2362751500025,
       "gross_loss": 223.7927582199917,
       "max_drawdown": 38.3402302449158,
-      "weighted_dur_sum": 4863.779,
+      "weighted_dur_sum": 4874.282,
       "exit_reasons": {
-        "TRAILING_STOP": 61,
+        "TRAILING_STOP": 62,
         "STOP_LOSS": 13,
         "SIGNAL_REVERSAL": 23,
         "TAKE_PROFIT": 16,
         "TIME_LIMIT": 1,
         "SESSION_SHUTDOWN": 2
       },
-      "win_rate": 83.62068965517241,
-      "profit_factor": 3.480766702174793,
-      "avg_holding_sec": 41.929129310344834
+      "win_rate": 83.76068376068376,
+      "profit_factor": 3.499828508213252,
+      "avg_holding_sec": 41.66052991452992
     },
     "MicroPrice_Maker": {
-      "trades": 1060,
-      "wins": 838,
-      "losses": 222,
-      "gross_pnl": 2232.597311850041,
-      "fees": 601.817221187455,
-      "net_pnl": 1630.780090662586,
-      "gross_win": 4481.834247120002,
-      "gross_loss": 2251.415092789966,
+      "trades": 1114,
+      "wins": 883,
+      "losses": 231,
+      "gross_pnl": 2427.3090437400465,
+      "fees": 632.4192561026598,
+      "net_pnl": 1794.8897876373867,
+      "gross_win": 4764.903631660008,
+      "gross_loss": 2340.225849779963,
       "max_drawdown": 67.77951713952643,
-      "weighted_dur_sum": 30164.190000000006,
+      "weighted_dur_sum": 31165.75900000001,
       "exit_reasons": {
-        "TRAILING_STOP": 259,
-        "SIGNAL_REVERSAL": 631,
-        "STOP_LOSS": 111,
-        "TAKE_PROFIT": 40,
-        "SESSION_SHUTDOWN": 9,
+        "TRAILING_STOP": 275,
+        "SIGNAL_REVERSAL": 659,
+        "STOP_LOSS": 115,
+        "TAKE_PROFIT": 44,
+        "SESSION_SHUTDOWN": 11,
         "TIME_LIMIT": 10
       },
-      "win_rate": 79.05660377358491,
-      "profit_factor": 1.990674336986028,
-      "avg_holding_sec": 28.45678301886793
+      "win_rate": 79.26391382405745,
+      "profit_factor": 2.0360870862562357,
+      "avg_holding_sec": 27.97644434470378
     },
     "MicroPrice_FastFill": {
-      "trades": 581,
-      "wins": 369,
-      "losses": 212,
-      "gross_pnl": 1175.2778958300207,
-      "fees": 310.09150286024914,
-      "net_pnl": 865.1863929697712,
-      "gross_win": 2607.638085020017,
-      "gross_loss": 1432.360189189997,
+      "trades": 609,
+      "wins": 389,
+      "losses": 220,
+      "gross_pnl": 1278.843777830026,
+      "fees": 324.37216103722113,
+      "net_pnl": 954.4716167928048,
+      "gross_win": 2767.4879670200235,
+      "gross_loss": 1488.6441891899979,
       "max_drawdown": 87.39146821199574,
-      "weighted_dur_sum": 20824.002999999997,
+      "weighted_dur_sum": 21495.295000000002,
       "exit_reasons": {
-        "DEFENSIVE_MAKER_HEDGE": 159,
-        "PROFIT_DECAY_EXIT": 35,
-        "SIGNAL_REVERSAL": 207,
-        "TRAILING_STOP": 91,
+        "DEFENSIVE_MAKER_HEDGE": 165,
+        "PROFIT_DECAY_EXIT": 37,
+        "SIGNAL_REVERSAL": 216,
+        "TRAILING_STOP": 98,
         "STOP_LOSS": 19,
-        "TAKE_PROFIT": 53,
+        "TAKE_PROFIT": 57,
         "TIME_LIMIT": 9,
         "SESSION_SHUTDOWN": 8
       },
-      "win_rate": 63.51118760757315,
-      "profit_factor": 1.8205184036109259,
-      "avg_holding_sec": 35.84165748709122
+      "win_rate": 63.8752052545156,
+      "profit_factor": 1.8590661133913209,
+      "avg_holding_sec": 35.29605090311987
     },
     "Absorption_Fade": {
-      "trades": 656,
-      "wins": 495,
-      "losses": 161,
-      "gross_pnl": 1740.3781295300532,
-      "fees": 375.86940113991807,
-      "net_pnl": 1364.5087283901353,
-      "gross_win": 3359.29091727003,
-      "gross_loss": 1620.6364034199794,
+      "trades": 676,
+      "wins": 509,
+      "losses": 167,
+      "gross_pnl": 1746.9503870400533,
+      "fees": 387.59640233401495,
+      "net_pnl": 1359.3539847060385,
+      "gross_win": 3424.3535824200317,
+      "gross_loss": 1679.1268110599804,
       "max_drawdown": 57.40071992393314,
-      "weighted_dur_sum": 22132.113000000005,
+      "weighted_dur_sum": 22644.012000000006,
       "exit_reasons": {
-        "SIGNAL_REVERSAL": 133,
-        "TRAILING_STOP": 376,
+        "SIGNAL_REVERSAL": 137,
+        "TRAILING_STOP": 389,
         "TAKE_PROFIT": 57,
-        "STOP_LOSS": 77,
+        "STOP_LOSS": 80,
         "TIME_LIMIT": 9,
         "SESSION_SHUTDOWN": 4
       },
-      "win_rate": 75.45731707317073,
-      "profit_factor": 2.072822077907803,
-      "avg_holding_sec": 33.73797713414635
+      "win_rate": 75.29585798816568,
+      "profit_factor": 2.0393656749833826,
+      "avg_holding_sec": 33.49705917159764
     },
     "AdaptiveML_Taker": {
-      "trades": 74,
-      "wins": 45,
+      "trades": 75,
+      "wins": 46,
       "losses": 29,
-      "gross_pnl": 69.12438540002137,
-      "fees": 81.59939029250282,
-      "net_pnl": -12.475004892481444,
-      "gross_win": 294.95711522001454,
+      "gross_pnl": 71.31827196002229,
+      "fees": 82.62015716271242,
+      "net_pnl": -11.301885202690123,
+      "gross_win": 297.15100178001546,
       "gross_loss": 229.6026779399911,
       "max_drawdown": 41.325072321720654,
-      "weighted_dur_sum": 2278.796,
+      "weighted_dur_sum": 2295.4519999999998,
       "exit_reasons": {
-        "TRAILING_STOP": 31,
+        "TRAILING_STOP": 32,
         "SIGNAL_REVERSAL": 25,
         "STOP_LOSS": 11,
         "TAKE_PROFIT": 4,
         "TIME_LIMIT": 2,
         "SESSION_SHUTDOWN": 1
       },
-      "win_rate": 60.810810810810814,
-      "profit_factor": 1.2846414417566352,
-      "avg_holding_sec": 30.794540540540538
+      "win_rate": 61.33333333333333,
+      "profit_factor": 1.2941965853624702,
+      "avg_holding_sec": 30.606026666666665
     },
     "Composite_Taker": {
       "trades": 0,
@@ -409,10 +409,10 @@
       "gross_pnl": 108.77216684900387,
       "fees": 21.41852512097367,
       "net_pnl": 87.3536417280302,
-      "gross_win": 201.147654545001,
-      "gross_loss": 92.37548769599717,
+      "gross_win": 201.14765454500102,
+      "gross_loss": 92.37548769599715,
       "max_drawdown": 41.499207899591056,
-      "weighted_dur_sum": 957.084,
+      "weighted_dur_sum": 957.0840000000001,
       "exit_reasons": {
         "TRAILING_STOP": 14,
         "SIGNAL_REVERSAL": 17,
@@ -420,8 +420,8 @@
         "TAKE_PROFIT": 3
       },
       "win_rate": 78.94736842105263,
-      "profit_factor": 2.1775003257029315,
-      "avg_holding_sec": 25.186421052631577
+      "profit_factor": 2.1775003257029324,
+      "avg_holding_sec": 25.18642105263158
     },
     "Composite_Maker": {
       "trades": 1,
@@ -448,10 +448,10 @@
       "gross_pnl": 294.02074518602166,
       "fees": 65.28612842547558,
       "net_pnl": 228.73461676054603,
-      "gross_win": 574.0761767580145,
-      "gross_loss": 280.055431571993,
+      "gross_win": 574.0761767580146,
+      "gross_loss": 280.0554315719929,
       "max_drawdown": 31.83632138282701,
-      "weighted_dur_sum": 2897.6940000000004,
+      "weighted_dur_sum": 2897.694,
       "exit_reasons": {
         "TRAILING_STOP": 46,
         "SIGNAL_REVERSAL": 38,
@@ -460,14 +460,14 @@
         "SESSION_SHUTDOWN": 1
       },
       "win_rate": 78.18181818181819,
-      "profit_factor": 2.0498662480339664,
-      "avg_holding_sec": 26.34267272727273
+      "profit_factor": 2.0498662480339673,
+      "avg_holding_sec": 26.342672727272728
     },
     "WOBI_Maker": {
       "trades": 66,
       "wins": 50,
       "losses": 16,
-      "gross_pnl": 194.36395159701163,
+      "gross_pnl": 194.3639515970116,
       "fees": 40.29628188215775,
       "net_pnl": 154.06766971485388,
       "gross_win": 398.7738235250065,
@@ -478,8 +478,8 @@
         "SIGNAL_REVERSAL": 14,
         "TAKE_PROFIT": 9,
         "STOP_LOSS": 13,
-        "TIME_LIMIT": 1,
-        "TRAILING_STOP": 29
+        "TRAILING_STOP": 29,
+        "TIME_LIMIT": 1
       },
       "win_rate": 75.75757575757575,
       "profit_factor": 1.950854035393545,
@@ -495,7 +495,7 @@
       "gross_win": 1650.9610205390018,
       "gross_loss": 1047.1929797019852,
       "max_drawdown": 80.70990754799277,
-      "weighted_dur_sum": 11116.243000000002,
+      "weighted_dur_sum": 11116.242999999999,
       "exit_reasons": {
         "SIGNAL_REVERSAL": 237,
         "TRAILING_STOP": 106,
@@ -506,7 +506,7 @@
       },
       "win_rate": 76.73860911270984,
       "profit_factor": 1.5765585260214785,
-      "avg_holding_sec": 26.657657074340534
+      "avg_holding_sec": 26.657657074340523
     },
     "MicroPrice_FastFill": {
       "trades": 285,
@@ -514,9 +514,9 @@
       "losses": 90,
       "gross_pnl": 842.2215609500091,
       "fees": 150.95168126177504,
-      "net_pnl": 691.2698796882343,
+      "net_pnl": 691.2698796882341,
       "gross_win": 1465.009516790003,
-      "gross_loss": 622.7879558399939,
+      "gross_loss": 622.7879558399937,
       "max_drawdown": 68.7193255540551,
       "weighted_dur_sum": 11653.946,
       "exit_reasons": {
@@ -530,7 +530,7 @@
         "SESSION_SHUTDOWN": 2
       },
       "win_rate": 68.42105263157895,
-      "profit_factor": 2.352340797621963,
+      "profit_factor": 2.3523407976219635,
       "avg_holding_sec": 40.89103859649123
     },
     "Absorption_Fade": {
@@ -540,7 +540,7 @@
       "gross_pnl": 343.8091744720157,
       "fees": 97.89771746339188,
       "net_pnl": 245.9114570086237,
-      "gross_win": 885.8663991380087,
+      "gross_win": 885.8663991380088,
       "gross_loss": 542.057224665993,
       "max_drawdown": 54.71825024138707,
       "weighted_dur_sum": 6912.537,
@@ -553,7 +553,7 @@
         "TAKE_PROFIT": 16
       },
       "win_rate": 70.05988023952095,
-      "profit_factor": 1.6342673039435374,
+      "profit_factor": 1.6342673039435376,
       "avg_holding_sec": 41.39243712574851
     },
     "AdaptiveML_Taker": {
@@ -563,16 +563,16 @@
       "gross_pnl": 53.220285496020466,
       "fees": 43.35165761586504,
       "net_pnl": 9.868627880155412,
-      "gross_win": 175.13911089401168,
-      "gross_loss": 123.79084099798942,
+      "gross_win": 175.13911089401165,
+      "gross_loss": 123.7908409979894,
       "max_drawdown": 63.68968545880671,
       "weighted_dur_sum": 1247.172,
       "exit_reasons": {
         "SIGNAL_REVERSAL": 14,
-        "STOP_LOSS": 6,
         "TRAILING_STOP": 15,
         "TIME_LIMIT": 1,
         "SESSION_SHUTDOWN": 1,
+        "STOP_LOSS": 6,
         "TAKE_PROFIT": 2
       },
       "win_rate": 61.53846153846154,
@@ -603,7 +603,7 @@
       "coin": "xyz:SKHX",
       "size_mb": 3.0543394088745117,
       "events": 5737,
-      "elapsed_sec": 3.9043140411376953,
+      "elapsed_sec": 5.106328964233398,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -786,7 +786,7 @@
       "coin": "xyz:SKHX",
       "size_mb": 4.0680742263793945,
       "events": 6839,
-      "elapsed_sec": 4.518335580825806,
+      "elapsed_sec": 5.93391227722168,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -976,7 +976,7 @@
       "coin": "xyz:SKHX",
       "size_mb": 3.577869415283203,
       "events": 7048,
-      "elapsed_sec": 4.773714303970337,
+      "elapsed_sec": 6.016794681549072,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -1157,7 +1157,7 @@
       "coin": "xyz:SKHX",
       "size_mb": 4.164889335632324,
       "events": 7705,
-      "elapsed_sec": 5.25862979888916,
+      "elapsed_sec": 6.584863662719727,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -1346,7 +1346,7 @@
       "coin": "xyz:SKHX",
       "size_mb": 4.34909725189209,
       "events": 7978,
-      "elapsed_sec": 5.358771800994873,
+      "elapsed_sec": 6.771150350570679,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -1536,7 +1536,7 @@
       "coin": "xyz:SKHX",
       "size_mb": 5.307332992553711,
       "events": 8422,
-      "elapsed_sec": 5.679875612258911,
+      "elapsed_sec": 7.00696325302124,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -1731,7 +1731,7 @@
       "coin": "xyz:SKHX",
       "size_mb": 5.156857490539551,
       "events": 8552,
-      "elapsed_sec": 5.771132707595825,
+      "elapsed_sec": 7.23833703994751,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -1922,7 +1922,7 @@
       "coin": "xyz:SKHX",
       "size_mb": 1.9131965637207031,
       "events": 3237,
-      "elapsed_sec": 1.7544472217559814,
+      "elapsed_sec": 2.030195474624634,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -2107,7 +2107,7 @@
       "coin": "xyz:SKHX",
       "size_mb": 5.412907600402832,
       "events": 9866,
-      "elapsed_sec": 6.655157566070557,
+      "elapsed_sec": 8.405003070831299,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -2296,7 +2296,7 @@
       "coin": "xyz:SKHX",
       "size_mb": 1.2138690948486328,
       "events": 2200,
-      "elapsed_sec": 1.4990496635437012,
+      "elapsed_sec": 1.5335931777954102,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -2479,7 +2479,7 @@
       "coin": "xyz:SKHX",
       "size_mb": 1.6789140701293945,
       "events": 2867,
-      "elapsed_sec": 1.7115592956542969,
+      "elapsed_sec": 2.0205025672912598,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -2664,7 +2664,7 @@
       "coin": "xyz:SKHX",
       "size_mb": 1.2805728912353516,
       "events": 2304,
-      "elapsed_sec": 1.3300890922546387,
+      "elapsed_sec": 1.4312500953674316,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -2839,12 +2839,186 @@
       }
     },
     {
+      "filename": "hl_xyz_skhx_l2_20261102_1100.jsonl",
+      "filepath": "data/xyz_skhx\\hl_xyz_skhx_l2_20261102_1100.jsonl",
+      "coin": "xyz:SKHX",
+      "size_mb": 1.0201549530029297,
+      "events": 2001,
+      "elapsed_sec": 1.7185328006744385,
+      "error": null,
+      "strategies": {
+        "QDAP_Maker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        },
+        "Composite_Maker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        },
+        "AdaptiveML_Maker": {
+          "trades": 4,
+          "wins": 2,
+          "losses": 2,
+          "win_rate": 50.0,
+          "gross_pnl": -12.258941399996095,
+          "fees": 2.5505708805719998,
+          "net_pnl": -14.809512280568095,
+          "gross_win": 6.4932641000013245,
+          "gross_loss": 18.75220549999742,
+          "profit_factor": 0.34626668847044245,
+          "max_drawdown": 19.18661332056763,
+          "avg_return_bps": -4.35503451934764,
+          "avg_duration_sec": 71.60674999999999,
+          "exit_reasons": {
+            "TRAILING_STOP": 2,
+            "SIGNAL_REVERSAL": 1,
+            "STOP_LOSS": 1
+          }
+        },
+        "WOBI_Maker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        },
+        "MicroPrice_Maker": {
+          "trades": 17,
+          "wins": 11,
+          "losses": 6,
+          "win_rate": 64.70588235294117,
+          "gross_pnl": -9.651166879993953,
+          "fees": 9.690892424390398,
+          "net_pnl": -19.34205930438435,
+          "gross_win": 39.41700000000281,
+          "gross_loss": 49.06816687999676,
+          "profit_factor": 0.8033110365912535,
+          "max_drawdown": 24.52934088438633,
+          "avg_return_bps": -1.3381778410039038,
+          "avg_duration_sec": 52.10594117647059,
+          "exit_reasons": {
+            "SIGNAL_REVERSAL": 11,
+            "STOP_LOSS": 2,
+            "TRAILING_STOP": 2,
+            "TIME_LIMIT": 2
+          }
+        },
+        "MicroPrice_FastFill": {
+          "trades": 6,
+          "wins": 4,
+          "losses": 2,
+          "win_rate": 66.66666666666666,
+          "gross_pnl": -4.580398669997113,
+          "fees": 4.0798886041347,
+          "net_pnl": -8.66028727413181,
+          "gross_win": 9.280000000002104,
+          "gross_loss": 13.860398669999217,
+          "profit_factor": 0.6695334110474492,
+          "max_drawdown": 15.476651644126832,
+          "avg_return_bps": -1.6987588983443729,
+          "avg_duration_sec": 65.27616666666667,
+          "exit_reasons": {
+            "STOP_LOSS": 1,
+            "SIGNAL_REVERSAL": 3,
+            "PROFIT_DECAY_EXIT": 1,
+            "SESSION_SHUTDOWN": 1
+          }
+        },
+        "Absorption_Fade": {
+          "trades": 4,
+          "wins": 4,
+          "losses": 0,
+          "win_rate": 100.0,
+          "gross_pnl": 9.211993200000425,
+          "fees": 2.0406687602039995,
+          "net_pnl": 7.171324439796424,
+          "gross_win": 9.211993200000425,
+          "gross_loss": 0.0,
+          "profit_factor": 99.0,
+          "max_drawdown": 1.9350000000031287,
+          "avg_return_bps": 2.108712176389216,
+          "avg_duration_sec": 16.15625,
+          "exit_reasons": {
+            "SIGNAL_REVERSAL": 1,
+            "TRAILING_STOP": 3
+          }
+        },
+        "AdaptiveML_Taker": {
+          "trades": 1,
+          "wins": 0,
+          "losses": 1,
+          "win_rate": 0.0,
+          "gross_pnl": -7.127106379998323,
+          "fees": 1.0204448795742,
+          "net_pnl": -8.147551259572523,
+          "gross_win": 0.0,
+          "gross_loss": 7.127106379998323,
+          "profit_factor": 0.0,
+          "max_drawdown": 8.279100399573508,
+          "avg_return_bps": -9.579168414266752,
+          "avg_duration_sec": 7.31,
+          "exit_reasons": {
+            "SIGNAL_REVERSAL": 1
+          }
+        },
+        "Composite_Taker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        }
+      }
+    },
+    {
       "filename": "hl_xyz_skhx_l2_20261030_1000.jsonl",
       "filepath": "data/xyz_skhx\\hl_xyz_skhx_l2_20261030_1000.jsonl",
       "coin": "xyz:SKHX",
       "size_mb": 3.2942657470703125,
       "events": 6083,
-      "elapsed_sec": 3.7447335720062256,
+      "elapsed_sec": 4.452455282211304,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -3025,186 +3199,12 @@
       }
     },
     {
-      "filename": "hl_xyz_skhx_l2_20261102_1100.jsonl",
-      "filepath": "data/xyz_skhx\\hl_xyz_skhx_l2_20261102_1100.jsonl",
-      "coin": "xyz:SKHX",
-      "size_mb": 1.0201549530029297,
-      "events": 2001,
-      "elapsed_sec": 1.4408116340637207,
-      "error": null,
-      "strategies": {
-        "QDAP_Maker": {
-          "trades": 0,
-          "wins": 0,
-          "losses": 0,
-          "win_rate": 0.0,
-          "gross_pnl": 0.0,
-          "fees": 0.0,
-          "net_pnl": 0.0,
-          "gross_win": 0.0,
-          "gross_loss": 0.0,
-          "profit_factor": 0.0,
-          "max_drawdown": 0.0,
-          "avg_return_bps": 0.0,
-          "avg_duration_sec": 0.0,
-          "exit_reasons": {}
-        },
-        "Composite_Maker": {
-          "trades": 0,
-          "wins": 0,
-          "losses": 0,
-          "win_rate": 0.0,
-          "gross_pnl": 0.0,
-          "fees": 0.0,
-          "net_pnl": 0.0,
-          "gross_win": 0.0,
-          "gross_loss": 0.0,
-          "profit_factor": 0.0,
-          "max_drawdown": 0.0,
-          "avg_return_bps": 0.0,
-          "avg_duration_sec": 0.0,
-          "exit_reasons": {}
-        },
-        "AdaptiveML_Maker": {
-          "trades": 4,
-          "wins": 2,
-          "losses": 2,
-          "win_rate": 50.0,
-          "gross_pnl": -12.258941399996095,
-          "fees": 2.5505708805719998,
-          "net_pnl": -14.809512280568095,
-          "gross_win": 6.4932641000013245,
-          "gross_loss": 18.75220549999742,
-          "profit_factor": 0.34626668847044245,
-          "max_drawdown": 19.18661332056763,
-          "avg_return_bps": -4.35503451934764,
-          "avg_duration_sec": 71.60674999999999,
-          "exit_reasons": {
-            "TRAILING_STOP": 2,
-            "SIGNAL_REVERSAL": 1,
-            "STOP_LOSS": 1
-          }
-        },
-        "WOBI_Maker": {
-          "trades": 0,
-          "wins": 0,
-          "losses": 0,
-          "win_rate": 0.0,
-          "gross_pnl": 0.0,
-          "fees": 0.0,
-          "net_pnl": 0.0,
-          "gross_win": 0.0,
-          "gross_loss": 0.0,
-          "profit_factor": 0.0,
-          "max_drawdown": 0.0,
-          "avg_return_bps": 0.0,
-          "avg_duration_sec": 0.0,
-          "exit_reasons": {}
-        },
-        "MicroPrice_Maker": {
-          "trades": 17,
-          "wins": 11,
-          "losses": 6,
-          "win_rate": 64.70588235294117,
-          "gross_pnl": -9.651166879993953,
-          "fees": 9.690892424390398,
-          "net_pnl": -19.34205930438435,
-          "gross_win": 39.41700000000281,
-          "gross_loss": 49.06816687999676,
-          "profit_factor": 0.8033110365912535,
-          "max_drawdown": 24.52934088438633,
-          "avg_return_bps": -1.3381778410039038,
-          "avg_duration_sec": 52.10594117647059,
-          "exit_reasons": {
-            "SIGNAL_REVERSAL": 11,
-            "STOP_LOSS": 2,
-            "TRAILING_STOP": 2,
-            "TIME_LIMIT": 2
-          }
-        },
-        "MicroPrice_FastFill": {
-          "trades": 6,
-          "wins": 4,
-          "losses": 2,
-          "win_rate": 66.66666666666666,
-          "gross_pnl": -4.580398669997113,
-          "fees": 4.0798886041347,
-          "net_pnl": -8.66028727413181,
-          "gross_win": 9.280000000002104,
-          "gross_loss": 13.860398669999217,
-          "profit_factor": 0.6695334110474492,
-          "max_drawdown": 15.476651644126832,
-          "avg_return_bps": -1.6987588983443729,
-          "avg_duration_sec": 65.27616666666667,
-          "exit_reasons": {
-            "STOP_LOSS": 1,
-            "SIGNAL_REVERSAL": 3,
-            "PROFIT_DECAY_EXIT": 1,
-            "SESSION_SHUTDOWN": 1
-          }
-        },
-        "Absorption_Fade": {
-          "trades": 4,
-          "wins": 4,
-          "losses": 0,
-          "win_rate": 100.0,
-          "gross_pnl": 9.211993200000425,
-          "fees": 2.0406687602039995,
-          "net_pnl": 7.171324439796424,
-          "gross_win": 9.211993200000425,
-          "gross_loss": 0.0,
-          "profit_factor": 99.0,
-          "max_drawdown": 1.9350000000031287,
-          "avg_return_bps": 2.108712176389216,
-          "avg_duration_sec": 16.15625,
-          "exit_reasons": {
-            "SIGNAL_REVERSAL": 1,
-            "TRAILING_STOP": 3
-          }
-        },
-        "AdaptiveML_Taker": {
-          "trades": 1,
-          "wins": 0,
-          "losses": 1,
-          "win_rate": 0.0,
-          "gross_pnl": -7.127106379998323,
-          "fees": 1.0204448795742,
-          "net_pnl": -8.147551259572523,
-          "gross_win": 0.0,
-          "gross_loss": 7.127106379998323,
-          "profit_factor": 0.0,
-          "max_drawdown": 8.279100399573508,
-          "avg_return_bps": -9.579168414266752,
-          "avg_duration_sec": 7.31,
-          "exit_reasons": {
-            "SIGNAL_REVERSAL": 1
-          }
-        },
-        "Composite_Taker": {
-          "trades": 0,
-          "wins": 0,
-          "losses": 0,
-          "win_rate": 0.0,
-          "gross_pnl": 0.0,
-          "fees": 0.0,
-          "net_pnl": 0.0,
-          "gross_win": 0.0,
-          "gross_loss": 0.0,
-          "profit_factor": 0.0,
-          "max_drawdown": 0.0,
-          "avg_return_bps": 0.0,
-          "avg_duration_sec": 0.0,
-          "exit_reasons": {}
-        }
-      }
-    },
-    {
       "filename": "hl_xyz_skhx_l2_20261030_1200.jsonl",
       "filepath": "data/xyz_skhx\\hl_xyz_skhx_l2_20261030_1200.jsonl",
       "coin": "xyz:SKHX",
       "size_mb": 2.7803850173950195,
       "events": 5098,
-      "elapsed_sec": 3.307781457901001,
+      "elapsed_sec": 3.7840535640716553,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -3390,7 +3390,7 @@
       "coin": "xyz:SKHX",
       "size_mb": 0.30872154235839844,
       "events": 586,
-      "elapsed_sec": 0.2891249656677246,
+      "elapsed_sec": 0.2974846363067627,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -3554,7 +3554,7 @@
       "coin": "xyz:SKHX",
       "size_mb": 0.5306224822998047,
       "events": 903,
-      "elapsed_sec": 0.5157756805419922,
+      "elapsed_sec": 0.548499345779419,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -3719,12 +3719,177 @@
       }
     },
     {
+      "filename": "hl_xyz_skhx_l2_20261103_1600.jsonl",
+      "filepath": "data/xyz_skhx\\hl_xyz_skhx_l2_20261103_1600.jsonl",
+      "coin": "xyz:SKHX",
+      "size_mb": 0.601409912109375,
+      "events": 1100,
+      "elapsed_sec": 0.8342292308807373,
+      "error": null,
+      "strategies": {
+        "QDAP_Maker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        },
+        "Composite_Maker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        },
+        "AdaptiveML_Maker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        },
+        "WOBI_Maker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        },
+        "MicroPrice_Maker": {
+          "trades": 18,
+          "wins": 16,
+          "losses": 2,
+          "win_rate": 88.88888888888889,
+          "gross_pnl": 52.87878890000152,
+          "fees": 9.180355343666998,
+          "net_pnl": 43.69843355633452,
+          "gross_win": 67.25178890000116,
+          "gross_loss": 14.372999999999639,
+          "profit_factor": 4.679036311139139,
+          "max_drawdown": 10.373999999997977,
+          "avg_return_bps": 2.8554610851052753,
+          "avg_duration_sec": 18.03588888888889,
+          "exit_reasons": {
+            "TRAILING_STOP": 7,
+            "SIGNAL_REVERSAL": 11
+          }
+        },
+        "MicroPrice_FastFill": {
+          "trades": 6,
+          "wins": 3,
+          "losses": 3,
+          "win_rate": 50.0,
+          "gross_pnl": 0.7889999999992732,
+          "fees": 3.0600187500000002,
+          "net_pnl": -2.271018750000727,
+          "gross_win": 17.568000000000364,
+          "gross_loss": 16.77900000000109,
+          "profit_factor": 1.0470230645449206,
+          "max_drawdown": 14.891913810000915,
+          "avg_return_bps": -0.4459156973563753,
+          "avg_duration_sec": 24.979333333333333,
+          "exit_reasons": {
+            "DEFENSIVE_MAKER_HEDGE": 2,
+            "SIGNAL_REVERSAL": 3,
+            "PROFIT_DECAY_EXIT": 1
+          }
+        },
+        "Absorption_Fade": {
+          "trades": 6,
+          "wins": 5,
+          "losses": 1,
+          "win_rate": 83.33333333333334,
+          "gross_pnl": 5.16637431999939,
+          "fees": 3.5678915393508,
+          "net_pnl": 1.598482780648589,
+          "gross_win": 16.50807699999987,
+          "gross_loss": 11.341702680000477,
+          "profit_factor": 1.4555201688640258,
+          "max_drawdown": 14.518607625099321,
+          "avg_return_bps": 0.313193113049873,
+          "avg_duration_sec": 40.344500000000004,
+          "exit_reasons": {
+            "TRAILING_STOP": 5,
+            "STOP_LOSS": 1
+          }
+        },
+        "AdaptiveML_Taker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        },
+        "Composite_Taker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        }
+      }
+    },
+    {
       "filename": "hl_xyz_skhx_l2_20261102_0200.jsonl",
       "filepath": "data/xyz_skhx\\hl_xyz_skhx_l2_20261102_0200.jsonl",
       "coin": "xyz:SKHX",
       "size_mb": 2.960845947265625,
       "events": 5681,
-      "elapsed_sec": 2.951129674911499,
+      "elapsed_sec": 3.5131797790527344,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -3908,7 +4073,7 @@
       "coin": "xyz:SKHX",
       "size_mb": 4.214947700500488,
       "events": 7487,
-      "elapsed_sec": 4.690340518951416,
+      "elapsed_sec": 5.243240833282471,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -4087,12 +4252,185 @@
       }
     },
     {
+      "filename": "hl_xyz_skhx_l2_20261103_1500.jsonl",
+      "filepath": "data/xyz_skhx\\hl_xyz_skhx_l2_20261103_1500.jsonl",
+      "coin": "xyz:SKHX",
+      "size_mb": 0.923121452331543,
+      "events": 1717,
+      "elapsed_sec": 1.4053230285644531,
+      "error": null,
+      "strategies": {
+        "QDAP_Maker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        },
+        "Composite_Maker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        },
+        "AdaptiveML_Maker": {
+          "trades": 2,
+          "wins": 2,
+          "losses": 0,
+          "win_rate": 100.0,
+          "gross_pnl": 13.535999999998552,
+          "fees": 1.0196236199999997,
+          "net_pnl": 12.516376379998551,
+          "gross_win": 13.535999999998552,
+          "gross_loss": 0.0,
+          "profit_factor": 99.0,
+          "max_drawdown": 1.1954999999979918,
+          "avg_return_bps": 7.365201846805018,
+          "avg_duration_sec": 21.264499999999998,
+          "exit_reasons": {
+            "TRAILING_STOP": 1,
+            "SIGNAL_REVERSAL": 1
+          }
+        },
+        "WOBI_Maker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        },
+        "MicroPrice_Maker": {
+          "trades": 22,
+          "wins": 19,
+          "losses": 3,
+          "win_rate": 86.36363636363636,
+          "gross_pnl": 108.36221452999821,
+          "fees": 12.751348649549698,
+          "net_pnl": 95.61086588044851,
+          "gross_win": 136.28467679999912,
+          "gross_loss": 28.37556660999831,
+          "profit_factor": 4.802888297285255,
+          "max_drawdown": 16.43910482600768,
+          "avg_return_bps": 5.113535599364975,
+          "avg_duration_sec": 18.67309090909091,
+          "exit_reasons": {
+            "SIGNAL_REVERSAL": 11,
+            "TAKE_PROFIT": 3,
+            "TRAILING_STOP": 5,
+            "STOP_LOSS": 2,
+            "SESSION_SHUTDOWN": 1
+          }
+        },
+        "MicroPrice_FastFill": {
+          "trades": 12,
+          "wins": 9,
+          "losses": 3,
+          "win_rate": 75.0,
+          "gross_pnl": 60.337697000002315,
+          "fees": 6.120580430910001,
+          "net_pnl": 54.217116569092326,
+          "gross_win": 80.1876970000023,
+          "gross_loss": 19.85,
+          "profit_factor": 4.03968246851397,
+          "max_drawdown": 22.008014240225748,
+          "avg_return_bps": 5.314422204432493,
+          "avg_duration_sec": 24.847250000000003,
+          "exit_reasons": {
+            "SIGNAL_REVERSAL": 4,
+            "TAKE_PROFIT": 2,
+            "TRAILING_STOP": 3,
+            "DEFENSIVE_MAKER_HEDGE": 3
+          }
+        },
+        "Absorption_Fade": {
+          "trades": 6,
+          "wins": 2,
+          "losses": 4,
+          "win_rate": 33.33333333333333,
+          "gross_pnl": -21.8374900600008,
+          "fees": 4.0788924330006004,
+          "net_pnl": -25.9163824930014,
+          "gross_win": 17.44121489999979,
+          "gross_loss": 39.27870496000059,
+          "profit_factor": 0.4440374222561824,
+          "max_drawdown": 43.44274847219276,
+          "avg_return_bps": -5.079203272578941,
+          "avg_duration_sec": 17.17866666666667,
+          "exit_reasons": {
+            "TRAILING_STOP": 2,
+            "SIGNAL_REVERSAL": 2,
+            "STOP_LOSS": 2
+          }
+        },
+        "AdaptiveML_Taker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        },
+        "Composite_Taker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        }
+      }
+    },
+    {
       "filename": "hl_xyz_skhx_l2_20261102_1200.jsonl",
       "filepath": "data/xyz_skhx\\hl_xyz_skhx_l2_20261102_1200.jsonl",
       "coin": "xyz:SKHX",
       "size_mb": 2.29830265045166,
       "events": 4190,
-      "elapsed_sec": 2.6068291664123535,
+      "elapsed_sec": 3.088324546813965,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -4273,7 +4611,7 @@
       "coin": "xyz:SKHX",
       "size_mb": 5.386349678039551,
       "events": 10009,
-      "elapsed_sec": 6.750448226928711,
+      "elapsed_sec": 7.951284408569336,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -4449,12 +4787,190 @@
       }
     },
     {
+      "filename": "hl_xyz_skhx_l2_20261102_1500.jsonl",
+      "filepath": "data/xyz_skhx/snippets\\hl_xyz_skhx_l2_20261102_1500.jsonl",
+      "coin": "xyz:SKHX",
+      "size_mb": 0.9029207229614258,
+      "events": 1688,
+      "elapsed_sec": 0.9832980632781982,
+      "error": null,
+      "strategies": {
+        "QDAP_Maker": {
+          "trades": 1,
+          "wins": 1,
+          "losses": 0,
+          "win_rate": 100.0,
+          "gross_pnl": 4.265894150001132,
+          "fees": 0.5099424631755,
+          "net_pnl": 3.755951686825632,
+          "gross_win": 4.265894150001132,
+          "gross_loss": 0.0,
+          "profit_factor": 99.0,
+          "max_drawdown": 3.1479999999992287,
+          "avg_return_bps": 4.418156465007812,
+          "avg_duration_sec": 10.503,
+          "exit_reasons": {
+            "TRAILING_STOP": 1
+          }
+        },
+        "Composite_Maker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        },
+        "AdaptiveML_Maker": {
+          "trades": 1,
+          "wins": 1,
+          "losses": 0,
+          "win_rate": 100.0,
+          "gross_pnl": 3.483078199998863,
+          "fees": 0.5103975323459999,
+          "net_pnl": 2.972680667652863,
+          "gross_win": 3.483078199998863,
+          "gross_loss": 0.0,
+          "profit_factor": 99.0,
+          "max_drawdown": 2.363999999997759,
+          "avg_return_bps": 3.495263036689111,
+          "avg_duration_sec": 16.656,
+          "exit_reasons": {
+            "TRAILING_STOP": 1
+          }
+        },
+        "WOBI_Maker": {
+          "trades": 1,
+          "wins": 1,
+          "losses": 0,
+          "win_rate": 100.0,
+          "gross_pnl": 4.265894150001132,
+          "fees": 0.5099424631755,
+          "net_pnl": 3.755951686825632,
+          "gross_win": 4.265894150001132,
+          "gross_loss": 0.0,
+          "profit_factor": 99.0,
+          "max_drawdown": 3.1479999999992287,
+          "avg_return_bps": 4.418156465007812,
+          "avg_duration_sec": 10.503,
+          "exit_reasons": {
+            "TRAILING_STOP": 1
+          }
+        },
+        "MicroPrice_Maker": {
+          "trades": 14,
+          "wins": 10,
+          "losses": 4,
+          "win_rate": 71.42857142857143,
+          "gross_pnl": 33.470728460005816,
+          "fees": 8.6703309219882,
+          "net_pnl": 24.800397538017613,
+          "gross_win": 79.53291884000531,
+          "gross_loss": 46.06219037999951,
+          "profit_factor": 1.726642137160264,
+          "max_drawdown": 20.29223183626891,
+          "avg_return_bps": 2.0869448088042377,
+          "avg_duration_sec": 19.008214285714285,
+          "exit_reasons": {
+            "STOP_LOSS": 2,
+            "SIGNAL_REVERSAL": 6,
+            "TRAILING_STOP": 4,
+            "TAKE_PROFIT": 1,
+            "SESSION_SHUTDOWN": 1
+          }
+        },
+        "MicroPrice_FastFill": {
+          "trades": 10,
+          "wins": 8,
+          "losses": 2,
+          "win_rate": 80.0,
+          "gross_pnl": 42.439185000003924,
+          "fees": 5.100058996062,
+          "net_pnl": 37.33912600394192,
+          "gross_win": 62.09418500000392,
+          "gross_loss": 19.655,
+          "profit_factor": 3.1592055456628803,
+          "max_drawdown": 20.160868859999027,
+          "avg_return_bps": 4.393922399828237,
+          "avg_duration_sec": 22.3249,
+          "exit_reasons": {
+            "TAKE_PROFIT": 2,
+            "TRAILING_STOP": 4,
+            "PROFIT_DECAY_EXIT": 1,
+            "SIGNAL_REVERSAL": 2,
+            "DEFENSIVE_MAKER_HEDGE": 1
+          }
+        },
+        "Absorption_Fade": {
+          "trades": 8,
+          "wins": 7,
+          "losses": 1,
+          "win_rate": 87.5,
+          "gross_pnl": 23.243373250001778,
+          "fees": 4.0802172217454995,
+          "net_pnl": 19.163156028256275,
+          "gross_win": 31.113373250001775,
+          "gross_loss": 7.87,
+          "profit_factor": 3.953414644218777,
+          "max_drawdown": 13.002000000000407,
+          "avg_return_bps": 2.8170372901686602,
+          "avg_duration_sec": 20.845,
+          "exit_reasons": {
+            "TRAILING_STOP": 6,
+            "SIGNAL_REVERSAL": 2
+          }
+        },
+        "AdaptiveML_Taker": {
+          "trades": 1,
+          "wins": 1,
+          "losses": 0,
+          "win_rate": 100.0,
+          "gross_pnl": 2.1938865600009194,
+          "fees": 1.0207668702096,
+          "net_pnl": 1.1731196897913194,
+          "gross_win": 2.1938865600009194,
+          "gross_loss": 0.0,
+          "profit_factor": 99.0,
+          "max_drawdown": 2.363999999997759,
+          "avg_return_bps": 1.3791928819577832,
+          "avg_duration_sec": 16.656,
+          "exit_reasons": {
+            "TRAILING_STOP": 1
+          }
+        },
+        "Composite_Taker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        }
+      }
+    },
+    {
       "filename": "hl_xyz_skhx_l2_20261102_1300.jsonl",
       "filepath": "data/xyz_skhx\\hl_xyz_skhx_l2_20261102_1300.jsonl",
       "coin": "xyz:SKHX",
       "size_mb": 4.076563835144043,
       "events": 6650,
-      "elapsed_sec": 4.0590550899505615,
+      "elapsed_sec": 4.57824182510376,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -4638,7 +5154,7 @@
       "coin": "xyz:SKHY",
       "size_mb": 2.9080963134765625,
       "events": 5543,
-      "elapsed_sec": 3.734034299850464,
+      "elapsed_sec": 4.095731019973755,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -4816,12 +5332,378 @@
       }
     },
     {
+      "filename": "hl_xyz_skhy_l2_20261029_1800.jsonl",
+      "filepath": "data/xyz_skhy\\hl_xyz_skhy_l2_20261029_1800.jsonl",
+      "coin": "xyz:SKHY",
+      "size_mb": 2.781569480895996,
+      "events": 5431,
+      "elapsed_sec": 4.079978942871094,
+      "error": null,
+      "strategies": {
+        "QDAP_Maker": {
+          "trades": 1,
+          "wins": 1,
+          "losses": 0,
+          "win_rate": 100.0,
+          "gross_pnl": 2.6450000000006013,
+          "fees": 0.50995071,
+          "net_pnl": 2.1350492900006013,
+          "gross_win": 2.6450000000006013,
+          "gross_loss": 0.0,
+          "profit_factor": 99.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 2.5116746530593916,
+          "avg_duration_sec": 10.668,
+          "exit_reasons": {
+            "SIGNAL_REVERSAL": 1
+          }
+        },
+        "Composite_Maker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        },
+        "AdaptiveML_Maker": {
+          "trades": 13,
+          "wins": 11,
+          "losses": 2,
+          "win_rate": 84.61538461538461,
+          "gross_pnl": 6.230803711002565,
+          "fees": 7.141856579760209,
+          "net_pnl": -0.9110528687576465,
+          "gross_win": 29.3072185550023,
+          "gross_loss": 23.07641484399974,
+          "profit_factor": 1.2700074406325157,
+          "max_drawdown": 18.479482965334682,
+          "avg_return_bps": -0.08243495833137923,
+          "avg_duration_sec": 23.262923076923077,
+          "exit_reasons": {
+            "SIGNAL_REVERSAL": 6,
+            "TRAILING_STOP": 6,
+            "STOP_LOSS": 1
+          }
+        },
+        "WOBI_Maker": {
+          "trades": 4,
+          "wins": 3,
+          "losses": 1,
+          "win_rate": 75.0,
+          "gross_pnl": 6.816819506000668,
+          "fees": 2.55096252693546,
+          "net_pnl": 4.265856979065209,
+          "gross_win": 22.96813435000065,
+          "gross_loss": 16.15131484399998,
+          "profit_factor": 1.422059725281935,
+          "max_drawdown": 17.184096970335304,
+          "avg_return_bps": 1.2541986105306016,
+          "avg_duration_sec": 34.8255,
+          "exit_reasons": {
+            "TAKE_PROFIT": 1,
+            "STOP_LOSS": 1,
+            "TRAILING_STOP": 2
+          }
+        },
+        "MicroPrice_Maker": {
+          "trades": 57,
+          "wins": 45,
+          "losses": 12,
+          "win_rate": 78.94736842105263,
+          "gross_pnl": 36.29551087899943,
+          "fees": 31.110100997562682,
+          "net_pnl": 5.185409881436748,
+          "gross_win": 143.3051896189974,
+          "gross_loss": 107.00967873999801,
+          "profit_factor": 1.339179701372497,
+          "max_drawdown": 56.14532774665531,
+          "avg_return_bps": 0.10703209032800111,
+          "avg_duration_sec": 39.09589473684211,
+          "exit_reasons": {
+            "SIGNAL_REVERSAL": 41,
+            "TRAILING_STOP": 12,
+            "STOP_LOSS": 3,
+            "SESSION_SHUTDOWN": 1
+          }
+        },
+        "MicroPrice_FastFill": {
+          "trades": 57,
+          "wins": 44,
+          "losses": 13,
+          "win_rate": 77.19298245614034,
+          "gross_pnl": 128.09420786998766,
+          "fees": 29.068746080176496,
+          "net_pnl": 99.02546178981112,
+          "gross_win": 203.68110786998545,
+          "gross_loss": 75.58689999999781,
+          "profit_factor": 2.6946614806268196,
+          "max_drawdown": 26.51394316200458,
+          "avg_return_bps": 2.043793565505464,
+          "avg_duration_sec": 37.28126315789474,
+          "exit_reasons": {
+            "SIGNAL_REVERSAL": 34,
+            "TRAILING_STOP": 8,
+            "DEFENSIVE_MAKER_HEDGE": 12,
+            "TAKE_PROFIT": 1,
+            "PROFIT_DECAY_EXIT": 2
+          }
+        },
+        "Absorption_Fade": {
+          "trades": 7,
+          "wins": 5,
+          "losses": 2,
+          "win_rate": 71.42857142857143,
+          "gross_pnl": 3.3812775600001523,
+          "fees": 4.078090743417301,
+          "net_pnl": -0.6968131834171478,
+          "gross_win": 23.758217459999344,
+          "gross_loss": 20.376939899999194,
+          "profit_factor": 1.1659364741022906,
+          "max_drawdown": 15.064408428674142,
+          "avg_return_bps": -0.11762908401756933,
+          "avg_duration_sec": 73.2087142857143,
+          "exit_reasons": {
+            "TRAILING_STOP": 5,
+            "SIGNAL_REVERSAL": 1,
+            "STOP_LOSS": 1
+          }
+        },
+        "AdaptiveML_Taker": {
+          "trades": 4,
+          "wins": 2,
+          "losses": 2,
+          "win_rate": 50.0,
+          "gross_pnl": 2.890606394003566,
+          "fees": 4.590136734443341,
+          "net_pnl": -1.6995303404397748,
+          "gross_win": 4.994500448001787,
+          "gross_loss": 2.1038940539982214,
+          "profit_factor": 2.3739315382874357,
+          "max_drawdown": 13.8086456779929,
+          "avg_return_bps": -0.4998651801343902,
+          "avg_duration_sec": 76.46725,
+          "exit_reasons": {
+            "TRAILING_STOP": 2,
+            "TIME_LIMIT": 1,
+            "SESSION_SHUTDOWN": 1
+          }
+        },
+        "Composite_Taker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        }
+      }
+    },
+    {
+      "filename": "hl_xyz_skhy_l2_20261029_1900.jsonl",
+      "filepath": "data/xyz_skhy\\hl_xyz_skhy_l2_20261029_1900.jsonl",
+      "coin": "xyz:SKHY",
+      "size_mb": 2.8422327041625977,
+      "events": 5501,
+      "elapsed_sec": 4.080401420593262,
+      "error": null,
+      "strategies": {
+        "QDAP_Maker": {
+          "trades": 1,
+          "wins": 1,
+          "losses": 0,
+          "win_rate": 100.0,
+          "gross_pnl": 4.240000000000663,
+          "fees": 0.5098494,
+          "net_pnl": 3.7301506000006626,
+          "gross_win": 4.240000000000663,
+          "gross_loss": 0.0,
+          "profit_factor": 99.0,
+          "max_drawdown": 2.1200000000008004,
+          "avg_return_bps": 4.388613830517709,
+          "avg_duration_sec": 58.852,
+          "exit_reasons": {
+            "TRAILING_STOP": 1
+          }
+        },
+        "Composite_Maker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        },
+        "AdaptiveML_Maker": {
+          "trades": 4,
+          "wins": 2,
+          "losses": 2,
+          "win_rate": 50.0,
+          "gross_pnl": -10.157644112001671,
+          "fees": 2.5508348964688796,
+          "net_pnl": -12.708479008470551,
+          "gross_win": 8.39737497999893,
+          "gross_loss": 18.5550190920006,
+          "profit_factor": 0.4525662268716925,
+          "max_drawdown": 20.618441230719327,
+          "avg_return_bps": -3.7378737787630723,
+          "avg_duration_sec": 41.70125,
+          "exit_reasons": {
+            "TRAILING_STOP": 1,
+            "SIGNAL_REVERSAL": 2,
+            "STOP_LOSS": 1
+          }
+        },
+        "WOBI_Maker": {
+          "trades": 1,
+          "wins": 1,
+          "losses": 0,
+          "win_rate": 100.0,
+          "gross_pnl": 1.5765000000000597,
+          "fees": 0.5100450449999999,
+          "net_pnl": 1.0664549550000597,
+          "gross_win": 1.5765000000000597,
+          "gross_loss": 0.0,
+          "profit_factor": 99.0,
+          "max_drawdown": 1.0509999999994761,
+          "avg_return_bps": 1.254658423493115,
+          "avg_duration_sec": 10.625,
+          "exit_reasons": {
+            "TRAILING_STOP": 1
+          }
+        },
+        "MicroPrice_Maker": {
+          "trades": 58,
+          "wins": 48,
+          "losses": 10,
+          "win_rate": 82.75862068965517,
+          "gross_pnl": 66.66143212999923,
+          "fees": 31.619915307766856,
+          "net_pnl": 35.04151682223238,
+          "gross_win": 158.7576454099995,
+          "gross_loss": 92.09621328000028,
+          "profit_factor": 1.723823811597208,
+          "max_drawdown": 47.92658465155182,
+          "avg_return_bps": 0.7108138911268173,
+          "avg_duration_sec": 30.530137931034485,
+          "exit_reasons": {
+            "SIGNAL_REVERSAL": 36,
+            "TRAILING_STOP": 18,
+            "STOP_LOSS": 3,
+            "SESSION_SHUTDOWN": 1
+          }
+        },
+        "MicroPrice_FastFill": {
+          "trades": 31,
+          "wins": 15,
+          "losses": 16,
+          "win_rate": 48.38709677419355,
+          "gross_pnl": -33.454206221996444,
+          "fees": 16.83367954280118,
+          "net_pnl": -50.28788576479762,
+          "gross_win": 73.49473320000398,
+          "gross_loss": 106.94893942200041,
+          "profit_factor": 0.6871945958249065,
+          "max_drawdown": 68.7193255540551,
+          "avg_return_bps": -1.9083671132726692,
+          "avg_duration_sec": 39.52654838709677,
+          "exit_reasons": {
+            "PROFIT_DECAY_EXIT": 5,
+            "SIGNAL_REVERSAL": 8,
+            "DEFENSIVE_MAKER_HEDGE": 11,
+            "TRAILING_STOP": 4,
+            "STOP_LOSS": 1,
+            "TAKE_PROFIT": 1,
+            "SESSION_SHUTDOWN": 1
+          }
+        },
+        "Absorption_Fade": {
+          "trades": 13,
+          "wins": 10,
+          "losses": 3,
+          "win_rate": 76.92307692307693,
+          "gross_pnl": 6.387254467003862,
+          "fees": 7.647877649463329,
+          "net_pnl": -1.2606231824594651,
+          "gross_win": 39.931868835002426,
+          "gross_loss": 33.54461436799856,
+          "profit_factor": 1.19041072873675,
+          "max_drawdown": 18.05911783623378,
+          "avg_return_bps": -0.11390853027375482,
+          "avg_duration_sec": 35.05246153846154,
+          "exit_reasons": {
+            "TRAILING_STOP": 10,
+            "STOP_LOSS": 2,
+            "SIGNAL_REVERSAL": 1
+          }
+        },
+        "AdaptiveML_Taker": {
+          "trades": 1,
+          "wins": 1,
+          "losses": 0,
+          "win_rate": 100.0,
+          "gross_pnl": 6.6757924560021324,
+          "fees": 1.0202659386789599,
+          "net_pnl": 5.655526517323173,
+          "gross_win": 6.6757924560021324,
+          "gross_loss": 0.0,
+          "profit_factor": 99.0,
+          "max_drawdown": 3.68619999999828,
+          "avg_return_bps": 6.6531322975349765,
+          "avg_duration_sec": 43.502,
+          "exit_reasons": {
+            "TRAILING_STOP": 1
+          }
+        },
+        "Composite_Taker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        }
+      }
+    },
+    {
       "filename": "hl_xyz_skhy_l2_20261029_2300.jsonl",
-      "filepath": "data/xyz_skhy/snippets/hl_xyz_skhy_l2_20261029_2300.jsonl",
+      "filepath": "data/xyz_skhy/snippets\\hl_xyz_skhy_l2_20261029_2300.jsonl",
       "coin": "xyz:SKHY",
       "size_mb": 1.737849235534668,
       "events": 3148,
-      "elapsed_sec": 1.884230613708496,
+      "elapsed_sec": 1.9594898223876953,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -5006,574 +5888,12 @@
       }
     },
     {
-      "filename": "hl_xyz_skhy_l2_20261029_1800.jsonl",
-      "filepath": "data/xyz_skhy\\hl_xyz_skhy_l2_20261029_1800.jsonl",
-      "coin": "xyz:SKHY",
-      "size_mb": 2.781569480895996,
-      "events": 5431,
-      "elapsed_sec": 3.915254831314087,
-      "error": null,
-      "strategies": {
-        "QDAP_Maker": {
-          "trades": 1,
-          "wins": 1,
-          "losses": 0,
-          "win_rate": 100.0,
-          "gross_pnl": 2.6450000000006013,
-          "fees": 0.50995071,
-          "net_pnl": 2.1350492900006013,
-          "gross_win": 2.6450000000006013,
-          "gross_loss": 0.0,
-          "profit_factor": 99.0,
-          "max_drawdown": 0.0,
-          "avg_return_bps": 2.5116746530593916,
-          "avg_duration_sec": 10.668,
-          "exit_reasons": {
-            "SIGNAL_REVERSAL": 1
-          }
-        },
-        "Composite_Maker": {
-          "trades": 0,
-          "wins": 0,
-          "losses": 0,
-          "win_rate": 0.0,
-          "gross_pnl": 0.0,
-          "fees": 0.0,
-          "net_pnl": 0.0,
-          "gross_win": 0.0,
-          "gross_loss": 0.0,
-          "profit_factor": 0.0,
-          "max_drawdown": 0.0,
-          "avg_return_bps": 0.0,
-          "avg_duration_sec": 0.0,
-          "exit_reasons": {}
-        },
-        "AdaptiveML_Maker": {
-          "trades": 13,
-          "wins": 11,
-          "losses": 2,
-          "win_rate": 84.61538461538461,
-          "gross_pnl": 6.230803711002565,
-          "fees": 7.141856579760209,
-          "net_pnl": -0.9110528687576465,
-          "gross_win": 29.3072185550023,
-          "gross_loss": 23.07641484399974,
-          "profit_factor": 1.2700074406325157,
-          "max_drawdown": 18.479482965334682,
-          "avg_return_bps": -0.08243495833137923,
-          "avg_duration_sec": 23.262923076923077,
-          "exit_reasons": {
-            "SIGNAL_REVERSAL": 6,
-            "TRAILING_STOP": 6,
-            "STOP_LOSS": 1
-          }
-        },
-        "WOBI_Maker": {
-          "trades": 4,
-          "wins": 3,
-          "losses": 1,
-          "win_rate": 75.0,
-          "gross_pnl": 6.816819506000668,
-          "fees": 2.55096252693546,
-          "net_pnl": 4.265856979065209,
-          "gross_win": 22.96813435000065,
-          "gross_loss": 16.15131484399998,
-          "profit_factor": 1.422059725281935,
-          "max_drawdown": 17.184096970335304,
-          "avg_return_bps": 1.2541986105306016,
-          "avg_duration_sec": 34.8255,
-          "exit_reasons": {
-            "TAKE_PROFIT": 1,
-            "STOP_LOSS": 1,
-            "TRAILING_STOP": 2
-          }
-        },
-        "MicroPrice_Maker": {
-          "trades": 57,
-          "wins": 45,
-          "losses": 12,
-          "win_rate": 78.94736842105263,
-          "gross_pnl": 36.29551087899943,
-          "fees": 31.110100997562682,
-          "net_pnl": 5.185409881436748,
-          "gross_win": 143.3051896189974,
-          "gross_loss": 107.00967873999801,
-          "profit_factor": 1.339179701372497,
-          "max_drawdown": 56.14532774665531,
-          "avg_return_bps": 0.10703209032800111,
-          "avg_duration_sec": 39.09589473684211,
-          "exit_reasons": {
-            "SIGNAL_REVERSAL": 41,
-            "TRAILING_STOP": 12,
-            "STOP_LOSS": 3,
-            "SESSION_SHUTDOWN": 1
-          }
-        },
-        "MicroPrice_FastFill": {
-          "trades": 57,
-          "wins": 44,
-          "losses": 13,
-          "win_rate": 77.19298245614034,
-          "gross_pnl": 128.09420786998766,
-          "fees": 29.068746080176496,
-          "net_pnl": 99.02546178981112,
-          "gross_win": 203.68110786998545,
-          "gross_loss": 75.58689999999781,
-          "profit_factor": 2.6946614806268196,
-          "max_drawdown": 26.51394316200458,
-          "avg_return_bps": 2.043793565505464,
-          "avg_duration_sec": 37.28126315789474,
-          "exit_reasons": {
-            "SIGNAL_REVERSAL": 34,
-            "TRAILING_STOP": 8,
-            "DEFENSIVE_MAKER_HEDGE": 12,
-            "TAKE_PROFIT": 1,
-            "PROFIT_DECAY_EXIT": 2
-          }
-        },
-        "Absorption_Fade": {
-          "trades": 7,
-          "wins": 5,
-          "losses": 2,
-          "win_rate": 71.42857142857143,
-          "gross_pnl": 3.3812775600001523,
-          "fees": 4.078090743417301,
-          "net_pnl": -0.6968131834171478,
-          "gross_win": 23.758217459999344,
-          "gross_loss": 20.376939899999194,
-          "profit_factor": 1.1659364741022906,
-          "max_drawdown": 15.064408428674142,
-          "avg_return_bps": -0.11762908401756933,
-          "avg_duration_sec": 73.2087142857143,
-          "exit_reasons": {
-            "TRAILING_STOP": 5,
-            "SIGNAL_REVERSAL": 1,
-            "STOP_LOSS": 1
-          }
-        },
-        "AdaptiveML_Taker": {
-          "trades": 4,
-          "wins": 2,
-          "losses": 2,
-          "win_rate": 50.0,
-          "gross_pnl": 2.890606394003566,
-          "fees": 4.590136734443341,
-          "net_pnl": -1.6995303404397748,
-          "gross_win": 4.994500448001787,
-          "gross_loss": 2.1038940539982214,
-          "profit_factor": 2.3739315382874357,
-          "max_drawdown": 13.8086456779929,
-          "avg_return_bps": -0.4998651801343902,
-          "avg_duration_sec": 76.46725,
-          "exit_reasons": {
-            "TRAILING_STOP": 2,
-            "TIME_LIMIT": 1,
-            "SESSION_SHUTDOWN": 1
-          }
-        },
-        "Composite_Taker": {
-          "trades": 0,
-          "wins": 0,
-          "losses": 0,
-          "win_rate": 0.0,
-          "gross_pnl": 0.0,
-          "fees": 0.0,
-          "net_pnl": 0.0,
-          "gross_win": 0.0,
-          "gross_loss": 0.0,
-          "profit_factor": 0.0,
-          "max_drawdown": 0.0,
-          "avg_return_bps": 0.0,
-          "avg_duration_sec": 0.0,
-          "exit_reasons": {}
-        }
-      }
-    },
-    {
-      "filename": "hl_xyz_skhy_l2_20261029_1900.jsonl",
-      "filepath": "data/xyz_skhy\\hl_xyz_skhy_l2_20261029_1900.jsonl",
-      "coin": "xyz:SKHY",
-      "size_mb": 2.8422327041625977,
-      "events": 5501,
-      "elapsed_sec": 3.6323862075805664,
-      "error": null,
-      "strategies": {
-        "QDAP_Maker": {
-          "trades": 1,
-          "wins": 1,
-          "losses": 0,
-          "win_rate": 100.0,
-          "gross_pnl": 4.240000000000663,
-          "fees": 0.5098494,
-          "net_pnl": 3.7301506000006626,
-          "gross_win": 4.240000000000663,
-          "gross_loss": 0.0,
-          "profit_factor": 99.0,
-          "max_drawdown": 2.1200000000008004,
-          "avg_return_bps": 4.388613830517709,
-          "avg_duration_sec": 58.852,
-          "exit_reasons": {
-            "TRAILING_STOP": 1
-          }
-        },
-        "Composite_Maker": {
-          "trades": 0,
-          "wins": 0,
-          "losses": 0,
-          "win_rate": 0.0,
-          "gross_pnl": 0.0,
-          "fees": 0.0,
-          "net_pnl": 0.0,
-          "gross_win": 0.0,
-          "gross_loss": 0.0,
-          "profit_factor": 0.0,
-          "max_drawdown": 0.0,
-          "avg_return_bps": 0.0,
-          "avg_duration_sec": 0.0,
-          "exit_reasons": {}
-        },
-        "AdaptiveML_Maker": {
-          "trades": 4,
-          "wins": 2,
-          "losses": 2,
-          "win_rate": 50.0,
-          "gross_pnl": -10.157644112001671,
-          "fees": 2.5508348964688796,
-          "net_pnl": -12.708479008470551,
-          "gross_win": 8.39737497999893,
-          "gross_loss": 18.5550190920006,
-          "profit_factor": 0.4525662268716925,
-          "max_drawdown": 20.618441230719327,
-          "avg_return_bps": -3.7378737787630723,
-          "avg_duration_sec": 41.70125,
-          "exit_reasons": {
-            "TRAILING_STOP": 1,
-            "SIGNAL_REVERSAL": 2,
-            "STOP_LOSS": 1
-          }
-        },
-        "WOBI_Maker": {
-          "trades": 1,
-          "wins": 1,
-          "losses": 0,
-          "win_rate": 100.0,
-          "gross_pnl": 1.5765000000000597,
-          "fees": 0.5100450449999999,
-          "net_pnl": 1.0664549550000597,
-          "gross_win": 1.5765000000000597,
-          "gross_loss": 0.0,
-          "profit_factor": 99.0,
-          "max_drawdown": 1.0509999999994761,
-          "avg_return_bps": 1.254658423493115,
-          "avg_duration_sec": 10.625,
-          "exit_reasons": {
-            "TRAILING_STOP": 1
-          }
-        },
-        "MicroPrice_Maker": {
-          "trades": 58,
-          "wins": 48,
-          "losses": 10,
-          "win_rate": 82.75862068965517,
-          "gross_pnl": 66.66143212999923,
-          "fees": 31.619915307766856,
-          "net_pnl": 35.04151682223238,
-          "gross_win": 158.7576454099995,
-          "gross_loss": 92.09621328000028,
-          "profit_factor": 1.723823811597208,
-          "max_drawdown": 47.92658465155182,
-          "avg_return_bps": 0.7108138911268173,
-          "avg_duration_sec": 30.530137931034485,
-          "exit_reasons": {
-            "SIGNAL_REVERSAL": 36,
-            "TRAILING_STOP": 18,
-            "STOP_LOSS": 3,
-            "SESSION_SHUTDOWN": 1
-          }
-        },
-        "MicroPrice_FastFill": {
-          "trades": 31,
-          "wins": 15,
-          "losses": 16,
-          "win_rate": 48.38709677419355,
-          "gross_pnl": -33.454206221996444,
-          "fees": 16.83367954280118,
-          "net_pnl": -50.28788576479762,
-          "gross_win": 73.49473320000398,
-          "gross_loss": 106.94893942200041,
-          "profit_factor": 0.6871945958249065,
-          "max_drawdown": 68.7193255540551,
-          "avg_return_bps": -1.9083671132726692,
-          "avg_duration_sec": 39.52654838709677,
-          "exit_reasons": {
-            "PROFIT_DECAY_EXIT": 5,
-            "SIGNAL_REVERSAL": 8,
-            "DEFENSIVE_MAKER_HEDGE": 11,
-            "TRAILING_STOP": 4,
-            "STOP_LOSS": 1,
-            "TAKE_PROFIT": 1,
-            "SESSION_SHUTDOWN": 1
-          }
-        },
-        "Absorption_Fade": {
-          "trades": 13,
-          "wins": 10,
-          "losses": 3,
-          "win_rate": 76.92307692307693,
-          "gross_pnl": 6.387254467003862,
-          "fees": 7.647877649463329,
-          "net_pnl": -1.2606231824594651,
-          "gross_win": 39.931868835002426,
-          "gross_loss": 33.54461436799856,
-          "profit_factor": 1.19041072873675,
-          "max_drawdown": 18.05911783623378,
-          "avg_return_bps": -0.11390853027375482,
-          "avg_duration_sec": 35.05246153846154,
-          "exit_reasons": {
-            "TRAILING_STOP": 10,
-            "STOP_LOSS": 2,
-            "SIGNAL_REVERSAL": 1
-          }
-        },
-        "AdaptiveML_Taker": {
-          "trades": 1,
-          "wins": 1,
-          "losses": 0,
-          "win_rate": 100.0,
-          "gross_pnl": 6.6757924560021324,
-          "fees": 1.0202659386789599,
-          "net_pnl": 5.655526517323173,
-          "gross_win": 6.6757924560021324,
-          "gross_loss": 0.0,
-          "profit_factor": 99.0,
-          "max_drawdown": 3.68619999999828,
-          "avg_return_bps": 6.6531322975349765,
-          "avg_duration_sec": 43.502,
-          "exit_reasons": {
-            "TRAILING_STOP": 1
-          }
-        },
-        "Composite_Taker": {
-          "trades": 0,
-          "wins": 0,
-          "losses": 0,
-          "win_rate": 0.0,
-          "gross_pnl": 0.0,
-          "fees": 0.0,
-          "net_pnl": 0.0,
-          "gross_win": 0.0,
-          "gross_loss": 0.0,
-          "profit_factor": 0.0,
-          "max_drawdown": 0.0,
-          "avg_return_bps": 0.0,
-          "avg_duration_sec": 0.0,
-          "exit_reasons": {}
-        }
-      }
-    },
-    {
-      "filename": "hl_xyz_skhy_l2_20261029_2000.jsonl",
-      "filepath": "data/xyz_skhy\\hl_xyz_skhy_l2_20261029_2000.jsonl",
-      "coin": "xyz:SKHY",
-      "size_mb": 6.907613754272461,
-      "events": 10048,
-      "elapsed_sec": 5.867593288421631,
-      "error": null,
-      "strategies": {
-        "QDAP_Maker": {
-          "trades": 11,
-          "wins": 9,
-          "losses": 2,
-          "win_rate": 81.81818181818183,
-          "gross_pnl": 51.59009671300275,
-          "fees": 6.1201030626588295,
-          "net_pnl": 45.46999365034392,
-          "gross_win": 71.54162802500076,
-          "gross_loss": 19.951531311998018,
-          "profit_factor": 3.5857712827274875,
-          "max_drawdown": 21.681518508819863,
-          "avg_return_bps": 4.862674597039652,
-          "avg_duration_sec": 14.95790909090909,
-          "exit_reasons": {
-            "SIGNAL_REVERSAL": 7,
-            "TRAILING_STOP": 2,
-            "STOP_LOSS": 1,
-            "TAKE_PROFIT": 1
-          }
-        },
-        "Composite_Maker": {
-          "trades": 1,
-          "wins": 1,
-          "losses": 0,
-          "win_rate": 100.0,
-          "gross_pnl": 27.10139999999952,
-          "fees": 0.509235306,
-          "net_pnl": 26.592164693999518,
-          "gross_win": 27.10139999999952,
-          "gross_loss": 0.0,
-          "profit_factor": 99.0,
-          "max_drawdown": 0.5313999999998487,
-          "avg_return_bps": 31.281934112645555,
-          "avg_duration_sec": 22.622,
-          "exit_reasons": {
-            "TAKE_PROFIT": 1
-          }
-        },
-        "AdaptiveML_Maker": {
-          "trades": 28,
-          "wins": 23,
-          "losses": 5,
-          "win_rate": 82.14285714285714,
-          "gross_pnl": 145.96492779600973,
-          "fees": 17.33897031164118,
-          "net_pnl": 128.62595748436854,
-          "gross_win": 220.48404493800578,
-          "gross_loss": 74.519117141996,
-          "profit_factor": 2.9587581468239077,
-          "max_drawdown": 23.318161836386935,
-          "avg_return_bps": 5.404024769319652,
-          "avg_duration_sec": 15.98382142857143,
-          "exit_reasons": {
-            "SIGNAL_REVERSAL": 5,
-            "TRAILING_STOP": 11,
-            "TAKE_PROFIT": 6,
-            "STOP_LOSS": 5,
-            "SESSION_SHUTDOWN": 1
-          }
-        },
-        "WOBI_Maker": {
-          "trades": 17,
-          "wins": 13,
-          "losses": 4,
-          "win_rate": 76.47058823529412,
-          "gross_pnl": 54.64440447400799,
-          "fees": 10.20144489779004,
-          "net_pnl": 44.44295957621795,
-          "gross_win": 106.95378601000556,
-          "gross_loss": 52.30938153599756,
-          "profit_factor": 2.0446387028377226,
-          "max_drawdown": 22.838315745131695,
-          "avg_return_bps": 3.0757164248730455,
-          "avg_duration_sec": 18.083882352941174,
-          "exit_reasons": {
-            "SIGNAL_REVERSAL": 6,
-            "TAKE_PROFIT": 2,
-            "STOP_LOSS": 3,
-            "TRAILING_STOP": 6
-          }
-        },
-        "MicroPrice_Maker": {
-          "trades": 90,
-          "wins": 68,
-          "losses": 22,
-          "win_rate": 75.55555555555556,
-          "gross_pnl": 231.65851893401614,
-          "fees": 56.087997866869074,
-          "net_pnl": 175.5705210671471,
-          "gross_win": 541.1678603800113,
-          "gross_loss": 309.50934144599523,
-          "profit_factor": 1.748470200775627,
-          "max_drawdown": 70.16007119242568,
-          "avg_return_bps": 2.2950230369811706,
-          "avg_duration_sec": 14.45198888888889,
-          "exit_reasons": {
-            "TRAILING_STOP": 24,
-            "SIGNAL_REVERSAL": 41,
-            "STOP_LOSS": 19,
-            "TAKE_PROFIT": 5,
-            "SESSION_SHUTDOWN": 1
-          }
-        },
-        "MicroPrice_FastFill": {
-          "trades": 60,
-          "wins": 40,
-          "losses": 20,
-          "win_rate": 66.66666666666666,
-          "gross_pnl": 254.18503509801295,
-          "fees": 33.14608389851898,
-          "net_pnl": 221.03895119949405,
-          "gross_win": 421.96040132000746,
-          "gross_loss": 167.7753662219944,
-          "profit_factor": 2.515031919296689,
-          "max_drawdown": 43.56223945104648,
-          "avg_return_bps": 4.334028184377107,
-          "avg_duration_sec": 14.84025,
-          "exit_reasons": {
-            "TRAILING_STOP": 8,
-            "SIGNAL_REVERSAL": 16,
-            "DEFENSIVE_MAKER_HEDGE": 14,
-            "TAKE_PROFIT": 16,
-            "STOP_LOSS": 5,
-            "PROFIT_DECAY_EXIT": 1
-          }
-        },
-        "Absorption_Fade": {
-          "trades": 50,
-          "wins": 34,
-          "losses": 16,
-          "win_rate": 68.0,
-          "gross_pnl": 137.00919810400904,
-          "fees": 30.08017873806732,
-          "net_pnl": 106.92901936594167,
-          "gross_win": 330.42597523000455,
-          "gross_loss": 193.4167771259955,
-          "profit_factor": 1.7083625326605383,
-          "max_drawdown": 45.18868852271771,
-          "avg_return_bps": 2.515730237234206,
-          "avg_duration_sec": 15.971140000000005,
-          "exit_reasons": {
-            "STOP_LOSS": 9,
-            "TRAILING_STOP": 22,
-            "SIGNAL_REVERSAL": 10,
-            "TAKE_PROFIT": 9
-          }
-        },
-        "AdaptiveML_Taker": {
-          "trades": 11,
-          "wins": 6,
-          "losses": 5,
-          "win_rate": 54.54545454545454,
-          "gross_pnl": 11.437601138004508,
-          "fees": 12.74931595452462,
-          "net_pnl": -1.3117148165201207,
-          "gross_win": 70.37587461800139,
-          "gross_loss": 58.93827347999688,
-          "profit_factor": 1.1940606750533052,
-          "max_drawdown": 63.68968545880671,
-          "avg_return_bps": -0.1396688285435606,
-          "avg_duration_sec": 17.082818181818183,
-          "exit_reasons": {
-            "TRAILING_STOP": 5,
-            "TAKE_PROFIT": 2,
-            "STOP_LOSS": 3,
-            "SIGNAL_REVERSAL": 1
-          }
-        },
-        "Composite_Taker": {
-          "trades": 0,
-          "wins": 0,
-          "losses": 0,
-          "win_rate": 0.0,
-          "gross_pnl": 0.0,
-          "fees": 0.0,
-          "net_pnl": 0.0,
-          "gross_win": 0.0,
-          "gross_loss": 0.0,
-          "profit_factor": 0.0,
-          "max_drawdown": 0.0,
-          "avg_return_bps": 0.0,
-          "avg_duration_sec": 0.0,
-          "exit_reasons": {}
-        }
-      }
-    },
-    {
       "filename": "hl_xyz_skhy_l2_20261029_2200.jsonl",
       "filepath": "data/xyz_skhy\\hl_xyz_skhy_l2_20261029_2200.jsonl",
       "coin": "xyz:SKHY",
       "size_mb": 4.563737869262695,
       "events": 9482,
-      "elapsed_sec": 5.290019750595093,
+      "elapsed_sec": 5.746830701828003,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -5765,7 +6085,7 @@
       "coin": "xyz:SKHY",
       "size_mb": 5.067378997802734,
       "events": 9810,
-      "elapsed_sec": 5.59173059463501,
+      "elapsed_sec": 6.2190024852752686,
       "error": null,
       "strategies": {
         "QDAP_Maker": {
@@ -5929,6 +6249,202 @@
             "TRAILING_STOP": 2,
             "SIGNAL_REVERSAL": 6,
             "STOP_LOSS": 1
+          }
+        },
+        "Composite_Taker": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "gross_pnl": 0.0,
+          "fees": 0.0,
+          "net_pnl": 0.0,
+          "gross_win": 0.0,
+          "gross_loss": 0.0,
+          "profit_factor": 0.0,
+          "max_drawdown": 0.0,
+          "avg_return_bps": 0.0,
+          "avg_duration_sec": 0.0,
+          "exit_reasons": {}
+        }
+      }
+    },
+    {
+      "filename": "hl_xyz_skhy_l2_20261029_2000.jsonl",
+      "filepath": "data/xyz_skhy\\hl_xyz_skhy_l2_20261029_2000.jsonl",
+      "coin": "xyz:SKHY",
+      "size_mb": 6.907613754272461,
+      "events": 10048,
+      "elapsed_sec": 6.533915281295776,
+      "error": null,
+      "strategies": {
+        "QDAP_Maker": {
+          "trades": 11,
+          "wins": 9,
+          "losses": 2,
+          "win_rate": 81.81818181818183,
+          "gross_pnl": 51.59009671300275,
+          "fees": 6.1201030626588295,
+          "net_pnl": 45.46999365034392,
+          "gross_win": 71.54162802500076,
+          "gross_loss": 19.951531311998018,
+          "profit_factor": 3.5857712827274875,
+          "max_drawdown": 21.681518508819863,
+          "avg_return_bps": 4.862674597039652,
+          "avg_duration_sec": 14.95790909090909,
+          "exit_reasons": {
+            "SIGNAL_REVERSAL": 7,
+            "TRAILING_STOP": 2,
+            "STOP_LOSS": 1,
+            "TAKE_PROFIT": 1
+          }
+        },
+        "Composite_Maker": {
+          "trades": 1,
+          "wins": 1,
+          "losses": 0,
+          "win_rate": 100.0,
+          "gross_pnl": 27.10139999999952,
+          "fees": 0.509235306,
+          "net_pnl": 26.592164693999518,
+          "gross_win": 27.10139999999952,
+          "gross_loss": 0.0,
+          "profit_factor": 99.0,
+          "max_drawdown": 0.5313999999998487,
+          "avg_return_bps": 31.281934112645555,
+          "avg_duration_sec": 22.622,
+          "exit_reasons": {
+            "TAKE_PROFIT": 1
+          }
+        },
+        "AdaptiveML_Maker": {
+          "trades": 28,
+          "wins": 23,
+          "losses": 5,
+          "win_rate": 82.14285714285714,
+          "gross_pnl": 145.96492779600973,
+          "fees": 17.33897031164118,
+          "net_pnl": 128.62595748436854,
+          "gross_win": 220.48404493800578,
+          "gross_loss": 74.519117141996,
+          "profit_factor": 2.9587581468239077,
+          "max_drawdown": 23.318161836386935,
+          "avg_return_bps": 5.404024769319652,
+          "avg_duration_sec": 15.98382142857143,
+          "exit_reasons": {
+            "SIGNAL_REVERSAL": 5,
+            "TRAILING_STOP": 11,
+            "TAKE_PROFIT": 6,
+            "STOP_LOSS": 5,
+            "SESSION_SHUTDOWN": 1
+          }
+        },
+        "WOBI_Maker": {
+          "trades": 17,
+          "wins": 13,
+          "losses": 4,
+          "win_rate": 76.47058823529412,
+          "gross_pnl": 54.64440447400799,
+          "fees": 10.20144489779004,
+          "net_pnl": 44.44295957621795,
+          "gross_win": 106.95378601000556,
+          "gross_loss": 52.30938153599756,
+          "profit_factor": 2.0446387028377226,
+          "max_drawdown": 22.838315745131695,
+          "avg_return_bps": 3.0757164248730455,
+          "avg_duration_sec": 18.083882352941174,
+          "exit_reasons": {
+            "SIGNAL_REVERSAL": 6,
+            "TAKE_PROFIT": 2,
+            "STOP_LOSS": 3,
+            "TRAILING_STOP": 6
+          }
+        },
+        "MicroPrice_Maker": {
+          "trades": 90,
+          "wins": 68,
+          "losses": 22,
+          "win_rate": 75.55555555555556,
+          "gross_pnl": 231.65851893401614,
+          "fees": 56.087997866869074,
+          "net_pnl": 175.5705210671471,
+          "gross_win": 541.1678603800113,
+          "gross_loss": 309.50934144599523,
+          "profit_factor": 1.748470200775627,
+          "max_drawdown": 70.16007119242568,
+          "avg_return_bps": 2.2950230369811706,
+          "avg_duration_sec": 14.45198888888889,
+          "exit_reasons": {
+            "TRAILING_STOP": 24,
+            "SIGNAL_REVERSAL": 41,
+            "STOP_LOSS": 19,
+            "TAKE_PROFIT": 5,
+            "SESSION_SHUTDOWN": 1
+          }
+        },
+        "MicroPrice_FastFill": {
+          "trades": 60,
+          "wins": 40,
+          "losses": 20,
+          "win_rate": 66.66666666666666,
+          "gross_pnl": 254.18503509801295,
+          "fees": 33.14608389851898,
+          "net_pnl": 221.03895119949405,
+          "gross_win": 421.96040132000746,
+          "gross_loss": 167.7753662219944,
+          "profit_factor": 2.515031919296689,
+          "max_drawdown": 43.56223945104648,
+          "avg_return_bps": 4.334028184377107,
+          "avg_duration_sec": 14.84025,
+          "exit_reasons": {
+            "TRAILING_STOP": 8,
+            "SIGNAL_REVERSAL": 16,
+            "DEFENSIVE_MAKER_HEDGE": 14,
+            "TAKE_PROFIT": 16,
+            "STOP_LOSS": 5,
+            "PROFIT_DECAY_EXIT": 1
+          }
+        },
+        "Absorption_Fade": {
+          "trades": 50,
+          "wins": 34,
+          "losses": 16,
+          "win_rate": 68.0,
+          "gross_pnl": 137.00919810400904,
+          "fees": 30.08017873806732,
+          "net_pnl": 106.92901936594167,
+          "gross_win": 330.42597523000455,
+          "gross_loss": 193.4167771259955,
+          "profit_factor": 1.7083625326605383,
+          "max_drawdown": 45.18868852271771,
+          "avg_return_bps": 2.515730237234206,
+          "avg_duration_sec": 15.971140000000005,
+          "exit_reasons": {
+            "STOP_LOSS": 9,
+            "TRAILING_STOP": 22,
+            "SIGNAL_REVERSAL": 10,
+            "TAKE_PROFIT": 9
+          }
+        },
+        "AdaptiveML_Taker": {
+          "trades": 11,
+          "wins": 6,
+          "losses": 5,
+          "win_rate": 54.54545454545454,
+          "gross_pnl": 11.437601138004508,
+          "fees": 12.74931595452462,
+          "net_pnl": -1.3117148165201207,
+          "gross_win": 70.37587461800139,
+          "gross_loss": 58.93827347999688,
+          "profit_factor": 1.1940606750533052,
+          "max_drawdown": 63.68968545880671,
+          "avg_return_bps": -0.1396688285435606,
+          "avg_duration_sec": 17.082818181818183,
+          "exit_reasons": {
+            "TRAILING_STOP": 5,
+            "TAKE_PROFIT": 2,
+            "STOP_LOSS": 3,
+            "SIGNAL_REVERSAL": 1
           }
         },
         "Composite_Taker": {
