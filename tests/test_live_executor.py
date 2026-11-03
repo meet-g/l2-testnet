@@ -19,6 +19,7 @@ from engine.live_executor import LiveOrderExecutor
 class TestLiveOrderExecutor(unittest.TestCase):
     def setUp(self):
         self.cfg = AppConfig()
+        self.cfg.strategies.live_execution.priority_fee_bps = 0.0
         # Mock eth_account and Hyperliquid network calls so tests run isolated & fast
         with patch("engine.live_executor.eth_account.Account.from_key"), \
              patch("engine.live_executor.Info"), \

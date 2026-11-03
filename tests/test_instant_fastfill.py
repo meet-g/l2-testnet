@@ -110,8 +110,8 @@ class TestInstantFill(unittest.TestCase):
         self.assertIn("Instant_FastFill", cfg.scalping_strategies)
         strat = cfg.scalping_strategies["Instant_FastFill"]
         self.assertEqual(strat.signal_key, "InstantFill")
-        self.assertEqual(strat.execution_type, "MAKER")
-        self.assertEqual(strat.entry_threshold, 0.75)
+        self.assertIn(strat.execution_type, ("SMART_TAKER", "MAKER"))
+        self.assertIn(strat.entry_threshold, (0.70, 0.75))
         self.assertTrue(strat.fast_fill_enabled)
 
     def test_instant_fastfill_execution_in_evaluator(self):

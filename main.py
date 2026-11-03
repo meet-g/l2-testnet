@@ -125,6 +125,7 @@ class L2EngineRunner:
                 auditor=self.auditor,
                 strategy_name=active_name,
                 non_blocking=True,
+                priority_fee_bps=self.config.strategies.live_execution.priority_fee_bps,
             )
 
         self.dashboard = TerminalDashboard(console=self.console)
@@ -1003,6 +1004,20 @@ def check_hyperliquid_account(
     except Exception:
         pass
 
+    # Query undelegated staking balance (used for priority fee gas burns)
+    staking_hype = 0.0
+    try:
+        resp_stake = requests.post(
+            rest_url,
+            json={"type": "delegatorSummary", "user": acct_address},
+            timeout=8,
+        )
+        if resp_stake.status_code == 200:
+            stake_data = resp_stake.json()
+            staking_hype = float(stake_data.get("undelegated", 0.0))
+    except Exception:
+        pass
+
     # Display Balance Table
     bal_table = Table(title="Account Margin & Collateral Summary", box=None, padding=(0, 2))
     bal_table.add_column("Metric", justify="left")
@@ -1013,6 +1028,7 @@ def check_hyperliquid_account(
     bal_table.add_row("Perp Margin Used", f"[yellow]${margin_used:,.2f}[/yellow]")
     bal_table.add_row("Perp Notional Position Value", f"${total_ntl_pos:,.2f}")
     bal_table.add_row("Spot USDC Balance", f"[bold cyan]${spot_usdc:,.2f}[/bold cyan]")
+    bal_table.add_row("Undelegated Staking Balance (HYPE Gas)", f"[bold yellow]{staking_hype:.4f} HYPE[/bold yellow]")
     console.print(bal_table)
     console.print()
 
@@ -1683,6 +1699,12 @@ def main():
         default=None,
         help="Custom maker fee in bps (e.g. 0.3 for 0.003%% on XYZ stocks like SKHYNIX, 1.5 for crypto)",
     )
+    parser.add_argument(
+        "--priority-fee",
+        type=float,
+        default=None,
+        help="Sequencer priority fee in bps (e.g. 0.5 for Tier 1: p=5,000, 1.0 for Tier 2: p=10,000). Deducted from undelegated staking balance.",
+    )
     args = parser.parse_args()
 
     cfg = AppConfig()
@@ -1718,6 +1740,8 @@ def main():
         cfg.account.account_address = args.account.strip()
     if args.secret_key:
         cfg.account.secret_key = args.secret_key.strip()
+    if args.priority_fee is not None:
+        cfg.strategies.live_execution.priority_fee_bps = float(args.priority_fee)
     
     # Configure asset and fee schedule (auto-detects XYZ stocks like SKHYNIX)
     is_stock_override = True if args.xyz_stock else None
@@ -1824,7 +1848,13 @@ def main():
 
     elif args.mode == "place-order":
         from engine.live_executor import LiveOrderExecutor
-        executor = LiveOrderExecutor(config=cfg, console=console, default_order_size_btc=args.order_size)
+        p_fee = args.priority_fee if args.priority_fee is not None else cfg.strategies.live_execution.priority_fee_bps
+        executor = LiveOrderExecutor(
+            config=cfg,
+            console=console,
+            default_order_size_btc=args.order_size,
+            priority_fee_bps=p_fee,
+        )
         is_buy = args.side.upper() == "BUY"
         px = args.price
         if px <= 0:
@@ -1857,6 +1887,11 @@ def main():
         console.print(f"[bold cyan]Interface Mode:[/bold cyan] [bold green]{ui_label}[/bold green]")
         fee_profile_name = "XYZ Stock / Equities" if cfg.market.is_xyz_stock else "Crypto Perps"
         console.print(f"[bold cyan]Asset & Fees:[/bold cyan] [bold green]{cfg.market.coin}[/bold green] ([yellow]{fee_profile_name}[/yellow]) | Maker: [green]{cfg.market.maker_fee_bps:.2f} bps[/green] ({cfg.market.maker_fee_bps/100:.4f}%) | Taker: [yellow]{cfg.market.taker_fee_bps:.2f} bps[/yellow] ({cfg.market.taker_fee_bps/100:.4f}%)")
+        p_fee = cfg.strategies.live_execution.priority_fee_bps
+        if p_fee > 0:
+            console.print(f"[bold cyan]Priority Fee:[/bold cyan] [bold yellow]{p_fee:.1f} bps[/bold yellow] (p={int(round(p_fee * 10000))}) [Sequencer Priority Bidding - Staking Balance Active]")
+        else:
+            console.print(f"[bold cyan]Priority Fee:[/bold cyan] [dim]0.0 bps (Standard Consensus Queue)[/dim]")
         if args.live_orders:
             cfg.backtest.order_size_btc = args.order_size
             net = cfg.hyperliquid.network_name.upper()
@@ -1897,6 +1932,11 @@ def main():
         console.print(f"[bold cyan]Interface Mode:[/bold cyan] [bold green]{ui_label}[/bold green]")
         fee_profile_name = "XYZ Stock / Equities" if cfg.market.is_xyz_stock else "Crypto Perps"
         console.print(f"[bold cyan]Asset & Fees:[/bold cyan] [bold green]{cfg.market.coin}[/bold green] ([yellow]{fee_profile_name}[/yellow]) | Maker: [green]{cfg.market.maker_fee_bps:.2f} bps[/green] ({cfg.market.maker_fee_bps/100:.4f}%) | Taker: [yellow]{cfg.market.taker_fee_bps:.2f} bps[/yellow] ({cfg.market.taker_fee_bps/100:.4f}%)")
+        p_fee = cfg.strategies.live_execution.priority_fee_bps
+        if p_fee > 0:
+            console.print(f"[bold cyan]Priority Fee:[/bold cyan] [bold yellow]{p_fee:.1f} bps[/bold yellow] (p={int(round(p_fee * 10000))}) [Sequencer Priority Bidding - Staking Balance Active]")
+        else:
+            console.print(f"[bold cyan]Priority Fee:[/bold cyan] [dim]0.0 bps (Standard Consensus Queue)[/dim]")
         runner = L2EngineRunner(
             config=cfg,
             record_data=True,

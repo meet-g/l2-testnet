@@ -62,6 +62,7 @@ class LiveOrderExecutor:
         auditor: Optional[Any] = None,
         strategy_name: str = "LiveExecution",
         non_blocking: bool = False,
+        priority_fee_bps: Optional[float] = None,
     ):
         self.config = config or AppConfig()
         self.console = console or Console()
@@ -130,6 +131,13 @@ class LiveOrderExecutor:
         self.trough_unrealized_bps: float = 0.0
         self.last_best_bid: float = 0.0
         self.last_best_ask: float = 0.0
+
+        # Execution Speed & Optimization Guardrails (Optimizations 1-5)
+        live_cfg = getattr(getattr(self.config, "strategies", None), "live_execution", None) or getattr(self.config, "live_execution", None)
+        self.penny_jumping: bool = getattr(live_cfg, "penny_jumping", True)
+        self.use_ioc_on_marketable: bool = getattr(live_cfg, "use_ioc_on_marketable", True)
+        self.use_native_tpsl: bool = getattr(live_cfg, "use_native_tpsl", True)
+        self.priority_fee_bps: float = priority_fee_bps if priority_fee_bps is not None else getattr(live_cfg, "priority_fee_bps", 0.0)
 
         self._initialize()
 
@@ -212,6 +220,18 @@ class LiveOrderExecutor:
                 f"Master: [dim]{self.account_address[:8]}...[/dim] | Signer: [dim]{signer_addr[:8]}...[/dim] | "
                 f"Coin: [bold cyan]{self.coin}[/bold cyan] (szDec: {self.sz_decimals}, maxPxDec: {self.max_price_decimals})"
             )
+            opt_labels = []
+            if self.penny_jumping:
+                opt_labels.append("Penny-Jumping: ON")
+            if self.use_ioc_on_marketable:
+                opt_labels.append("IOC Escalation: ON")
+            if self.use_native_tpsl:
+                opt_labels.append("Native TPSL: ON")
+            if self.priority_fee_bps > 0.0:
+                opt_labels.append(f"Priority Fee: {self.priority_fee_bps:.1f} bps (p={int(round(self.priority_fee_bps * 10000))}) [Sequencer Priority Bidding]")
+            else:
+                opt_labels.append("Priority Fee: 0.0 bps (Standard Consensus)")
+            self.console.print(f"  [dim cyan]• Execution Profile:[/dim cyan] [cyan]{' | '.join(opt_labels)}[/cyan]")
 
             # Perform initial state sync
             self.sync_state(force=True)
@@ -267,7 +287,16 @@ class LiveOrderExecutor:
 
         if is_buy and getattr(self, "last_best_ask", 0.0) > 0.0:
             if px_fmt >= self.last_best_ask:
-                if getattr(self, "last_best_bid", 0.0) > 0.0 and self.last_best_bid < self.last_best_ask:
+                # Optimization 1: Inside-spread penny-jumping captures Queue Rank #1 as Maker
+                if (
+                    getattr(self, "penny_jumping", True)
+                    and getattr(self, "last_best_bid", 0.0) > 0.0
+                    and (self.last_best_ask - self.last_best_bid) > tick_size * 1.01
+                ):
+                    px_fmt = self.format_price(self.last_best_bid + tick_size)
+                    if px_fmt >= self.last_best_ask:
+                        px_fmt = self.format_price(self.last_best_bid)
+                elif getattr(self, "last_best_bid", 0.0) > 0.0 and self.last_best_bid < self.last_best_ask:
                     px_fmt = self.format_price(self.last_best_bid)
                 else:
                     px_fmt = self.format_price(self.last_best_ask - tick_size)
@@ -275,7 +304,16 @@ class LiveOrderExecutor:
                     px_fmt = self.format_price(self.last_best_ask - 2 * tick_size)
         elif not is_buy and getattr(self, "last_best_bid", 0.0) > 0.0:
             if px_fmt <= self.last_best_bid:
-                if getattr(self, "last_best_ask", 0.0) > 0.0 and self.last_best_ask > self.last_best_bid:
+                # Optimization 1: Inside-spread penny-jumping captures Queue Rank #1 as Maker
+                if (
+                    getattr(self, "penny_jumping", True)
+                    and getattr(self, "last_best_ask", 0.0) > 0.0
+                    and (self.last_best_ask - self.last_best_bid) > tick_size * 1.01
+                ):
+                    px_fmt = self.format_price(self.last_best_ask - tick_size)
+                    if px_fmt <= self.last_best_bid:
+                        px_fmt = self.format_price(self.last_best_ask)
+                elif getattr(self, "last_best_ask", 0.0) > 0.0 and self.last_best_ask > self.last_best_bid:
                     px_fmt = self.format_price(self.last_best_ask)
                 else:
                     px_fmt = self.format_price(self.last_best_bid + tick_size)
@@ -1065,11 +1103,38 @@ class LiveOrderExecutor:
             self.console.print(f"[dim yellow][LiveExecutor] Order notional ${notional:.2f} is below $10 minimum requirement.[/dim yellow]")
             return None
 
-        tif = "Alo" if post_only else "Gtc"
+        # Determine TIF (Optimization 2: Dynamic Ioc Taker Escalation)
+        strat_cfg = self.config.strategies.get_strategy(strat_tag) if hasattr(self.config, "strategies") else None
+        is_smart_taker = (getattr(strat_cfg, "execution_type", "") == "SMART_TAKER")
+        
+        custom_tif = kwargs.get("tif")
+        if custom_tif:
+            tif = custom_tif
+        elif post_only:
+            tif = "Alo"
+        elif getattr(self, "use_ioc_on_marketable", True) or is_smart_taker:
+            # Immediate-Or-Cancel: Fills crossing depth immediately with zero resting stale queue wait
+            tif = "Ioc"
+        else:
+            tif = "Gtc"
+
+        # Determine Order Grouping (Optimization 5: Priority Fee Sequencer Bidding)
+        grouping_val = kwargs.get("grouping")
+        if grouping_val is None:
+            p_bps = getattr(self, "priority_fee_bps", 0.0)
+            if p_bps > 0.0:
+                grouping_val = {"p": int(round(p_bps * 10000))}
+            else:
+                grouping_val = "na"
+
         side_str = "BUY" if is_buy else "SELL"
         side_color = "green" if is_buy else "red"
         net_label = "TESTNET" if self.config.hyperliquid.use_testnet else "MAINNET"
         order_reduce_only = is_exit if reduce_only is None else bool(reduce_only)
+
+        # Hyperliquid Protocol Guard: Priority ALO orders cannot be reduce only
+        if grouping_val != "na" and order_reduce_only and tif == "Alo":
+            grouping_val = "na"
 
         dispatch_async = self.non_blocking if non_blocking is None else non_blocking
 
@@ -1096,19 +1161,34 @@ class LiveOrderExecutor:
         def _do_place():
             t_wire_start = time.perf_counter()
             try:
-                res = self.exchange.order(
-                    name=self.coin,
-                    is_buy=is_buy,
-                    sz=sz_fmt,
-                    limit_px=px_fmt,
-                    order_type={"limit": {"tif": tif}},
-                    reduce_only=order_reduce_only,
-                )
+                order_req = {
+                    "coin": self.coin,
+                    "is_buy": is_buy,
+                    "sz": sz_fmt,
+                    "limit_px": px_fmt,
+                    "order_type": {"limit": {"tif": tif}},
+                    "reduce_only": order_reduce_only,
+                }
+                if grouping_val != "na" and hasattr(self.exchange, "bulk_orders"):
+                    try:
+                        res = self.exchange.bulk_orders([order_req], grouping=grouping_val)
+                    except TypeError:
+                        res = self.exchange.bulk_orders([order_req])
+                else:
+                    res = self.exchange.order(
+                        name=self.coin,
+                        is_buy=is_buy,
+                        sz=sz_fmt,
+                        limit_px=px_fmt,
+                        order_type={"limit": {"tif": tif}},
+                        reduce_only=order_reduce_only,
+                    )
                 wire_ms = (time.perf_counter() - t_wire_start) * 1000.0
 
+                p_tag = f", Priority: {self.priority_fee_bps:.1f} bps (p={int(round(self.priority_fee_bps * 10000))})" if grouping_val != "na" else ""
                 self.console.print(
                     f"[bold {side_color}][LIVE {net_label} ORDER] [{strat_tag}] Transmitted {side_str} {sz_fmt} {self.coin} @ ${px_fmt:,.4f} "
-                    f"(${notional:,.2f} notional, TIF: {tif}{', ReduceOnly' if order_reduce_only else ''}, {wire_ms:.1f}ms wire)...[/bold {side_color}]"
+                    f"(${notional:,.2f} notional, TIF: {tif}{', ReduceOnly' if order_reduce_only else ''}{p_tag}, {wire_ms:.1f}ms wire)...[/bold {side_color}]"
                 )
 
                 if self.auditor:
@@ -1247,8 +1327,9 @@ class LiveOrderExecutor:
                         if "Post only order would have immediately matched" in str(err_msg):
                             strat_cfg = self.config.strategies.get_strategy(strat_tag) if hasattr(self.config, "strategies") else None
                             is_smart_taker = (getattr(strat_cfg, "execution_type", "") == "SMART_TAKER")
-                            if is_exit or is_smart_taker:
-                                self.console.print(f"[bold yellow]⚡ [LiveExecutor] [{strat_tag}] Post-only exit would match resting liquidity -> Re-submitting with TIF GTC for immediate fill...[/bold yellow]")
+                            fast_fill_en = bool(getattr(strat_cfg, "fast_fill_enabled", False))
+                            if is_exit or is_smart_taker or fast_fill_en:
+                                self.console.print(f"[bold yellow]⚡ [LiveExecutor] [{strat_tag}] Post-only order would match resting liquidity -> Escalating to TIF IOC for instant fill...[/bold yellow]")
                                 return self.place_limit_order(
                                     is_buy=is_buy,
                                     size_btc=sz_fmt,
@@ -1327,6 +1408,94 @@ class LiveOrderExecutor:
             return {"status": "ok", "pending": True}
         else:
             return _do_place()
+
+    def place_bracket_order(
+        self,
+        is_buy: bool,
+        size_btc: float,
+        price: float,
+        tp_price: float,
+        sl_price: float,
+        post_only: bool = True,
+        signal_score: float = 0.0,
+        strategy_name: Optional[str] = None,
+        non_blocking: Optional[bool] = None,
+        **kwargs,
+    ) -> Optional[dict]:
+        """Atomically submits an Entry Order linked with exchange-native TP and SL trigger orders using Hyperliquid grouping='normalTpsl'.
+        
+        Optimization 4:
+        Exits trigger directly inside Hyperliquid L1 consensus engine with 0ms client-side latency.
+        """
+        if not self.is_initialized or not self.exchange:
+            return None
+
+        strat_tag = strategy_name or self.strategy_name
+        px_fmt = self.format_price(price)
+        if post_only:
+            px_fmt = self._clamp_post_only_price(px_fmt, is_buy)
+        sz_fmt = self.ensure_min_notional(self.format_size(size_btc), px_fmt)
+        tp_px_fmt = self.format_price(tp_price)
+        sl_px_fmt = self.format_price(sl_price)
+
+        tif = "Alo" if post_only else "Ioc"
+        exit_side = not is_buy
+
+        entry_order = {
+            "coin": self.coin,
+            "is_buy": is_buy,
+            "sz": sz_fmt,
+            "limit_px": px_fmt,
+            "order_type": {"limit": {"tif": tif}},
+            "reduce_only": False,
+        }
+
+        tp_order = {
+            "coin": self.coin,
+            "is_buy": exit_side,
+            "sz": sz_fmt,
+            "limit_px": tp_px_fmt,
+            "order_type": {"trigger": {"triggerPx": tp_px_fmt, "isMarket": True, "tpsl": "tp"}},
+            "reduce_only": True,
+        }
+
+        sl_order = {
+            "coin": self.coin,
+            "is_buy": exit_side,
+            "sz": sz_fmt,
+            "limit_px": sl_px_fmt,
+            "order_type": {"trigger": {"triggerPx": sl_px_fmt, "isMarket": True, "tpsl": "sl"}},
+            "reduce_only": True,
+        }
+
+        dispatch_async = self.non_blocking if non_blocking is None else non_blocking
+
+        def _do_bracket():
+            try:
+                res = self.exchange.bulk_orders([entry_order, tp_order, sl_order], grouping="normalTpsl")
+                self.console.print(
+                    f"[bold green]✓ [LiveExecutor] [{strat_tag}] Dispatched on-chain atomic TPSL bracket (normalTpsl): "
+                    f"Entry ${px_fmt:,.4f} | TP ${tp_px_fmt:,.4f} | SL ${sl_px_fmt:,.4f}[/bold green]"
+                )
+                return res
+            except Exception as e:
+                self.console.print(f"[dim yellow][LiveExecutor] Native bracket exception: {e}. Falling back to standard limit order.[/dim yellow]")
+                return self.place_limit_order(
+                    is_buy=is_buy,
+                    size_btc=size_btc,
+                    price=price,
+                    post_only=post_only,
+                    signal_score=signal_score,
+                    strategy_name=strategy_name,
+                    non_blocking=False,
+                    **kwargs,
+                )
+
+        if dispatch_async and hasattr(self, "_order_executor") and self._order_executor:
+            self._order_executor.submit(_do_bracket)
+            return {"status": "ok", "pending": True}
+        else:
+            return _do_bracket()
 
     def on_signal_update(
         self,
@@ -1885,11 +2054,13 @@ class LiveOrderExecutor:
                 target_px = self.format_price(best_bid if is_buy else best_ask)
                 should_cancel = False
 
-                if abs(cur_px - target_px) > tick_size * 1.5:
+                order_age = now - self.active_order.get("time", now)
+                # Hard cancel if price drifted significantly away or if signal flipped opposite sign
+                if abs(cur_px - target_px) > tick_size * 2.5:
                     should_cancel = True
-                elif is_buy and signal_score < cancel_decay_floor:
+                elif (is_buy and signal_score < 0.0) or (not is_buy and signal_score > 0.0):
                     should_cancel = True
-                elif not is_buy and signal_score > -cancel_decay_floor:
+                elif order_age >= 5.0 and ((is_buy and signal_score < cancel_decay_floor) or (not is_buy and signal_score > -cancel_decay_floor)):
                     should_cancel = True
 
                 if should_cancel:

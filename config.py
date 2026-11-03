@@ -336,6 +336,8 @@ class BacktestConfig:
     default_execution_mode: str = "MAKER"
     slippage_bps: float = 0.2  # Realistic top-of-book slippage for 0.1 BTC on liquid BTC-PERP
     max_spread_bps: float = 1.5  # Reject entries when spread exceeds 1.5 bps
+    priority_fee_bps: float = 0.0  # Hyperliquid write priority fee (Optimization 5) in basis points
+    priority_fee_on_exit: bool = False  # Whether priority fee is also bid on exit orders
     
     # -------------------------------------------------------------------------
     # 1. Passive Maker Execution (Avellaneda-Stoikov Micro-Scalp)
@@ -393,6 +395,10 @@ DEFAULT_STRATEGIES_JSON = {
         "active_strategy": "Hedged_Convexity",
         "order_size_btc": 0.0005,
         "max_position_btc": 0.05,
+        "penny_jumping": True,
+        "use_ioc_on_marketable": True,
+        "use_native_tpsl": True,
+        "priority_fee_bps": 0.0,
     },
     "execution_strategies": {
         "Hedged_Convexity": {
@@ -781,6 +787,10 @@ class LiveExecutionConfig:
     active_strategy: str = "Composite_Maker"
     order_size_btc: float = 0.0005
     max_position_btc: float = 0.05
+    penny_jumping: bool = True
+    use_ioc_on_marketable: bool = True
+    use_native_tpsl: bool = True
+    priority_fee_bps: float = 0.0
 
 
 @dataclass
@@ -820,6 +830,10 @@ class StrategiesConfig:
             active_strategy=live_raw.get("active_strategy", "Hedged_Convexity"),
             order_size_btc=float(live_raw.get("order_size_btc", 0.0005)),
             max_position_btc=float(live_raw.get("max_position_btc", 0.05)),
+            penny_jumping=bool(live_raw.get("penny_jumping", True)),
+            use_ioc_on_marketable=bool(live_raw.get("use_ioc_on_marketable", True)),
+            use_native_tpsl=bool(live_raw.get("use_native_tpsl", True)),
+            priority_fee_bps=float(live_raw.get("priority_fee_bps", 0.0)),
         )
 
         def _parse_strat_item(s_name: str, s_info: dict, fallback: dict, is_scalp: bool = False) -> ExecutionStrategyConfig:
@@ -1210,6 +1224,10 @@ class StrategiesConfig:
                 "active_strategy": self.live_execution.active_strategy,
                 "order_size_btc": self.live_execution.order_size_btc,
                 "max_position_btc": self.live_execution.max_position_btc,
+                "penny_jumping": self.live_execution.penny_jumping,
+                "use_ioc_on_marketable": self.live_execution.use_ioc_on_marketable,
+                "use_native_tpsl": self.live_execution.use_native_tpsl,
+                "priority_fee_bps": self.live_execution.priority_fee_bps,
             },
             "execution_strategies": exec_dict,
             "scalping_strategies": scalp_dict,
@@ -1250,6 +1268,15 @@ class AppConfig:
     data_dir: str = "data"
     log_dir: str = "logs"
     sample_rate_hz: float = 20.0  # Sampling frequency for engine loop (20Hz = 50ms evaluation tick)
+
+    @property
+    def live_execution(self) -> LiveExecutionConfig:
+        """Convenience property exposing strategies.live_execution directly on AppConfig."""
+        return self.strategies.live_execution
+
+    @live_execution.setter
+    def live_execution(self, value: LiveExecutionConfig) -> None:
+        self.strategies.live_execution = value
 
     @property
     def coin_data_dir(self) -> str:

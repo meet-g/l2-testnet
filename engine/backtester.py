@@ -254,7 +254,9 @@ class EdgeEvaluator:
         taker_fee_pct = self.market_cfg.taker_fee_bps / 10_000.0
         maker_fee_pct = getattr(self.market_cfg, "maker_fee_bps", 1.5) / 10_000.0
         maker_rebate_pct = getattr(self.market_cfg, "maker_rebate_bps", 1.5) / 10_000.0
-        fee_hurdle_bps = getattr(self.market_cfg, "taker_fee_bps", 4.5)
+        priority_fee_pct = getattr(self.bt_cfg, "priority_fee_bps", 0.0) / 10_000.0
+        priority_fee_on_exit = getattr(self.bt_cfg, "priority_fee_on_exit", False)
+        fee_hurdle_bps = getattr(self.market_cfg, "taker_fee_bps", 4.5) + getattr(self.bt_cfg, "priority_fee_bps", 0.0)
         slippage_pct = self.bt_cfg.slippage_bps / 10_000.0
         spread_bps = ((best_ask - best_bid) / mid_price) * 10_000.0 if mid_price > 0 else 1.0
 
@@ -280,7 +282,7 @@ class EdgeEvaluator:
                 sl_bps = params.get("stop_loss_bps", self.bt_cfg.stop_loss_bps)
                 trail_act_bps = params.get("trailing_stop_activation_bps", self.bt_cfg.trailing_stop_activation_bps)
                 trail_dist_bps = params.get("trailing_stop_distance_bps", self.bt_cfg.trailing_stop_distance_bps)
-                reversal_thresh = params.get("exit_reversal_threshold", self.bt_cfg.exit_reversal_threshold)
+                reversal_thresh = params.get("exit_reversal_threshold") if params.get("exit_reversal_threshold") is not None else self.bt_cfg.exit_reversal_threshold
                 max_hold_secs = params.get("max_holding_time_secs", self.bt_cfg.max_holding_time_secs)
             else:
                 entry_thresh = params.get("entry_threshold", self.bt_cfg.entry_threshold_taker)
@@ -288,7 +290,7 @@ class EdgeEvaluator:
                 sl_bps = params.get("stop_loss_bps", self.bt_cfg.stop_loss_bps_taker)
                 trail_act_bps = params.get("trailing_stop_activation_bps", self.bt_cfg.trailing_stop_activation_bps_taker)
                 trail_dist_bps = params.get("trailing_stop_distance_bps", self.bt_cfg.trailing_stop_distance_bps_taker)
-                reversal_thresh = params.get("exit_reversal_threshold", self.bt_cfg.exit_reversal_threshold_taker)
+                reversal_thresh = params.get("exit_reversal_threshold") if params.get("exit_reversal_threshold") is not None else self.bt_cfg.exit_reversal_threshold_taker
                 max_hold_secs = params.get("max_holding_time_secs", self.bt_cfg.max_holding_time_secs_taker)
 
             # Update drawdown tracking
@@ -380,6 +382,8 @@ class EdgeEvaluator:
                             exec_label = "TAKER"
 
                         sz = state.position_btc
+                        if priority_fee_on_exit:
+                            fee += exit_price * sz * priority_fee_pct
                         exit_fee = fee
                         total_fees = state.entry_fee_usd + exit_fee
                         gross_pnl = (exit_price - state.entry_price) * sz
@@ -673,12 +677,12 @@ class EdgeEvaluator:
                     if is_maker:
                         # Passive Maker Buy at best bid
                         entry_price = best_bid
-                        fee = entry_price * sz * maker_fee_pct
+                        fee = entry_price * sz * (maker_fee_pct + priority_fee_pct)
                         entry_exec_label = "MAKER"
                     else:
                         # Smart Taker Buy
                         entry_price = best_ask * (1.0 + slippage_pct)
-                        fee = entry_price * sz * taker_fee_pct
+                        fee = entry_price * sz * (taker_fee_pct + priority_fee_pct)
                         entry_exec_label = "TAKER"
 
                     state.entry_fee_usd = fee
@@ -712,12 +716,12 @@ class EdgeEvaluator:
                     if is_maker:
                         # Passive Maker Sell at best ask
                         entry_price = best_ask
-                        fee = entry_price * sz * maker_fee_pct
+                        fee = entry_price * sz * (maker_fee_pct + priority_fee_pct)
                         entry_exec_label = "MAKER"
                     else:
                         # Smart Taker Sell
                         entry_price = best_bid * (1.0 - slippage_pct)
-                        fee = entry_price * sz * taker_fee_pct
+                        fee = entry_price * sz * (taker_fee_pct + priority_fee_pct)
                         entry_exec_label = "TAKER"
 
                     state.entry_fee_usd = fee
