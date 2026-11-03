@@ -7,6 +7,7 @@ from core.trade_stream import TradeManager
 from signals.absorption import AbsorptionSignal
 from signals.adaptive_alpha import AdaptiveAlphaSignal
 from signals.base import BaseSignal, SignalResult
+from signals.instant_fill import InstantFillSignal
 from signals.microprice import MicroPriceSignal
 from signals.momentum_expansion import MomentumExpansionSignal
 from signals.convexity_cascade import ConvexityCascadeSignal
@@ -53,7 +54,7 @@ class CompositeAlphaSignal(BaseSignal):
             for sig in [
                 "WOBI", "VOI", "MicroPrice", "VPIN", "Absorption", "Sweep",
                 "AdaptiveML", "QDAP", "MomentumExpansion", "ConvexityCascade",
-                "HedgedConvexity", "QueueReplenishment"
+                "HedgedConvexity", "QueueReplenishment", "InstantFill"
             ]
         }
 
@@ -71,6 +72,7 @@ class CompositeAlphaSignal(BaseSignal):
         self.signal_hedged = HedgedConvexitySignal()
         self.signal_queue_replenishment = QueueReplenishmentSignal()
         self.signal_queue_rep = self.signal_queue_replenishment
+        self.signal_instant_fill = InstantFillSignal()
 
     def is_enabled(self, sig_name: str) -> bool:
         """Returns True if the signal is enabled in configuration."""
@@ -100,6 +102,7 @@ class CompositeAlphaSignal(BaseSignal):
         en_convexity = self.is_enabled("ConvexityCascade")
         en_hedged = self.is_enabled("HedgedConvexity")
         en_qr = self.is_enabled("QueueReplenishment")
+        en_instant_fill = self.is_enabled("InstantFill")
 
         res_wobi = self.signal_wobi.compute(book, trades, now_ms) if en_wobi else SignalResult("WOBI", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
         res_voi = self.signal_voi.compute(book, trades, now_ms) if en_voi else SignalResult("VOI", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
@@ -118,6 +121,7 @@ class CompositeAlphaSignal(BaseSignal):
         res_convexity = self.signal_convexity.compute(book, trades, now_ms) if en_convexity else SignalResult("ConvexityCascade", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
         res_hedged = self.signal_hedged.compute(book, trades, now_ms) if en_hedged else SignalResult("HedgedConvexity", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
         res_qr = self.signal_queue_replenishment.compute(book, trades, now_ms) if en_qr else SignalResult("QueueReplenishment", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
+        res_instant_fill = self.signal_instant_fill.compute(book, trades, now_ms) if en_instant_fill else SignalResult("InstantFill", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
 
         # Attach enabled state to sub-signal metadata
         res_wobi.metadata["enabled"] = en_wobi
@@ -132,6 +136,7 @@ class CompositeAlphaSignal(BaseSignal):
         res_convexity.metadata["enabled"] = en_convexity
         res_hedged.metadata["enabled"] = en_hedged
         res_qr.metadata["enabled"] = en_qr
+        res_instant_fill.metadata["enabled"] = en_instant_fill
 
         # Detect regime
         is_toxic = res_vpin.metadata.get("is_toxic", False) and en_vpin
@@ -210,6 +215,7 @@ class CompositeAlphaSignal(BaseSignal):
                     "ConvexityCascade": res_convexity,
                     "HedgedConvexity": res_hedged,
                     "QueueReplenishment": res_qr,
+                    "InstantFill": res_instant_fill,
                 },
             },
         )

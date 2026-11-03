@@ -1375,7 +1375,9 @@ class LiveOrderExecutor:
             reversal_thresh = getattr(self.config.backtest, "exit_reversal_threshold", 0.35)
         hedge_loss_bps = getattr(strat_cfg, "hedge_trigger_loss_bps", -3.5)
         fee_hurdle_bps = getattr(getattr(self.config, "market", None), "taker_fee_bps", 0.90 if getattr(getattr(self.config, "market", None), "is_xyz_stock", False) else 4.5)
-        fast_fill_enabled = bool(getattr(strat_cfg, "fast_fill_enabled", False) or ("FastFill" in active_strat_name) or (getattr(strat_cfg, "execution_type", "") == "SMART_TAKER"))
+        fast_fill_enabled = bool(getattr(strat_cfg, "fast_fill_enabled", False) or ("FastFill" in active_strat_name) or (getattr(strat_cfg, "execution_type", "") in ("SMART_TAKER", "TAKER", "FAST_FILL_TAKER")))
+        is_smart_taker = bool(getattr(strat_cfg, "execution_type", "") in ("SMART_TAKER", "TAKER", "FAST_FILL_TAKER"))
+        max_entry_spread_bps = float(getattr(strat_cfg, "max_entry_spread_bps", 3.5) or 3.5)
         entry_escalate_secs = float(getattr(strat_cfg, "entry_escalate_secs", 2.5) or 2.5)
         exit_escalate_secs = float(getattr(strat_cfg, "exit_escalate_secs", 2.0) or 2.0)
         defensive_hedge_market = bool(getattr(strat_cfg, "defensive_hedge_market", False))
@@ -1691,8 +1693,31 @@ class LiveOrderExecutor:
                     self.cancel_order(self.active_order["oid"])
                 return
 
-        # Bullish Entry: Fast-fill quoting with spread improvement
+        # Bullish Entry: Fast-fill quoting or immediate marketable fill
         if signal_score >= maker_threshold:
+            if is_smart_taker:
+                # Immediate Marketable Taker Fill: Cross spread immediately at best_ask
+                spread_bps = ((best_ask - best_bid) / mid_price) * 10_000.0 if mid_price > 0 else 0.0
+                if spread_bps > max_entry_spread_bps:
+                    self.console.print(f"[dim yellow][LiveExecutor] [{active_strat_name}] Skipping aggressive taker buy: spread ({spread_bps:.1f} bps) exceeds limit ({max_entry_spread_bps:.1f} bps).[/dim yellow]")
+                    if self.active_order and not self.active_order.get("is_exit"):
+                        self.cancel_order(self.active_order["oid"])
+                    return
+
+                if self.active_order and not self.active_order.get("is_exit"):
+                    self.cancel_order(self.active_order["oid"])
+
+                self.place_limit_order(
+                    is_buy=True,
+                    size_btc=order_size,
+                    price=best_ask,
+                    post_only=False,
+                    signal_score=signal_score,
+                    is_exit=False,
+                    strategy_name=active_strat_name,
+                )
+                return
+
             if spread > tick_size * 1.5 and (best_bid + tick_size < best_ask):
                 target_px = self.format_price(best_bid + tick_size)
                 if target_px >= best_ask:
@@ -1760,8 +1785,31 @@ class LiveOrderExecutor:
                 strategy_name=active_strat_name,
             )
 
-        # Bearish Entry: Fast-fill quoting with spread improvement
+        # Bearish Entry: Fast-fill quoting or immediate marketable fill
         elif signal_score <= -maker_threshold:
+            if is_smart_taker:
+                # Immediate Marketable Taker Fill: Cross spread immediately at best_bid
+                spread_bps = ((best_ask - best_bid) / mid_price) * 10_000.0 if mid_price > 0 else 0.0
+                if spread_bps > max_entry_spread_bps:
+                    self.console.print(f"[dim yellow][LiveExecutor] [{active_strat_name}] Skipping aggressive taker sell: spread ({spread_bps:.1f} bps) exceeds limit ({max_entry_spread_bps:.1f} bps).[/dim yellow]")
+                    if self.active_order and not self.active_order.get("is_exit"):
+                        self.cancel_order(self.active_order["oid"])
+                    return
+
+                if self.active_order and not self.active_order.get("is_exit"):
+                    self.cancel_order(self.active_order["oid"])
+
+                self.place_limit_order(
+                    is_buy=False,
+                    size_btc=order_size,
+                    price=best_bid,
+                    post_only=False,
+                    signal_score=signal_score,
+                    is_exit=False,
+                    strategy_name=active_strat_name,
+                )
+                return
+
             if spread > tick_size * 1.5 and (best_ask - tick_size > best_bid):
                 target_px = self.format_price(best_ask - tick_size)
                 if target_px <= best_bid:

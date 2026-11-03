@@ -380,6 +380,7 @@ LEGACY_SCALPING_STRATEGIES: Tuple[str, ...] = (
     "Absorption_Fade",
     "AdaptiveML_Taker",
     "Composite_Taker",
+    "Instant_FastFill",
 )
 
 
@@ -607,6 +608,26 @@ DEFAULT_STRATEGIES_JSON = {
             "max_holding_time_secs": 120,
             "min_volatility_bps": 4.5,
         },
+        "Instant_FastFill": {
+            "enabled": False,
+            "description": "Ultra-fast immediate marketable fill on opposing queue depletion with passive maker take-profit quoting and defensive hedge",
+            "signal_key": "InstantFill",
+            "execution_type": "SMART_TAKER",
+            "entry_threshold": 0.70,
+            "min_confidence": 0.65,
+            "order_size_btc": 0.1,
+            "take_profit_bps": 8.0,
+            "stop_loss_bps": 10.0,
+            "trailing_stop_activation_bps": 4.0,
+            "trailing_stop_distance_bps": 1.5,
+            "max_holding_time_secs": 90,
+            "exit_reversal_threshold": 0.70,
+            "hedge_trigger_loss_bps": -4.0,
+            "hedge_reversal_threshold": 0.0,
+            "min_volatility_bps": 3.0,
+            "loss_cooldown_secs": 30,
+            "fast_fill_enabled": True,
+        },
     },
     "alpha_signals": {
         "QDAP": {
@@ -662,6 +683,11 @@ DEFAULT_STRATEGIES_JSON = {
         "QueueReplenishment": {
             "enabled": True,
             "description": "Dynamic L1/L3 queue replenishment delta, multi-tier cancellation asymmetry, and trade depletion persistence",
+        },
+        "InstantFill": {
+            "enabled": True,
+            "weight": 0.20,
+            "description": "Flow Depletion, Queue Exhaustion, and Immediate Sweep alpha detector",
         },
     },
 }

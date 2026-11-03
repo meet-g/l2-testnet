@@ -122,6 +122,7 @@ class EdgeEvaluator:
                 "MicroPrice_FastFill": ("MicroPrice", "MAKER"),
                 "AdaptiveML_Taker": ("AdaptiveML", "SMART_TAKER"),
                 "Composite_Taker": ("CompositeAlpha", "SMART_TAKER"),
+                "Instant_FastFill": ("InstantFill", "SMART_TAKER"),
                 "Absorption_Fade": ("Absorption", "MAKER"),
             }
 
@@ -147,7 +148,7 @@ class EdgeEvaluator:
         unique_signals.update([
             "WOBI", "VOI", "MicroPrice", "VPIN", "Absorption", "Sweep",
             "CompositeAlpha", "AdaptiveML", "QDAP", "MomentumExpansion",
-            "ConvexityCascade", "HedgedConvexity", "QueueReplenishment"
+            "ConvexityCascade", "HedgedConvexity", "QueueReplenishment", "InstantFill"
         ])
 
         self.eval_data: Dict[str, Dict[int, Deque[Tuple[float, float]]]] = {

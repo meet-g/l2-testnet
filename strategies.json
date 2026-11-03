@@ -3,7 +3,7 @@
   "_instructions": "Set 'enabled': true or false to select/deselect any execution strategy, scalping strategy, or alpha signal.",
   "version": "1.1",
   "live_execution": {
-    "active_strategy": "MicroPrice_FastFill",
+    "active_strategy": "AdaptiveML_Maker",
     "order_size_btc": 0.0005,
     "max_position_btc": 0.05
   },
@@ -115,7 +115,7 @@
       "min_volatility_bps": 3.8
     },
     "AdaptiveML_Maker": {
-      "enabled": false,
+      "enabled": true,
       "description": "Passive maker execution driven by machine-learning online feature drift prediction",
       "signal_key": "AdaptiveML",
       "execution_type": "MAKER",
@@ -129,7 +129,7 @@
       "min_volatility_bps": 3.8
     },
     "WOBI_Maker": {
-      "enabled": false,
+      "enabled": true,
       "description": "Passive quoting biased by anti-spoofed Weighted Order Book Imbalance",
       "signal_key": "WOBI",
       "execution_type": "MAKER",
@@ -157,12 +157,11 @@
       "min_volatility_bps": 3.8
     },
     "MicroPrice_FastFill": {
-      "enabled": true,
+      "enabled": false,
       "description": "High-confidence fast-filling Stoikov MicroPrice with multi-factor gating and defensive hedge",
       "signal_key": "MicroPrice",
       "execution_type": "MAKER",
-      "entry_threshold": 0.80,
-      "min_confidence": 0.75,
+      "entry_threshold": 0.8,
       "order_size_btc": 0.1,
       "take_profit_bps": 16.0,
       "stop_loss_bps": 12.0,
@@ -172,12 +171,13 @@
       "exit_reversal_threshold": 0.75,
       "min_volatility_bps": 3.5,
       "hedge_trigger_loss_bps": -6.0,
-      "hedge_reversal_threshold": 0.10,
+      "hedge_reversal_threshold": 0.1,
       "loss_cooldown_secs": 60,
       "fast_fill_enabled": true,
       "entry_escalate_secs": 6.0,
       "exit_escalate_secs": 3.0,
-      "defensive_hedge_market": false
+      "defensive_hedge_market": false,
+      "min_confidence": 0.75
     },
     "Absorption_Fade": {
       "enabled": false,
@@ -220,6 +220,29 @@
       "trailing_stop_distance_bps": 1.2,
       "max_holding_time_secs": 120,
       "min_volatility_bps": 4.5
+    },
+    "Instant_FastFill": {
+      "enabled": true,
+      "description": "Ultra-fast priority queue fill on opposing queue depletion with spread-improvement quoting, fast escalation, and defensive hedge",
+      "signal_key": "InstantFill",
+      "execution_type": "MAKER",
+      "entry_threshold": 0.75,
+      "min_confidence": 0.65,
+      "order_size_btc": 0.1,
+      "take_profit_bps": 14.0,
+      "stop_loss_bps": 10.0,
+      "trailing_stop_activation_bps": 4.0,
+      "trailing_stop_distance_bps": 1.2,
+      "max_holding_time_secs": 90,
+      "exit_reversal_threshold": 0.7,
+      "hedge_trigger_loss_bps": -5.0,
+      "hedge_reversal_threshold": 0.0,
+      "min_volatility_bps": 3.0,
+      "loss_cooldown_secs": 30,
+      "fast_fill_enabled": true,
+      "entry_escalate_secs": 1.5,
+      "exit_escalate_secs": 1.5,
+      "defensive_hedge_market": false
     }
   },
   "alpha_signals": {
@@ -282,6 +305,11 @@
       "enabled": true,
       "weight": 0.0,
       "description": "Dynamic L1/L3 queue replenishment delta, multi-tier cancellation asymmetry, and trade depletion persistence"
+    },
+    "InstantFill": {
+      "enabled": true,
+      "weight": 0.2,
+      "description": "Flow Depletion, Queue Exhaustion, and Immediate Sweep alpha detector"
     }
   }
 }

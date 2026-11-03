@@ -37,12 +37,13 @@ class TestStrategyDistinction(unittest.TestCase):
             "Absorption_Fade",
             "AdaptiveML_Taker",
             "Composite_Taker",
+            "Instant_FastFill",
         )
 
         self.assertEqual(NEW_EXECUTION_STRATEGIES, expected_new)
         self.assertEqual(LEGACY_SCALPING_STRATEGIES, expected_legacy)
         self.assertEqual(len(NEW_EXECUTION_STRATEGIES), 4)
-        self.assertEqual(len(LEGACY_SCALPING_STRATEGIES), 9)
+        self.assertEqual(len(LEGACY_SCALPING_STRATEGIES), 10)
 
         # Ensure no overlap
         overlap = set(NEW_EXECUTION_STRATEGIES).intersection(set(LEGACY_SCALPING_STRATEGIES))
@@ -73,7 +74,7 @@ class TestStrategyDistinction(unittest.TestCase):
             self.assertFalse(cfg.is_scalping_strategy(name))
             self.assertEqual(cfg.get_strategy_category(name), "execution")
 
-        self.assertEqual(len(cfg.scalping_strategies), 9)
+        self.assertEqual(len(cfg.scalping_strategies), 10)
         for name in LEGACY_SCALPING_STRATEGIES:
             self.assertIn(name, cfg.scalping_strategies)
             strat = cfg.scalping_strategies[name]
@@ -85,7 +86,7 @@ class TestStrategyDistinction(unittest.TestCase):
 
         # Verify all_strategies union
         all_strats = cfg.all_strategies
-        self.assertEqual(len(all_strats), 13)
+        self.assertEqual(len(all_strats), 14)
         for name in NEW_EXECUTION_STRATEGIES + LEGACY_SCALPING_STRATEGIES:
             self.assertIn(name, all_strats)
             self.assertIsNotNone(cfg.get_strategy(name))
@@ -101,7 +102,7 @@ class TestStrategyDistinction(unittest.TestCase):
             self.assertIn("entry_threshold", exec_params[name])
 
         scalp_params = cfg.get_scalping_strategy_params()
-        self.assertEqual(len(scalp_params), 9)
+        self.assertEqual(len(scalp_params), 10)
         for name in LEGACY_SCALPING_STRATEGIES:
             self.assertIn(name, scalp_params)
             self.assertIn("entry_threshold", scalp_params[name])
