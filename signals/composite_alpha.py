@@ -101,22 +101,22 @@ class CompositeAlphaSignal(BaseSignal):
         en_hedged = self.is_enabled("HedgedConvexity")
         en_qr = self.is_enabled("QueueReplenishment")
 
-        res_wobi = self.signal_wobi.compute(book, trades, now_ms) if en_wobi else SignalResult("WOBI", 0.0, 0.0, {"enabled": False})
-        res_voi = self.signal_voi.compute(book, trades, now_ms) if en_voi else SignalResult("VOI", 0.0, 0.0, {"enabled": False})
-        res_mp = self.signal_microprice.compute(book, trades, now_ms) if en_mp else SignalResult("MicroPrice", 0.0, 0.0, {"enabled": False})
-        res_vpin = self.signal_vpin.compute(book, trades, now_ms) if en_vpin else SignalResult("VPIN", 0.0, 0.0, {"enabled": False})
-        res_abs = self.signal_absorption.compute(book, trades, now_ms) if en_abs else SignalResult("Absorption", 0.0, 0.0, {"enabled": False})
-        res_sweep = self.signal_sweep.compute(book, trades, now_ms) if en_sweep else SignalResult("Sweep", 0.0, 0.0, {"enabled": False})
+        res_wobi = self.signal_wobi.compute(book, trades, now_ms) if en_wobi else SignalResult("WOBI", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
+        res_voi = self.signal_voi.compute(book, trades, now_ms) if en_voi else SignalResult("VOI", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
+        res_mp = self.signal_microprice.compute(book, trades, now_ms) if en_mp else SignalResult("MicroPrice", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
+        res_vpin = self.signal_vpin.compute(book, trades, now_ms) if en_vpin else SignalResult("VPIN", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
+        res_abs = self.signal_absorption.compute(book, trades, now_ms) if en_abs else SignalResult("Absorption", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
+        res_sweep = self.signal_sweep.compute(book, trades, now_ms) if en_sweep else SignalResult("Sweep", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
         if en_adaptive:
             if self.signal_adaptive is None:
                 self.signal_adaptive = AdaptiveAlphaSignal()
             res_adaptive = self.signal_adaptive.compute(book, trades, now_ms)
         else:
-            res_adaptive = SignalResult("AdaptiveML", 0.0, 0.0, {"enabled": False})
-        res_qdap = self.signal_qdap.compute(book, trades, now_ms) if en_qdap else SignalResult("QDAP", 0.0, 0.0, {"enabled": False})
-        res_mom = self.signal_mom.compute(book, trades, now_ms) if en_mom else SignalResult("MomentumExpansion", 0.0, 0.0, {"enabled": False})
-        res_convexity = self.signal_convexity.compute(book, trades, now_ms) if en_convexity else SignalResult("ConvexityCascade", 0.0, 0.0, {"enabled": False})
-        res_hedged = self.signal_hedged.compute(book, trades, now_ms) if en_hedged else SignalResult("HedgedConvexity", 0.0, 0.0, {"enabled": False})
+            res_adaptive = SignalResult("AdaptiveML", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
+        res_qdap = self.signal_qdap.compute(book, trades, now_ms) if en_qdap else SignalResult("QDAP", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
+        res_mom = self.signal_mom.compute(book, trades, now_ms) if en_mom else SignalResult("MomentumExpansion", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
+        res_convexity = self.signal_convexity.compute(book, trades, now_ms) if en_convexity else SignalResult("ConvexityCascade", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
+        res_hedged = self.signal_hedged.compute(book, trades, now_ms) if en_hedged else SignalResult("HedgedConvexity", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
         res_qr = self.signal_queue_replenishment.compute(book, trades, now_ms) if en_qr else SignalResult("QueueReplenishment", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
 
         # Attach enabled state to sub-signal metadata

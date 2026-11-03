@@ -50,6 +50,7 @@ logs/
 .DS_Store
 Thumbs.db
 desktop.ini
+*.lnk
 
 # Local scratch files & raw session audit dumps
 scratch/

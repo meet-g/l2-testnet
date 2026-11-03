@@ -33,6 +33,7 @@ class TestStrategyDistinction(unittest.TestCase):
             "AdaptiveML_Maker",
             "WOBI_Maker",
             "MicroPrice_Maker",
+            "MicroPrice_FastFill",
             "Absorption_Fade",
             "AdaptiveML_Taker",
             "Composite_Taker",
@@ -41,7 +42,7 @@ class TestStrategyDistinction(unittest.TestCase):
         self.assertEqual(NEW_EXECUTION_STRATEGIES, expected_new)
         self.assertEqual(LEGACY_SCALPING_STRATEGIES, expected_legacy)
         self.assertEqual(len(NEW_EXECUTION_STRATEGIES), 4)
-        self.assertEqual(len(LEGACY_SCALPING_STRATEGIES), 8)
+        self.assertEqual(len(LEGACY_SCALPING_STRATEGIES), 9)
 
         # Ensure no overlap
         overlap = set(NEW_EXECUTION_STRATEGIES).intersection(set(LEGACY_SCALPING_STRATEGIES))
@@ -72,7 +73,7 @@ class TestStrategyDistinction(unittest.TestCase):
             self.assertFalse(cfg.is_scalping_strategy(name))
             self.assertEqual(cfg.get_strategy_category(name), "execution")
 
-        self.assertEqual(len(cfg.scalping_strategies), 8)
+        self.assertEqual(len(cfg.scalping_strategies), 9)
         for name in LEGACY_SCALPING_STRATEGIES:
             self.assertIn(name, cfg.scalping_strategies)
             strat = cfg.scalping_strategies[name]
@@ -84,7 +85,7 @@ class TestStrategyDistinction(unittest.TestCase):
 
         # Verify all_strategies union
         all_strats = cfg.all_strategies
-        self.assertEqual(len(all_strats), 12)
+        self.assertEqual(len(all_strats), 13)
         for name in NEW_EXECUTION_STRATEGIES + LEGACY_SCALPING_STRATEGIES:
             self.assertIn(name, all_strats)
             self.assertIsNotNone(cfg.get_strategy(name))
@@ -100,7 +101,7 @@ class TestStrategyDistinction(unittest.TestCase):
             self.assertIn("entry_threshold", exec_params[name])
 
         scalp_params = cfg.get_scalping_strategy_params()
-        self.assertEqual(len(scalp_params), 8)
+        self.assertEqual(len(scalp_params), 9)
         for name in LEGACY_SCALPING_STRATEGIES:
             self.assertIn(name, scalp_params)
             self.assertIn("entry_threshold", scalp_params[name])
@@ -162,63 +163,105 @@ class TestStrategyDistinction(unittest.TestCase):
 
     def test_set_scalping_mode_toggle(self):
         """Verifies set_scalping_mode(True) enables all 8 scalping and disables core, and vice versa."""
-        cfg = StrategiesConfig.load("strategies.json")
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(DEFAULT_STRATEGIES_JSON, f, indent=2)
+            temp_path = f.name
 
-        # 1. Enable scalping mode
-        cfg.set_scalping_mode(enabled=True)
-        self.assertTrue(cfg.is_scalping_mode_active)
+        try:
+            cfg = StrategiesConfig.load(temp_path)
 
-        for name in LEGACY_SCALPING_STRATEGIES:
-            self.assertTrue(cfg.scalping_strategies[name].enabled, f"{name} should be enabled in scalping mode")
-        for name in NEW_EXECUTION_STRATEGIES:
-            self.assertFalse(cfg.execution_strategies[name].enabled, f"{name} should be disabled in scalping mode")
-        self.assertEqual(cfg.live_execution.active_strategy, "Composite_Maker")
+            # 1. Enable scalping mode
+            cfg.set_scalping_mode(enabled=True)
+            self.assertTrue(cfg.is_scalping_mode_active)
 
-        # 2. Disable scalping mode (return to core mode)
-        cfg.set_scalping_mode(enabled=False)
-        self.assertFalse(cfg.is_scalping_mode_active)
+            for name in LEGACY_SCALPING_STRATEGIES:
+                self.assertTrue(cfg.scalping_strategies[name].enabled, f"{name} should be enabled in scalping mode")
+            for name in NEW_EXECUTION_STRATEGIES:
+                self.assertFalse(cfg.execution_strategies[name].enabled, f"{name} should be disabled in scalping mode")
+            self.assertEqual(cfg.live_execution.active_strategy, "Composite_Maker")
 
-        for name in LEGACY_SCALPING_STRATEGIES:
-            self.assertFalse(cfg.scalping_strategies[name].enabled, f"{name} should be disabled in core mode")
-        for name in ("Hedged_Convexity", "Convexity_Cascade", "Momentum_Expansion"):
-            self.assertTrue(cfg.execution_strategies[name].enabled, f"{name} should be enabled in core mode")
-        self.assertEqual(cfg.live_execution.active_strategy, "Hedged_Convexity")
+            # 2. Disable scalping mode (return to core mode)
+            cfg.set_scalping_mode(enabled=False)
+            self.assertFalse(cfg.is_scalping_mode_active)
+
+            for name in LEGACY_SCALPING_STRATEGIES:
+                self.assertFalse(cfg.scalping_strategies[name].enabled, f"{name} should be disabled in core mode")
+            for name in ("Hedged_Convexity", "Convexity_Cascade", "Momentum_Expansion"):
+                self.assertTrue(cfg.execution_strategies[name].enabled, f"{name} should be enabled in core mode")
+            self.assertEqual(cfg.live_execution.active_strategy, "Hedged_Convexity")
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
     def test_scalping_session_ended_then_normal_session_runs(self):
         """Verifies that when a scalping session ends, a subsequent normal session has scalping strategies disabled."""
-        # 1. Simulate starting a scalping session via CLI (transient in-memory override)
-        scalp_session_cfg = StrategiesConfig.load("strategies.json")
-        scalp_session_cfg.set_scalping_mode(enabled=True, save=False)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(DEFAULT_STRATEGIES_JSON, f, indent=2)
+            default_path = f.name
 
-        # Confirm scalping session had scalping enabled
-        self.assertTrue(scalp_session_cfg.is_scalping_mode_active)
-        for s in LEGACY_SCALPING_STRATEGIES:
-            self.assertTrue(scalp_session_cfg.scalping_strategies[s].enabled)
-        for s in NEW_EXECUTION_STRATEGIES:
-            self.assertFalse(scalp_session_cfg.execution_strategies[s].enabled)
+        try:
+            # 1. Simulate starting a scalping session via CLI (transient in-memory override)
+            scalp_session_cfg = StrategiesConfig.load(default_path)
+            scalp_session_cfg.set_scalping_mode(enabled=True, save=False)
 
-        # 2. Scalping session ends. User now starts a normal session:
-        # Normal session loads strategies.json without --scalping override
-        normal_session_cfg = StrategiesConfig.load("strategies.json")
+            # Confirm scalping session had scalping enabled
+            self.assertTrue(scalp_session_cfg.is_scalping_mode_active)
+            for s in LEGACY_SCALPING_STRATEGIES:
+                self.assertTrue(scalp_session_cfg.scalping_strategies[s].enabled)
+            for s in NEW_EXECUTION_STRATEGIES:
+                self.assertFalse(scalp_session_cfg.execution_strategies[s].enabled)
 
-        # Confirm scalping strategies are strictly DISABLED in normal session
-        self.assertFalse(normal_session_cfg.is_scalping_mode_active)
-        for s in LEGACY_SCALPING_STRATEGIES:
-            self.assertFalse(
-                normal_session_cfg.scalping_strategies[s].enabled,
-                f"Scalping strategy {s} must be disabled when normal session runs"
-            )
+            # 2. Scalping session ends. User now starts a normal session:
+            # Normal session loads default strategies.json without --scalping override
+            normal_session_cfg = StrategiesConfig.load(default_path)
 
-        # Confirm core execution strategies are active
-        for s in ("Hedged_Convexity", "Convexity_Cascade", "Momentum_Expansion"):
-            self.assertTrue(
-                normal_session_cfg.execution_strategies[s].enabled,
-                f"Core execution strategy {s} must be active in normal session"
-            )
+            # Confirm scalping strategies are strictly DISABLED in normal session
+            self.assertFalse(normal_session_cfg.is_scalping_mode_active)
+            for s in LEGACY_SCALPING_STRATEGIES:
+                self.assertFalse(
+                    normal_session_cfg.scalping_strategies[s].enabled,
+                    f"Scalping strategy {s} must be disabled when normal session runs"
+                )
 
-        # Active live strategy must be a core strategy (Hedged_Convexity)
-        self.assertEqual(normal_session_cfg.live_execution.active_strategy, "Hedged_Convexity")
-        self.assertTrue(normal_session_cfg.is_execution_strategy(normal_session_cfg.live_execution.active_strategy))
+            # Confirm core execution strategies are active
+            for s in ("Hedged_Convexity", "Convexity_Cascade", "Momentum_Expansion"):
+                self.assertTrue(
+                    normal_session_cfg.execution_strategies[s].enabled,
+                    f"Core execution strategy {s} must be active in normal session"
+                )
+
+            # Active live strategy must be a core strategy (Hedged_Convexity)
+            self.assertEqual(normal_session_cfg.live_execution.active_strategy, "Hedged_Convexity")
+            self.assertTrue(normal_session_cfg.is_execution_strategy(normal_session_cfg.live_execution.active_strategy))
+        finally:
+            if os.path.exists(default_path):
+                os.remove(default_path)
+
+    def test_effective_live_strategy_resolution(self):
+        """Verifies get_effective_live_strategy dynamically resolves to enabled strategy when active_strategy is disabled."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(DEFAULT_STRATEGIES_JSON, f, indent=2)
+            temp_path = f.name
+
+        try:
+            cfg = StrategiesConfig.load(temp_path)
+            # Default: Hedged_Convexity is active and enabled
+            self.assertEqual(cfg.get_effective_live_strategy(), "Hedged_Convexity")
+
+            # Disable Hedged_Convexity while active_strategy is still Hedged_Convexity
+            cfg.execution_strategies["Hedged_Convexity"].enabled = False
+            # Should dynamically resolve to next enabled execution strategy
+            self.assertEqual(cfg.get_effective_live_strategy(), "Convexity_Cascade")
+
+            # Disable all execution strategies and enable MicroPrice_FastFill
+            for s in cfg.execution_strategies.values():
+                s.enabled = False
+            cfg.scalping_strategies["MicroPrice_FastFill"].enabled = True
+            cfg.live_execution.active_strategy = "Hedged_Convexity"  # still pointing to disabled
+            self.assertEqual(cfg.get_effective_live_strategy(), "MicroPrice_FastFill")
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
 
 if __name__ == "__main__":

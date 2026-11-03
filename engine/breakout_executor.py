@@ -101,8 +101,8 @@ class AccountTelemetry:
     available_margin: float = 0.0
     daily_drawdown_pct: float = 0.0
     max_drawdown_pct: float = 0.0
-    daily_drawdown_limit_pct: float = 4.0  # Prop firm hard rule (e.g. 4%)
-    max_drawdown_limit_pct: float = 8.0  # Prop firm hard rule (e.g. 8%)
+    daily_drawdown_limit_pct: float = 3.0  # Prop firm hard rule: 3.0% ($150 on $5k account)
+    max_drawdown_limit_pct: float = 3.0    # Prop firm hard rule: 3.0% ($150 on $5k account)
     is_daily_limit_breached: bool = False
     is_max_limit_breached: bool = False
     active_account_id: str = ""
@@ -126,7 +126,8 @@ class BreakoutExecutor:
         user_data_dir: Optional[str] = None,
         cdp_port: Optional[int] = 9222,
         headless: bool = False,
-        daily_loss_limit_pct: float = 3.5,  # Defensive threshold below 4.0%
+        daily_loss_limit_pct: float = 2.0,    # Defensive threshold below 3.0% ($100 on $5k)
+        max_drawdown_limit_pct: float = 2.2,  # Defensive threshold below 3.0% ($110 on $5k)
         console: Optional[Console] = None,
     ):
         self.portal_url = portal_url
@@ -134,6 +135,7 @@ class BreakoutExecutor:
         self.cdp_port = cdp_port
         self.headless = headless
         self.daily_loss_limit_pct = daily_loss_limit_pct
+        self.max_drawdown_limit_pct = max_drawdown_limit_pct
         self.console = console or Console()
 
         self._pw: Optional[Playwright] = None
@@ -176,26 +178,53 @@ class BreakoutExecutor:
                 return sel
         return None
 
-    async def connect(self, prefer_cdp: bool = True) -> bool:
-        """Connects to Breakout Terminal via CDP or opens a persistent browser profile."""
+    async def connect(self, prefer_cdp: bool = True, require_cdp: bool = True) -> bool:
+        """Connects to Breakout Terminal via CDP or opens a persistent browser profile.
+        
+        Args:
+            prefer_cdp: If True, attempts to connect to existing Chrome instance on cdp_port.
+            require_cdp: If True and CDP fails, avoids fallback to launch_persistent_context
+                         to prevent Cloudflare Turnstile bot detection triggers.
+        """
         os.makedirs(self.user_data_dir, exist_ok=True)
         self._pw = await async_playwright().start()
 
         if prefer_cdp and self.cdp_port:
-            try:
-                self.console.print(
-                    f"[dim cyan][BreakoutExecutor] Attempting CDP connection to port {self.cdp_port}...[/dim cyan]"
-                )
-                self._browser = await self._pw.chromium.connect_over_cdp(f"http://localhost:{self.cdp_port}")
-                self._context = self._browser.contexts[0]
-                self.console.print("[bold green]✓ [BreakoutExecutor] Connected via Chrome DevTools Protocol![/bold green]")
-            except Exception as e:
-                self.console.print(
-                    f"[dim yellow][BreakoutExecutor] CDP connection failed ({e}). Falling back to persistent profile.[/dim yellow]"
-                )
-                self._browser = None
+            # Use IPv4 127.0.0.1 to avoid Windows IPv6 (::1) localhost connection refusal
+            cdp_url = f"http://127.0.0.1:{self.cdp_port}"
+            for attempt in range(1, 4):
+                try:
+                    self.console.print(
+                        f"[dim cyan][BreakoutExecutor] Attempting CDP connection to {cdp_url} (attempt {attempt}/3)...[/dim cyan]"
+                    )
+                    self._browser = await self._pw.chromium.connect_over_cdp(cdp_url)
+                    self._context = self._browser.contexts[0]
+                    self.console.print("[bold green]✓ [BreakoutExecutor] Connected via Chrome DevTools Protocol![/bold green]")
+                    break
+                except Exception as e:
+                    if attempt < 3:
+                        await asyncio.sleep(0.5)
+                    else:
+                        self.console.print(
+                            f"[dim yellow][BreakoutExecutor] CDP connection to {cdp_url} failed: {e}[/dim yellow]"
+                        )
+                        self._browser = None
 
         if not self._browser:
+            if require_cdp:
+                self.console.print(
+                    "[bold red][BreakoutExecutor] CDP connection failed and require_cdp=True.[/bold red]\n"
+                    "[bold yellow]To bypass Cloudflare, launch Chrome with a dedicated user data dir and remote debugging:[/bold yellow]\n"
+                    "  & 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' "
+                    "--remote-debugging-port=9222 --user-data-dir=\"$env:LOCALAPPDATA\\Google\\Chrome_Breakout\" "
+                    "\"https://trade.breakoutprop.com\""
+                )
+                if self._pw:
+                    await self._pw.stop()
+                    self._pw = None
+                self.is_connected = False
+                return False
+
             self.console.print(
                 f"[dim cyan][BreakoutExecutor] Launching Chromium with profile: {self.user_data_dir}[/dim cyan]"
             )
@@ -210,25 +239,45 @@ class BreakoutExecutor:
                 ],
             )
 
-        # Locate or open Breakout page
-        self._page = await self._find_or_open_terminal_page()
-        self._setup_network_listeners(self._page)
-        self.is_connected = True
-        return True
+        # Locate active Breakout page
+        try:
+            self._page = await self._find_or_open_terminal_page()
+            self._setup_network_listeners(self._page)
+            self.is_connected = True
+            return True
+        except Exception as e:
+            self.console.print(f"[bold red][BreakoutExecutor] Failed to locate Breakout trade tab: {e}[/bold red]")
+            await self.close()
+            return False
 
     async def _find_or_open_terminal_page(self) -> Page:
-        """Finds an existing Breakout tab or opens one."""
+        """Finds an existing Breakout trade tab or opens one."""
         if not self._context:
             raise RuntimeError("Browser context not initialized")
 
         pages = self._context.pages
+        # 1. Search for an exact trade / account tab first
+        for p in pages:
+            url = p.url.lower()
+            if "trade.breakoutprop.com" in url or "breakoutprop.com/app/account" in url:
+                self.console.print(f"[bold green]✓ Found active Breakout trade page: {p.url}[/bold green]")
+                return p
+
+        # 2. Search for any breakout tab
         for p in pages:
             if "breakout" in p.url.lower():
                 self.console.print(f"[bold green]✓ Found active Breakout page: {p.url}[/bold green]")
                 return p
 
-        # If none found, use the first or open a new one
-        page = pages[0] if pages else await self._context.new_page()
+        # 3. If connected to an existing user Chrome via CDP, do NOT hijack an unrelated user tab
+        if self._browser and len(pages) > 0 and not any("breakout" in p.url.lower() for p in pages):
+            raise RuntimeError(
+                "Connected to active Chrome, but no Breakout trade tab was found. "
+                "Please navigate one of your Chrome tabs to https://trade.breakoutprop.com before running the supervisor."
+            )
+
+        # 4. If none found in isolated mode, open a new tab
+        page = await self._context.new_page() if pages else await self._context.new_page()
         self.console.print(f"[dim cyan]Navigating to {self.portal_url}...[/dim cyan]")
         await page.goto(self.portal_url, wait_until="domcontentloaded")
         
@@ -264,10 +313,12 @@ class BreakoutExecutor:
         page.on("request", on_request)
 
     async def close(self) -> None:
-        """Closes browser connections cleanly."""
+        """Closes browser connections cleanly without terminating user's active Chrome."""
         try:
             if self._context:
                 await self._context.close()
+            if self._browser:
+                await self._browser.close()
             if self._pw:
                 await self._pw.stop()
         except Exception:
@@ -278,6 +329,10 @@ class BreakoutExecutor:
     # --------------------------------------------------------------------------
     # Telemetry & Risk Guardrails (Prop Firm Protection)
     # --------------------------------------------------------------------------
+
+    async def get_account_telemetry(self) -> AccountTelemetry:
+        """Alias for refresh_account_telemetry."""
+        return await self.refresh_account_telemetry()
 
     async def refresh_account_telemetry(self) -> AccountTelemetry:
         """Scrapes or evaluates account equity, balance, and drawdown meters."""
@@ -314,12 +369,25 @@ class BreakoutExecutor:
                     return {
                         title: document.title,
                         url: window.location.href,
-                        texts: texts.slice(0, 200)
+                        texts: texts.slice(0, 200),
+                        innerText: document.body ? document.body.innerText : ""
                     };
                 }"""
             )
 
-            # Parse equity / balance patterns
+            # Check direct Portfolio text pattern: "Portfolio\n4,926.15\nUSD"
+            inner_text = data.get("innerText", "")
+            port_match = re.search(r"Portfolio\s*\n\s*([0-9,]+(?:\.[0-9]+)?)\s*\n\s*USD", inner_text, re.IGNORECASE)
+            if port_match:
+                eq_val = float(port_match.group(1).replace(",", ""))
+                self.telemetry.equity = eq_val
+                self.telemetry.balance = eq_val
+                if eq_val < 5000.0:
+                    dd_pct = ((5000.0 - eq_val) / 5000.0) * 100.0
+                    self.telemetry.max_drawdown_pct = round(dd_pct, 2)
+                    self.telemetry.daily_drawdown_pct = round(dd_pct, 2)
+
+            # Parse equity / balance patterns from text blocks
             for t in data.get("texts", []):
                 if "equity" in t.lower() or "balance" in t.lower():
                     nums = re.findall(r"\$([0-9,]+(?:\.[0-9]+)?)", t)
@@ -335,12 +403,24 @@ class BreakoutExecutor:
                     if pcts:
                         self.telemetry.daily_drawdown_pct = float(pcts[0])
 
-            # Safety check
+                if ("max" in t.lower() or "trailing" in t.lower()) and "drawdown" in t.lower():
+                    pcts = re.findall(r"([0-9]+(?:\.[0-9]+)?)\s*%", t)
+                    if pcts:
+                        self.telemetry.max_drawdown_pct = float(pcts[0])
+
+            # Safety checks (Defensive halts to guarantee 3% hard barriers are never breached)
             if self.telemetry.daily_drawdown_pct >= self.daily_loss_limit_pct:
                 self.telemetry.is_daily_limit_breached = True
                 self.console.print(
                     f"[bold red]⚠ CIRCUIT BREAKER TRIGGERED: Daily DD at {self.telemetry.daily_drawdown_pct:.2f}% "
                     f"(Defensive limit: {self.daily_loss_limit_pct}%)![/bold red]"
+                )
+
+            if self.telemetry.max_drawdown_pct >= self.max_drawdown_limit_pct:
+                self.telemetry.is_max_limit_breached = True
+                self.console.print(
+                    f"[bold red]⚠ CIRCUIT BREAKER TRIGGERED: Max DD at {self.telemetry.max_drawdown_pct:.2f}% "
+                    f"(Defensive limit: {self.max_drawdown_limit_pct}%)![/bold red]"
                 )
 
         except Exception as e:

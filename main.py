@@ -103,7 +103,7 @@ class L2EngineRunner:
             bt_cfg=self.config.backtest,
             strategy_defs=enabled_strategy_defs,
             strategy_params=strategy_params,
-            auditor=self.auditor,
+            auditor=None if self.live_orders else self.auditor,
         )
 
         self.recorder: Optional[L2DataRecorder] = (
@@ -115,7 +115,7 @@ class L2EngineRunner:
         self.live_executor = None
         if live_orders:
             from engine.live_executor import LiveOrderExecutor
-            active_name = self.config.strategies.live_execution.active_strategy
+            active_name = self.config.strategies.get_effective_live_strategy()
             self.live_executor = LiveOrderExecutor(
                 config=self.config,
                 console=self.console,
@@ -124,6 +124,7 @@ class L2EngineRunner:
                 allocation_pct=getattr(self.config.backtest, "capital_allocation_pct", 1.0),
                 auditor=self.auditor,
                 strategy_name=active_name,
+                non_blocking=True,
             )
 
         self.dashboard = TerminalDashboard(console=self.console)
@@ -132,6 +133,7 @@ class L2EngineRunner:
             from ui.web_server import DashboardWebServer
             self.web_server = DashboardWebServer(runner=self, port=self.web_port)
         self.latest_display_signals: Dict[str, Any] = {}
+        self._last_eval_time: float = 0.0
         self.is_running = False
 
     def __enter__(self):
@@ -141,13 +143,95 @@ class L2EngineRunner:
         self.close()
 
     def close(self) -> None:
-        """Closes all runner resources including auditor and data recorder."""
+        """Closes all runner resources including auditor, live executor, and data recorder."""
+        if self.live_executor and hasattr(self.live_executor, "close"):
+            self.live_executor.close()
         if self.web_server and self.web_server.server:
             self.web_server.server.should_exit = True
         if self.auditor:
             self.auditor.close_session()
         if self.recorder:
             self.recorder.close()
+
+    def _evaluate_signals(self) -> None:
+        """Evaluates composite alpha and triggers paper trading evaluator and live order executor (<0.1ms local compute)."""
+        if not self.book.is_valid:
+            return
+
+        now_ms = int(time.time() * 1000)
+        self._last_eval_time = now_ms / 1000.0
+
+        # Compute composite alpha
+        res = self.alpha_model.compute(self.book, self.trades, now_ms)
+        sub_sigs = res.metadata.get("sub_signals", {})
+        self.latest_display_signals = {**sub_sigs, "Composite": res}
+
+        # Extract score and confidence dictionaries
+        scores = {name: sig.score for name, sig in sub_sigs.items()}
+        scores["CompositeAlpha"] = res.score
+        confidences = {name: getattr(sig, "confidence", 0.0) for name, sig in sub_sigs.items()}
+        confidences["CompositeAlpha"] = getattr(res, "confidence", 0.0)
+
+        # Feed edge evaluator & paper trading simulator
+        self.evaluator.record_step(
+            timestamp_ms=now_ms,
+            mid_price=self.book.mid_price,
+            best_bid=self.book.best_bid,
+            best_ask=self.book.best_ask,
+            signals=scores,
+            confidences=confidences,
+        )
+
+        # Feed live order executor if enabled
+        if self.live_executor:
+            # 1. If holding an active position, preserve the owning strategy
+            if abs(self.live_executor.cached_position) > 1e-6:
+                if not self.live_executor.position_strategy:
+                    self.live_executor.position_strategy = self.config.strategies.get_effective_live_strategy()
+                strat_to_use = self.live_executor.position_strategy
+                active_strat = self.config.strategies.get_strategy(strat_to_use)
+                sig_score = scores.get(active_strat.signal_key, 0.0) if active_strat else 0.0
+                sig_conf = confidences.get(active_strat.signal_key, 0.0) if active_strat else 0.0
+            # 2. If an entry order is resting on the book, preserve its owning strategy
+            elif self.live_executor.active_order and self.live_executor.active_order.get("strategy_name"):
+                strat_to_use = self.live_executor.active_order.get("strategy_name")
+                active_strat = self.config.strategies.get_strategy(strat_to_use)
+                sig_score = scores.get(active_strat.signal_key, 0.0) if active_strat else 0.0
+                sig_conf = confidences.get(active_strat.signal_key, 0.0) if active_strat else 0.0
+            # 3. When completely flat with no resting order, dispatch across enabled strategies
+            else:
+                active_name = self.config.strategies.get_effective_live_strategy()
+                active_strat = self.config.strategies.get_strategy(active_name)
+
+                strat_to_use = active_name
+                sig_score = scores.get(active_strat.signal_key, 0.0) if (active_strat and active_strat.enabled) else 0.0
+                sig_conf = confidences.get(active_strat.signal_key, 0.0) if (active_strat and active_strat.enabled) else 0.0
+                if active_strat and active_strat.min_confidence is not None and sig_conf < active_strat.min_confidence:
+                    sig_score = 0.0
+                threshold = active_strat.entry_threshold if active_strat else 0.85
+
+                for s_name, s_def in self.config.strategies.all_strategies.items():
+                    if s_def.enabled and s_name != active_name:
+                        s_score = scores.get(s_def.signal_key, 0.0)
+                        s_conf = confidences.get(s_def.signal_key, 0.0)
+                        if s_def.min_confidence is not None and s_conf < s_def.min_confidence:
+                            continue
+                        if abs(s_score) >= s_def.entry_threshold and (abs(sig_score) < threshold or abs(s_score) > abs(sig_score)):
+                            sig_score = s_score
+                            sig_conf = s_conf
+                            strat_to_use = s_name
+                            threshold = s_def.entry_threshold
+
+            self.live_executor.strategy_name = strat_to_use
+            self.live_executor.on_signal_update(
+                signal_score=sig_score,
+                best_bid=self.book.best_bid,
+                best_ask=self.book.best_ask,
+                spread=self.book.spread,
+                scores=scores,
+                confidence=sig_conf,
+                confidences=confidences,
+            )
 
     async def _handle_message(self, raw_msg: str) -> None:
         """Processes an incoming WebSocket message from Hyperliquid."""
@@ -170,77 +254,26 @@ class L2EngineRunner:
 
         if channel == "l2Book":
             self.book.update_from_raw(data)
+            # FAST-PATH: Real-time event-driven signal evaluation and order execution (<0.1ms local latency)
+            self._evaluate_signals()
 
         elif channel == "trades":
             if isinstance(data, list):
                 self.trades.process_raw_trades(data)
+                # FAST-PATH: Real-time event-driven signal evaluation on incoming trade ticks
+                self._evaluate_signals()
 
         elif channel == "activeAssetCtx":
             self.book.update_asset_ctx(data)
 
     async def _evaluation_loop(self) -> None:
-        """Runs at fixed frequency (e.g. 10Hz) to compute signals and evaluate forward edge."""
+        """Runs periodic fallback/heartbeat loop to guarantee continuous alpha and resting order maintenance."""
         dt = 1.0 / self.config.sample_rate_hz
         while self.is_running:
             start_t = time.perf_counter()
-
-            if self.book.is_valid:
-                now_ms = int(time.time() * 1000)
-                # Compute composite alpha
-                res = self.alpha_model.compute(self.book, self.trades, now_ms)
-                sub_sigs = res.metadata.get("sub_signals", {})
-                self.latest_display_signals = {**sub_sigs, "Composite": res}
-
-                # Extract score dictionary
-                scores = {name: sig.score for name, sig in sub_sigs.items()}
-                scores["CompositeAlpha"] = res.score
-
-                # Feed edge evaluator & paper trading simulator
-                self.evaluator.record_step(
-                    timestamp_ms=now_ms,
-                    mid_price=self.book.mid_price,
-                    best_bid=self.book.best_bid,
-                    best_ask=self.book.best_ask,
-                    signals=scores,
-                )
-
-                # Feed live order executor if enabled
-                if self.live_executor:
-                    # 1. If holding an active position, preserve the owning strategy
-                    if abs(self.live_executor.cached_position) > 1e-6 and self.live_executor.position_strategy:
-                        strat_to_use = self.live_executor.position_strategy
-                        active_strat = self.config.strategies.get_strategy(strat_to_use)
-                        sig_score = scores.get(active_strat.signal_key, 0.0) if active_strat else 0.0
-                    # 2. If an entry order is resting on the book, preserve its owning strategy
-                    elif self.live_executor.active_order and self.live_executor.active_order.get("strategy_name"):
-                        strat_to_use = self.live_executor.active_order.get("strategy_name")
-                        active_strat = self.config.strategies.get_strategy(strat_to_use)
-                        sig_score = scores.get(active_strat.signal_key, 0.0) if active_strat else 0.0
-                    # 3. When completely flat with no resting order, dispatch across enabled strategies
-                    else:
-                        active_name = self.config.strategies.live_execution.active_strategy
-                        active_strat = self.config.strategies.get_strategy(active_name)
-
-                        strat_to_use = active_name
-                        sig_score = scores.get(active_strat.signal_key, 0.0) if (active_strat and active_strat.enabled) else 0.0
-                        threshold = active_strat.entry_threshold if active_strat else 0.85
-
-                        if abs(sig_score) < threshold:
-                            for s_name, s_def in self.config.strategies.all_strategies.items():
-                                if s_def.enabled and s_name != active_name:
-                                    s_score = scores.get(s_def.signal_key, 0.0)
-                                    if abs(s_score) >= s_def.entry_threshold and abs(s_score) > abs(sig_score):
-                                        sig_score = s_score
-                                        strat_to_use = s_name
-
-                    self.live_executor.strategy_name = strat_to_use
-                    self.live_executor.on_signal_update(
-                        signal_score=sig_score,
-                        best_bid=self.book.best_bid,
-                        best_ask=self.book.best_ask,
-                        spread=self.book.spread,
-                        scores=scores,
-                    )
+            now = time.time()
+            if (now - self._last_eval_time) >= (dt * 0.9):
+                self._evaluate_signals()
 
             elapsed = time.perf_counter() - start_t
             await asyncio.sleep(max(0.001, dt - elapsed))
@@ -300,6 +333,7 @@ class L2EngineRunner:
                     refresh_per_second=4,
                     screen=False,
                 ) as live:
+                    last_ui_render_time = 0.0
                     while self.is_running:
                         if duration_secs and (time.time() - start_time) >= duration_secs:
                             break
@@ -355,21 +389,24 @@ class L2EngineRunner:
                                         except asyncio.TimeoutError:
                                             pass
 
-                                        display_signals = self.latest_display_signals
-                                        live.update(
-                                            self.dashboard.render(
-                                                self.book,
-                                                self.trades,
-                                                display_signals,
-                                                self.evaluator,
-                                                network=network_name,
+                                        now_t = time.time()
+                                        if (now_t - last_ui_render_time) >= 0.25:
+                                            last_ui_render_time = now_t
+                                            display_signals = self.latest_display_signals
+                                            live.update(
+                                                self.dashboard.render(
+                                                    self.book,
+                                                    self.trades,
+                                                    display_signals,
+                                                    self.evaluator,
+                                                    network=network_name,
+                                                )
                                             )
-                                        )
-                                        if self.web_server and self.book.is_valid and self.web_server.broadcaster.should_broadcast(time.time()):
+                                        if self.web_server and self.book.is_valid and self.web_server.broadcaster.should_broadcast(now_t):
                                             await self.web_server.emit_telemetry(
                                                 self.book,
                                                 self.trades,
-                                                display_signals,
+                                                self.latest_display_signals,
                                                 self.evaluator,
                                                 network=network_name,
                                             )
@@ -1205,7 +1242,7 @@ def print_strategies_status(cfg: Optional[AppConfig] = None, console: Optional[C
     console.print(f"[bold cyan]           STRATEGY & ALPHA SIGNAL CONFIGURATION ({strat_cfg.filepath})           [/bold cyan]")
     console.print("[bold cyan]================================================================================[/bold cyan]\n")
 
-    active_live = strat_cfg.live_execution.active_strategy
+    active_live = strat_cfg.get_effective_live_strategy()
     active_strat = strat_cfg.get_strategy(active_live)
     live_status = "[bold green]ENABLED[/bold green]" if (active_strat and active_strat.enabled) else "[bold red]DISABLED[/bold red]"
     active_category = "Primary Execution Strategy" if strat_cfg.is_execution_strategy(active_live) else ("Scalping Strategy" if strat_cfg.is_scalping_strategy(active_live) else "Custom Strategy")
@@ -1823,7 +1860,7 @@ def main():
         if args.live_orders:
             cfg.backtest.order_size_btc = args.order_size
             net = cfg.hyperliquid.network_name.upper()
-            active_live = cfg.strategies.live_execution.active_strategy
+            active_live = cfg.strategies.get_effective_live_strategy()
             other_active = [s for s in en_strats if s != active_live]
             if other_active:
                 strats_desc = f"{active_live} (Primary) + {', '.join(other_active)} (Dynamic Multi-Strategy Dispatch)"
@@ -1926,14 +1963,18 @@ def main():
             if runner.book.is_valid and (now_ms - last_eval_ms >= eval_interval_ms):
                 last_eval_ms = now_ms
                 res = runner.alpha_model.compute(runner.book, runner.trades, now_ms)
-                sub_sigs = {name: sig.score for name, sig in res.metadata.get("sub_signals", {}).items()}
+                sub_dict = res.metadata.get("sub_signals", {})
+                sub_sigs = {name: sig.score for name, sig in sub_dict.items()}
                 sub_sigs["CompositeAlpha"] = res.score
+                sub_confs = {name: getattr(sig, "confidence", 1.0) for name, sig in sub_dict.items()}
+                sub_confs["CompositeAlpha"] = getattr(res, "confidence", 1.0)
                 runner.evaluator.record_step(
                     now_ms,
                     runner.book.mid_price,
                     runner.book.best_bid,
                     runner.book.best_ask,
                     sub_sigs,
+                    confidences=sub_confs,
                 )
         if runner.book.is_valid:
             now_ms = runner.book.last_update_time_ms or int(time.time() * 1000)

@@ -87,7 +87,9 @@ class SweepSignal(BaseSignal):
         self.last_bid_top = best_b
         self.last_ask_top = best_a
 
-        confidence = 0.7 if pattern != "STABLE" else 0.1
+        spread_bps = (best_a - best_b) / max(book.mid_price, 1e-4) * 10000.0 if book.mid_price > 0 else 0.0
+        spread_factor = 1.0 / (1.0 + max(0.0, spread_bps - 1.0) * 0.1)
+        confidence = max(0.0, min(1.0, (0.75 * spread_factor) if pattern != "STABLE" else 0.1))
 
         return SignalResult(
             name=self.name,

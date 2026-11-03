@@ -1,5 +1,6 @@
 """Cumulative Volume Delta (CVD) Absorption and Divergence Signal."""
 
+import bisect
 from collections import deque
 import math
 from typing import Deque, Optional, Tuple
@@ -34,7 +35,7 @@ class AbsorptionSignal(BaseSignal):
         super().__init__(name)
         self.window_secs = window_secs
         self.divergence_ratio_thresh = divergence_ratio_thresh
-        self.price_history: Deque[Tuple[int, float]] = deque(maxlen=200)
+        self.price_history: Deque[Tuple[int, float]] = deque(maxlen=2000)
 
     def compute(
         self,
@@ -49,16 +50,23 @@ class AbsorptionSignal(BaseSignal):
         mid = book.mid_price
         self.price_history.append((now_ms, mid))
 
+        scale = getattr(book, "notional_scale", 1.0)
+
         # Need at least 5 seconds of trade history
         cvd, buy_vol, sell_vol = trades.get_cvd_in_window(self.window_secs)
         total_vol = buy_vol + sell_vol
-        if total_vol < 0.5:
+        if total_vol < 0.5 * scale:
             return SignalResult(name=self.name, score=0.0, raw_value=0.0, confidence=0.1)
 
         # Calculate price delta over the window
         cutoff_ms = now_ms - int(self.window_secs * 1000)
-        old_prices = [p for t, p in self.price_history if t <= cutoff_ms]
-        old_price = old_prices[-1] if old_prices else self.price_history[0][1]
+        idx = bisect.bisect_left(self.price_history, (cutoff_ms, -1.0))
+        if idx < len(self.price_history) and self.price_history[idx][0] <= cutoff_ms:
+            old_price = self.price_history[idx][1]
+        elif idx > 0:
+            old_price = self.price_history[idx - 1][1]
+        else:
+            old_price = self.price_history[0][1]
         price_delta_bps = ((mid - old_price) / max(old_price, 1.0)) * 10000.0
 
         # Normalized CVD ratio: [-1.0, 1.0]
@@ -89,7 +97,7 @@ class AbsorptionSignal(BaseSignal):
                 score = max(-0.8, cvd_ratio)
                 pattern = "BEARISH_MOMENTUM"
 
-        confidence = min(1.0, total_vol / 5.0)
+        confidence = max(0.0, min(1.0, total_vol / (5.0 * scale)))
 
         return SignalResult(
             name=self.name,

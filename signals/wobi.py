@@ -81,8 +81,9 @@ class WOBISignal(BaseSignal):
         tob_imbalance = (tob_b - tob_a) / max(tob_b + tob_a, 1e-8)
 
         # Confidence is higher when spread is tight and depth is substantial
+        scale = getattr(book, "notional_scale", 1.0)
         spread_factor = max(0.2, 1.0 - (book.spread_bps / 5.0))
-        depth_factor = min(1.0, denom / 2.0)
+        depth_factor = min(1.0, denom / (2.0 * scale))
         confidence = min(1.0, spread_factor * depth_factor)
 
         # Normalized score

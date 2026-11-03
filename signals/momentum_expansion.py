@@ -12,6 +12,7 @@ from typing import Any, Deque, Dict, List, Optional, Tuple
 from core.orderbook import OrderBook
 from core.trade_stream import TradeManager
 from signals.base import BaseSignal, SignalResult
+from signals.absorption import AbsorptionSignal
 from signals.vpin import VPINSignal
 
 
@@ -55,6 +56,7 @@ class MomentumExpansionSignal(BaseSignal):
         self.min_trade_vol_window = min_trade_vol_window
 
         self.vpin = VPINSignal()
+        self.absorption = AbsorptionSignal(window_secs=20.0)
         self.price_history: List[Tuple[int, float]] = []
         self._head_idx: int = 0
         self.depth_history: Deque[Tuple[int, float, float]] = deque(maxlen=60)
@@ -199,8 +201,14 @@ class MomentumExpansionSignal(BaseSignal):
         # ---------------------------------------------------------------------
         # 4. Active Absorption Trap Shield & Confluence Gating
         # ---------------------------------------------------------------------
-        is_bull_trap = (flow_score > 0.12 and book_score < -self.absorption_hurdle)
-        is_bear_trap = (flow_score < -0.12 and book_score > self.absorption_hurdle)
+        abs_res = self.absorption.compute(book, trades, now_ms)
+        abs_score = abs_res.score
+
+        # True Institutional Limit Absorption Divergences (CVD vs Price delta)
+        # Bull Trap: Aggressive buyers hitting iceberg ask wall (abs_score <= -0.20) or book negative
+        is_bull_trap = (flow_score > 0 and abs_score <= -0.20) or (flow_score > 0.12 and book_score < -self.absorption_hurdle)
+        # Bear Trap: Aggressive sellers hitting iceberg bid wall (abs_score >= 0.20) or book positive
+        is_bear_trap = (flow_score < 0 and abs_score >= 0.20) or (flow_score < -0.12 and book_score > self.absorption_hurdle)
 
         # Climax Exhaustion Check:
         is_exhaustion_climax = (trend_score > 0.85 and flow_score > 0.70) or (trend_score < -0.85 and flow_score < -0.70)
@@ -256,26 +264,30 @@ class MomentumExpansionSignal(BaseSignal):
         is_toxic = vpin_res.metadata.get("is_toxic", False)
         if is_toxic:
             raw_score = max(-0.30, min(0.30, raw_score * 0.15))
+            confidence *= 0.50
 
         # Directional Toxicity Shield: Protect passive maker entries from informed adverse selection
         vpin_score = vpin_res.score
         if raw_score > 0 and vpin_score < -0.20:
             adverse_drag = min(1.0, abs(vpin_score) / 0.45)
             raw_score *= (1.0 - 0.75 * adverse_drag)
+            confidence *= (1.0 - 0.50 * adverse_drag)
             if vpin_score < -0.35:
                 raw_score = min(raw_score, 0.10)
         elif raw_score < 0 and vpin_score > 0.20:
             adverse_drag = min(1.0, abs(vpin_score) / 0.45)
             raw_score *= (1.0 - 0.75 * adverse_drag)
+            confidence *= (1.0 - 0.50 * adverse_drag)
             if vpin_score > 0.35:
                 raw_score = max(raw_score, -0.10)
 
         # Depth Fragility Shield: if resting wall was rapidly pulled (spoof decay), dampen alpha
         if (raw_score > 0 and wall_drop_b) or (raw_score < 0 and wall_drop_a):
             raw_score = max(-0.30, min(0.30, raw_score * 0.20))
+            confidence *= 0.50
 
         score = max(-1.0, min(1.0, raw_score))
-        confidence = max(0.1, min(1.0, confidence))
+        confidence = max(0.05, min(1.0, confidence))
 
         # Check touch queue exhaustion condition
         is_ask_depleted = (a_sz_1 < 0.8 * scale and b_sz_1 > 2.0 * scale)
@@ -296,6 +308,7 @@ class MomentumExpansionSignal(BaseSignal):
                 "flow_fast": flow_fast,
                 "flow_slow": flow_slow,
                 "flow_score": flow_score,
+                "abs_score": abs_score,
                 "trend_score": trend_score,
                 "cvd_fast_btc": cvd_fast,
                 "cvd_slow_btc": cvd_slow,

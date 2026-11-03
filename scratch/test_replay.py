@@ -21,7 +21,7 @@ def run_replay(replay_pattern: str, strategies_config: str = "strategies.json"):
     if strategies_config and os.path.exists(strategies_config):
         cfg.strategies = StrategiesConfig.load(strategies_config)
 
-    runner = L2EngineRunner(config=cfg, record_data=False)
+    runner = L2EngineRunner(config=cfg, record_data=False, enable_audit=True)
     replay = L2ReplayEngine(replay_pattern, speed_multiplier=1000.0)
     
     last_eval_ms = 0
@@ -60,7 +60,8 @@ def run_replay(replay_pattern: str, strategies_config: str = "strategies.json"):
         runner.evaluator.close_open_positions(runner.book.mid_price, now_ms, reason="SESSION_SHUTDOWN")
     
     elapsed = time.time() - t0
-    runner.auditor.close_session()
+    if runner.auditor:
+        runner.auditor.close_session()
 
     # Summarize results
     table = Table(title=f"Replay Results ({replay_pattern}) - {elapsed:.1f}s, {events_count:,} events")

@@ -622,7 +622,7 @@
       renderStrategies(data.strategies || {}, data.is_scalping_mode);
 
       // 6. Recent Trades Feed
-      if (data.recent_trades && data.recent_trades.length > 0) {
+      if (data.recent_trades !== undefined) {
         cachedTrades = data.recent_trades;
         renderTrades(cachedTrades);
       }
@@ -991,10 +991,11 @@
       for (const t of trades) {
         const sideColor = t.side === 'LONG' || t.side === 'BUY' ? 'text-emerald-400' : 'text-rose-400';
         const pnlColor = t.net_pnl > 0 ? 'text-emerald-400 font-bold' : (t.net_pnl < 0 ? 'text-rose-400 font-bold' : 'text-slate-400');
+        const liveBadge = t.is_live ? '<span class="px-1 py-0.2 mr-1 text-[9px] font-bold rounded bg-rose-950 text-rose-300 border border-rose-800">LIVE</span>' : '';
         html += `
           <tr class="hover:bg-slate-900/50 transition-colors">
             <td class="py-1 px-2 text-slate-400">${t.exit_time || '--'}</td>
-            <td class="py-1 px-2 font-medium text-slate-200">${(t.strategy || '').replace(/_/g, ' ')}</td>
+            <td class="py-1 px-2 font-medium text-slate-200">${liveBadge}${(t.strategy || '').replace(/_/g, ' ')}</td>
             <td class="py-1 px-2 ${sideColor} font-bold">${t.side}</td>
             <td class="py-1 px-2 text-right text-slate-300">${t.size_btc}</td>
             <td class="py-1 px-2 text-right text-slate-300">$${t.entry_price.toLocaleString()}</td>

@@ -226,6 +226,7 @@ class HedgedConvexitySignal(BaseSignal):
             # Informed selling threatens maker buy order
             adverse_drag = min(1.0, abs(vpin_score) / 0.45)
             raw_alpha *= (1.0 - 0.75 * adverse_drag)
+            confidence *= (1.0 - 0.50 * adverse_drag)
             # If adverse selling is acute, drop score below hedge threshold (0.20) to arm defensive maker hedge
             if vpin_score < -0.35:
                 raw_alpha = min(raw_alpha, 0.10)
@@ -233,6 +234,7 @@ class HedgedConvexitySignal(BaseSignal):
             # Informed buying threatens maker sell order
             adverse_drag = min(1.0, abs(vpin_score) / 0.45)
             raw_alpha *= (1.0 - 0.75 * adverse_drag)
+            confidence *= (1.0 - 0.50 * adverse_drag)
             if vpin_score > 0.35:
                 raw_alpha = max(raw_alpha, -0.10)
 
@@ -240,12 +242,15 @@ class HedgedConvexitySignal(BaseSignal):
         toxic_ceiling = 0.88 if is_btc else 0.75
         if vpin_raw >= toxic_ceiling and abs(vpin_score) < 0.25:
             raw_alpha *= 0.65
+            confidence *= 0.70
 
         # C. Depth Fragility Shield: if resting wall was rapidly pulled (spoof decay), dampen alpha
         if (raw_alpha > 0 and wall_drop_b) or (raw_alpha < 0 and wall_drop_a):
             raw_alpha = max(-0.30, min(0.30, raw_alpha * 0.20))
+            confidence *= 0.50
 
         score = max(-1.0, min(1.0, raw_alpha))
+        confidence = max(0.0, min(1.0, confidence))
 
         return SignalResult(
             name=self.name,

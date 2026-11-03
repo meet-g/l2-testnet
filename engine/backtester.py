@@ -119,6 +119,7 @@ class EdgeEvaluator:
                 "Composite_Maker": ("CompositeAlpha", "MAKER"),
                 "WOBI_Maker": ("WOBI", "MAKER"),
                 "MicroPrice_Maker": ("MicroPrice", "MAKER"),
+                "MicroPrice_FastFill": ("MicroPrice", "MAKER"),
                 "AdaptiveML_Taker": ("AdaptiveML", "SMART_TAKER"),
                 "Composite_Taker": ("CompositeAlpha", "SMART_TAKER"),
                 "Absorption_Fade": ("Absorption", "MAKER"),
@@ -170,6 +171,7 @@ class EdgeEvaluator:
         best_bid: float,
         best_ask: float,
         signals: Dict[str, float],
+        confidences: Optional[Dict[str, float]] = None,
     ) -> None:
         """Called on every sample step (e.g. 5-10 Hz). Updates forward returns and paper trading."""
         if mid_price <= 0:
@@ -213,7 +215,7 @@ class EdgeEvaluator:
             self.current_volatility_bps = 99.0  # Warmup
 
         # 4. Simulate paper trading with improved entry and exit
-        self._update_paper_trading(timestamp_ms, mid_price, best_bid, best_ask, signals)
+        self._update_paper_trading(timestamp_ms, mid_price, best_bid, best_ask, signals, confidences)
 
     def _update_forward_returns(self, current_time_ms: int, current_price: float) -> None:
         """Matches past observations with current price once horizon elapses."""
@@ -245,6 +247,7 @@ class EdgeEvaluator:
         best_bid: float,
         best_ask: float,
         signals: Dict[str, float],
+        confidences: Optional[Dict[str, float]] = None,
     ) -> None:
         """Executes simulated paper trades with realistic fee, spread, and trailing stop mechanics."""
         taker_fee_pct = self.market_cfg.taker_fee_bps / 10_000.0
@@ -268,6 +271,8 @@ class EdgeEvaluator:
 
             # Strategy-specific execution parameters (with per-strategy overrides)
             params = self.strategy_params.get(s_name, {})
+            hedge_trigger_loss_bps = params.get("hedge_trigger_loss_bps") if params.get("hedge_trigger_loss_bps") is not None else -3.0
+            hedge_reversal_threshold = params.get("hedge_reversal_threshold") if params.get("hedge_reversal_threshold") is not None else -0.15
             if is_maker:
                 entry_thresh = params.get("entry_threshold", self.bt_cfg.entry_threshold)
                 tp_bps = params.get("take_profit_bps", self.bt_cfg.take_profit_bps)
@@ -276,8 +281,6 @@ class EdgeEvaluator:
                 trail_dist_bps = params.get("trailing_stop_distance_bps", self.bt_cfg.trailing_stop_distance_bps)
                 reversal_thresh = params.get("exit_reversal_threshold", self.bt_cfg.exit_reversal_threshold)
                 max_hold_secs = params.get("max_holding_time_secs", self.bt_cfg.max_holding_time_secs)
-                hedge_trigger_loss_bps = params.get("hedge_trigger_loss_bps", -3.0)
-                hedge_reversal_threshold = params.get("hedge_reversal_threshold", -0.15)
             else:
                 entry_thresh = params.get("entry_threshold", self.bt_cfg.entry_threshold_taker)
                 tp_bps = params.get("take_profit_bps", self.bt_cfg.take_profit_bps_taker)
@@ -330,7 +333,7 @@ class EdgeEvaluator:
                     exit_reason = None
                     if gain_bps >= tp_bps:
                         exit_reason = "TAKE_PROFIT"
-                    elif (state.execution_type == "HEDGED_MAKER" or "hedge_trigger_loss_bps" in params) and score <= hedge_reversal_threshold and gain_bps <= hedge_trigger_loss_bps:
+                    elif (state.execution_type == "HEDGED_MAKER" or params.get("hedge_trigger_loss_bps") is not None) and score <= hedge_reversal_threshold and gain_bps <= hedge_trigger_loss_bps:
                         exit_reason = "DEFENSIVE_MAKER_HEDGE"
                     elif mid_price <= state.stop_price:
                         exit_reason = "TRAILING_STOP" if state.trailing_stop_active else "STOP_LOSS"
@@ -346,14 +349,24 @@ class EdgeEvaluator:
                     if exit_reason:
                         # Determine exit execution price and fees
                         if is_maker and exit_reason != "STOP_LOSS":
-                            if exit_reason in ("TRAILING_STOP", "TAKE_PROFIT"):
+                            if exit_reason == "DEFENSIVE_MAKER_HEDGE" and params.get("defensive_hedge_market", False):
+                                exit_price = best_bid * (1.0 - slippage_pct)
+                                fee = exit_price * state.position_btc * taker_fee_pct
+                                exec_label = "TAKER (HEDGE)"
+                            elif exit_reason == "SIGNAL_REVERSAL" and params.get("reversal_exit_market", False):
+                                exit_price = best_bid * (1.0 - slippage_pct)
+                                fee = exit_price * state.position_btc * taker_fee_pct
+                                exec_label = "TAKER (REV)"
+                            elif exit_reason in ("TRAILING_STOP", "TAKE_PROFIT"):
                                 # Passive resting maker limit fill: fills at or better than limit order price
                                 target_limit = state.stop_price if exit_reason == "TRAILING_STOP" else state.entry_price * (1.0 + tp_bps / 10_000.0)
                                 exit_price = max(best_ask, target_limit)
+                                fee = exit_price * state.position_btc * maker_fee_pct
+                                exec_label = "MAKER"
                             else:
                                 exit_price = best_ask
-                            fee = exit_price * state.position_btc * maker_fee_pct
-                            exec_label = "MAKER"
+                                fee = exit_price * state.position_btc * maker_fee_pct
+                                exec_label = "MAKER"
                         elif not is_maker and exit_reason != "STOP_LOSS" and self.bt_cfg.taker_exit_as_maker_on_tp:
                             # Smart Taker exits all orderly conditions passively as Maker
                             exit_price = best_ask
@@ -467,7 +480,7 @@ class EdgeEvaluator:
                     exit_reason = None
                     if gain_bps >= tp_bps:
                         exit_reason = "TAKE_PROFIT"
-                    elif (state.execution_type == "HEDGED_MAKER" or "hedge_trigger_loss_bps" in params) and score >= -hedge_reversal_threshold and gain_bps <= hedge_trigger_loss_bps:
+                    elif (state.execution_type == "HEDGED_MAKER" or params.get("hedge_trigger_loss_bps") is not None) and score >= -hedge_reversal_threshold and gain_bps <= hedge_trigger_loss_bps:
                         exit_reason = "DEFENSIVE_MAKER_HEDGE"
                     elif mid_price >= state.stop_price:
                         exit_reason = "TRAILING_STOP" if state.trailing_stop_active else "STOP_LOSS"
@@ -482,14 +495,24 @@ class EdgeEvaluator:
 
                     if exit_reason:
                         if is_maker and exit_reason != "STOP_LOSS":
-                            if exit_reason in ("TRAILING_STOP", "TAKE_PROFIT"):
+                            if exit_reason == "DEFENSIVE_MAKER_HEDGE" and params.get("defensive_hedge_market", False):
+                                exit_price = best_ask * (1.0 + slippage_pct)
+                                fee = exit_price * abs(state.position_btc) * taker_fee_pct
+                                exec_label = "TAKER (HEDGE)"
+                            elif exit_reason == "SIGNAL_REVERSAL" and params.get("reversal_exit_market", False):
+                                exit_price = best_ask * (1.0 + slippage_pct)
+                                fee = exit_price * abs(state.position_btc) * taker_fee_pct
+                                exec_label = "TAKER (REV)"
+                            elif exit_reason in ("TRAILING_STOP", "TAKE_PROFIT"):
                                 # Passive resting maker limit fill: fills at or better than limit order price
                                 target_limit = state.stop_price if exit_reason == "TRAILING_STOP" else state.entry_price * (1.0 - tp_bps / 10_000.0)
                                 exit_price = min(best_bid, target_limit)
+                                fee = exit_price * abs(state.position_btc) * maker_fee_pct
+                                exec_label = "MAKER"
                             else:
                                 exit_price = best_bid
-                            fee = exit_price * abs(state.position_btc) * maker_fee_pct
-                            exec_label = "MAKER"
+                                fee = exit_price * abs(state.position_btc) * maker_fee_pct
+                                exec_label = "MAKER"
                         elif not is_maker and exit_reason != "STOP_LOSS" and self.bt_cfg.taker_exit_as_maker_on_tp:
                             # Smart Taker exits all orderly conditions passively as Maker
                             exit_price = best_bid
@@ -587,8 +610,23 @@ class EdgeEvaluator:
                 if min_vol_bps > 0.0 and self.current_volatility_bps < min_vol_bps:
                     continue
 
+                # High Confidence Gate: Require high confidence if configured
+                min_conf = params.get("min_confidence")
+                if min_conf is not None and min_conf > 0.0:
+                    if confidences is not None:
+                        cur_conf = confidences.get(sig_k, 0.0)
+                    elif f"{sig_k}_conf" in signals:
+                        cur_conf = signals[f"{sig_k}_conf"]
+                    elif f"{sig_k}_confidence" in signals:
+                        cur_conf = signals[f"{sig_k}_confidence"]
+                    else:
+                        cur_conf = 0.0
+                    if cur_conf < min_conf:
+                        continue
+
                 # Post-Loss Whipsaw Cooldown with Escalation: Prevent rapid-fire churn after loss
-                base_cooldown_ms = params.get("loss_cooldown_secs", 60) * 1000
+                loss_cooldown_sec = params.get("loss_cooldown_secs")
+                base_cooldown_ms = (loss_cooldown_sec if loss_cooldown_sec is not None else 60) * 1000
                 # Escalate cooldown geometrically: 60s -> 120s -> 240s (cap at 4x base)
                 escalation_factor = min(4, 2 ** max(0, state.consecutive_losses - 1)) if state.consecutive_losses > 0 else 1
                 loss_cooldown_ms = base_cooldown_ms * escalation_factor
@@ -635,10 +673,12 @@ class EdgeEvaluator:
                         # Passive Maker Buy at best bid
                         entry_price = best_bid
                         fee = entry_price * sz * maker_fee_pct
+                        entry_exec_label = "MAKER"
                     else:
                         # Smart Taker Buy
                         entry_price = best_ask * (1.0 + slippage_pct)
                         fee = entry_price * sz * taker_fee_pct
+                        entry_exec_label = "TAKER"
 
                     state.entry_fee_usd = fee
                     state.cash_usd -= fee
@@ -659,7 +699,7 @@ class EdgeEvaluator:
                         "side": "LONG",
                         "size_btc": sz,
                         "price": entry_price,
-                        "exec": "MAKER" if is_maker else "TAKER",
+                        "exec": entry_exec_label,
                         "reason": f"Sig {score:+.2f}",
                         "stop_price": state.stop_price,
                         "net_pnl": 0.0,
@@ -672,10 +712,12 @@ class EdgeEvaluator:
                         # Passive Maker Sell at best ask
                         entry_price = best_ask
                         fee = entry_price * sz * maker_fee_pct
+                        entry_exec_label = "MAKER"
                     else:
                         # Smart Taker Sell
                         entry_price = best_bid * (1.0 - slippage_pct)
                         fee = entry_price * sz * taker_fee_pct
+                        entry_exec_label = "TAKER"
 
                     state.entry_fee_usd = fee
                     state.cash_usd -= fee
@@ -696,7 +738,7 @@ class EdgeEvaluator:
                         "side": "SHORT",
                         "size_btc": sz,
                         "price": entry_price,
-                        "exec": "MAKER" if is_maker else "TAKER",
+                        "exec": entry_exec_label,
                         "reason": f"Sig {score:+.2f}",
                         "stop_price": state.stop_price,
                         "net_pnl": 0.0,

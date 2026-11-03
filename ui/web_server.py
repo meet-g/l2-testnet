@@ -276,6 +276,15 @@ def create_web_app(runner_ref: Any, broadcaster: TelemetryBroadcaster) -> FastAP
 
         strat_cfg.enabled = req.enabled
 
+        # Maintain alignment of active live execution strategy with enabled strategies
+        if req.enabled:
+            current_live = getattr(runner.config.strategies.live_execution, "active_strategy", None)
+            curr_obj = runner.config.strategies.get_strategy(current_live) if current_live else None
+            if not curr_obj or not curr_obj.enabled:
+                runner.config.strategies.live_execution.active_strategy = strat_name
+        elif not req.enabled and getattr(runner.config.strategies.live_execution, "active_strategy", None) == strat_name:
+            runner.config.strategies.live_execution.active_strategy = runner.config.strategies.get_effective_live_strategy()
+
         # Persist change to strategies.json so it survives restart / reload
         try:
             runner.config.strategies.save()
@@ -520,6 +529,7 @@ class DashboardWebServer:
         total_unrealized_pnl = 0.0
         total_trades_count = 0
 
+        is_live = bool(getattr(self.runner, "live_orders", False))
         mid_px = float(getattr(book, "mid_price", 0.0))
         runner_obj = self.runner
         all_configured = runner_obj.config.strategies.all_strategies if (runner_obj and hasattr(runner_obj, "config") and hasattr(runner_obj.config, "strategies")) else {}
@@ -528,34 +538,113 @@ class DashboardWebServer:
         if not all_configured and evaluator and hasattr(evaluator, "strategies"):
             all_configured = {name: None for name in evaluator.strategies.keys()}
 
+        # Group live trades by strategy when in live mode
+        live_strat_trades: Dict[str, List[Dict[str, Any]]] = {}
+        if is_live:
+            if getattr(self.runner, "auditor", None) and hasattr(self.runner.auditor, "trades") and self.runner.auditor.trades:
+                for t in self.runner.auditor.trades:
+                    sn = getattr(t, "strategy_name", "")
+                    if sn not in live_strat_trades:
+                        live_strat_trades[sn] = []
+                    live_strat_trades[sn].append({
+                        "net_pnl_usd": float(getattr(t, "net_pnl_usd", 0.0)),
+                        "gross_pnl_usd": float(getattr(t, "gross_pnl_usd", 0.0)),
+                        "fees_paid_usd": float(getattr(t, "total_fees_usd", 0.0)),
+                    })
+            elif hasattr(self.runner, "live_executor") and self.runner.live_executor and getattr(self.runner.live_executor, "completed_trades", None):
+                for t in self.runner.live_executor.completed_trades:
+                    sn = t.get("strategy", "")
+                    if sn not in live_strat_trades:
+                        live_strat_trades[sn] = []
+                    live_strat_trades[sn].append({
+                        "net_pnl_usd": float(t.get("net_pnl_usd", 0.0)),
+                        "gross_pnl_usd": float(t.get("gross_pnl_usd", 0.0)),
+                        "fees_paid_usd": float(t.get("total_fees_usd", 0.0)),
+                    })
+
         for s_name, s_cfg in all_configured.items():
             state = evaluator.strategies.get(s_name) if (evaluator and hasattr(evaluator, "strategies")) else None
-            perf = evaluator.get_strategy_performance(s_name, mid_px) if (evaluator and hasattr(evaluator, "get_strategy_performance") and state) else {}
 
-            in_pos = bool(state.is_in_position) if state else False
-            pos_btc = float(state.position_btc) if state else 0.0
-            entry_px = float(state.entry_price) if state else 0.0
+            if is_live:
+                strat_trades = live_strat_trades.get(s_name, [])
+                n_trades = len(strat_trades)
+                wins = sum(1 for tr in strat_trades if tr["net_pnl_usd"] > 0)
+                win_rate = (wins / n_trades * 100.0) if n_trades > 0 else 0.0
+                realized_pnl = sum(tr["net_pnl_usd"] for tr in strat_trades)
+                fees_paid = sum(tr["fees_paid_usd"] for tr in strat_trades)
+                gross_wins = sum(tr["gross_pnl_usd"] for tr in strat_trades if tr["gross_pnl_usd"] > 0)
+                gross_losses = sum(abs(tr["gross_pnl_usd"]) for tr in strat_trades if tr["gross_pnl_usd"] < 0)
+                profit_factor = (gross_wins / gross_losses) if gross_losses > 0 else (99.0 if gross_wins > 0 else 0.0)
 
-            pos_info = None
-            if in_pos:
-                unrealized_usd = pos_btc * (mid_px - entry_px)
-                unrealized_bps = (unrealized_usd / (abs(pos_btc) * entry_px)) * 10_000.0 if (abs(pos_btc) * entry_px) > 0 else 0.0
-                hold_secs = (now_ms - state.entry_time_ms) / 1000.0 if state else 0.0
-                pos_info = {
-                    "side": "LONG" if pos_btc > 0 else "SHORT",
-                    "size_btc": round(abs(pos_btc), 4),
-                    "entry_price": round(entry_px, 2),
-                    "unrealized_usd": round(unrealized_usd, 3),
-                    "unrealized_bps": round(unrealized_bps, 1),
-                    "stop_price": round(float(state.stop_price), 2),
-                    "trailing_active": getattr(state, "trailing_stop_active", False),
-                    "hold_secs": round(hold_secs, 1),
-                }
-                total_unrealized_pnl += unrealized_usd
+                cum = 0.0
+                peak = 0.0
+                max_dd = 0.0
+                for tr in strat_trades:
+                    cum += tr["net_pnl_usd"]
+                    if cum > peak:
+                        peak = cum
+                    dd = peak - cum
+                    if dd > max_dd:
+                        max_dd = dd
 
-            realized_pnl = float(perf.get("realized_pnl_usd", 0.0))
-            total_realized_pnl += realized_pnl
-            total_trades_count += int(perf.get("trades", 0))
+                in_pos = False
+                pos_info = None
+                lx = getattr(self.runner, "live_executor", None)
+                if lx and abs(getattr(lx, "cached_position", 0.0)) > 1e-6:
+                    act_strat = getattr(lx, "position_strategy", None) or getattr(lx, "strategy_name", "")
+                    if act_strat == s_name:
+                        in_pos = True
+                        live_pos = getattr(lx, "cached_position", 0.0)
+                        live_entry = getattr(lx, "entry_price", mid_px) or mid_px
+                        live_unrealized = live_pos * (mid_px - live_entry) if mid_px > 0 else 0.0
+                        live_bps = (live_unrealized / (abs(live_pos) * live_entry)) * 10_000.0 if (abs(live_pos) * live_entry > 0) else 0.0
+                        hold_secs = (now_ms - getattr(lx, "entry_time_ms", now_ms)) / 1000.0 if getattr(lx, "entry_time_ms", 0) > 0 else 0.0
+                        pos_info = {
+                            "side": "LONG" if live_pos > 0 else "SHORT",
+                            "size_btc": round(abs(live_pos), 4),
+                            "entry_price": round(live_entry, 2),
+                            "unrealized_usd": round(live_unrealized, 3),
+                            "unrealized_bps": round(live_bps, 1),
+                            "stop_price": 0.0,
+                            "trailing_active": getattr(lx, "trailing_stop_active", False),
+                            "hold_secs": round(hold_secs, 1),
+                        }
+                        total_unrealized_pnl += live_unrealized
+
+                total_realized_pnl += realized_pnl
+                total_trades_count += n_trades
+            else:
+                perf = evaluator.get_strategy_performance(s_name, mid_px) if (evaluator and hasattr(evaluator, "get_strategy_performance") and state) else {}
+
+                in_pos = bool(state.is_in_position) if state else False
+                pos_btc = float(state.position_btc) if state else 0.0
+                entry_px = float(state.entry_price) if state else 0.0
+
+                pos_info = None
+                if in_pos:
+                    unrealized_usd = pos_btc * (mid_px - entry_px)
+                    unrealized_bps = (unrealized_usd / (abs(pos_btc) * entry_px)) * 10_000.0 if (abs(pos_btc) * entry_px) > 0 else 0.0
+                    hold_secs = (now_ms - state.entry_time_ms) / 1000.0 if state else 0.0
+                    pos_info = {
+                        "side": "LONG" if pos_btc > 0 else "SHORT",
+                        "size_btc": round(abs(pos_btc), 4),
+                        "entry_price": round(entry_px, 2),
+                        "unrealized_usd": round(unrealized_usd, 3),
+                        "unrealized_bps": round(unrealized_bps, 1),
+                        "stop_price": round(float(state.stop_price), 2),
+                        "trailing_active": getattr(state, "trailing_stop_active", False),
+                        "hold_secs": round(hold_secs, 1),
+                    }
+                    total_unrealized_pnl += unrealized_usd
+
+                realized_pnl = float(perf.get("realized_pnl_usd", 0.0))
+                total_realized_pnl += realized_pnl
+                total_trades_count += int(perf.get("trades", 0))
+                n_trades = perf.get("trades", 0)
+                win_rate = float(perf.get("win_rate_pct", 0.0))
+                profit_factor = float(perf.get("profit_factor", 0.0))
+                fees_paid = float(perf.get("fees_paid_usd", 0.0))
+                max_dd = float(perf.get("max_drawdown_usd", 0.0))
 
             category = "scalping" if (s_cfg and getattr(s_cfg, "is_scalping", False)) else "execution"
             if state and hasattr(state, "category"):
@@ -568,20 +657,56 @@ class DashboardWebServer:
                 "category": category,
                 "in_position": in_pos,
                 "position": pos_info,
-                "trades": perf.get("trades", 0),
-                "win_rate": round(float(perf.get("win_rate_pct", 0.0)), 1),
-                "profit_factor": round(float(perf.get("profit_factor", 0.0)), 2),
+                "trades": n_trades,
+                "win_rate": round(win_rate, 1),
+                "profit_factor": round(profit_factor, 2),
                 "realized_pnl": round(realized_pnl, 2),
-                "fees_paid": round(float(perf.get("fees_paid_usd", 0.0)), 3),
-                "drawdown": round(float(perf.get("max_drawdown_usd", 0.0)), 2),
+                "fees_paid": round(fees_paid, 3),
+                "drawdown": round(max_dd, 2),
                 "signal_key": getattr(s_cfg, "signal_key", "CompositeAlpha") if s_cfg else getattr(state, "signal_key", "CompositeAlpha"),
                 "entry_threshold": getattr(s_cfg, "entry_threshold", 0.8) if s_cfg else 0.8,
                 "execution_style": getattr(s_cfg, "execution_type", "MAKER") if s_cfg else getattr(state, "execution_type", "MAKER"),
             }
 
         # 4. Recent Closed Trades (last 15)
+        is_live = bool(getattr(self.runner, "live_orders", False))
         recent_trades = []
-        if evaluator and hasattr(evaluator, "strategies"):
+        if is_live and getattr(self.runner, "auditor", None) and hasattr(self.runner.auditor, "trades") and self.runner.auditor.trades:
+            for t in reversed(self.runner.auditor.trades[-15:]):
+                recent_trades.append({
+                    "strategy": t.strategy_name,
+                    "side": t.side,
+                    "size_btc": round(float(t.size_btc), 4),
+                    "size": round(float(t.size_btc), 4),
+                    "coin": getattr(t, "coin", coin),
+                    "entry_price": round(float(t.entry_price), 2),
+                    "exit_price": round(float(t.exit_price), 2),
+                    "net_pnl": round(float(t.net_pnl_usd), 2),
+                    "return_bps": round(float(t.return_bps), 1),
+                    "exit_reason": t.exit_reason,
+                    "duration_s": round(t.holding_time_secs, 1),
+                    "exit_time": t.exit_time_iso.split("T")[-1] if "T" in t.exit_time_iso else t.exit_time_iso,
+                    "is_live": True,
+                })
+        elif is_live and hasattr(self.runner, "live_executor") and self.runner.live_executor and getattr(self.runner.live_executor, "completed_trades", None):
+            for t in reversed(self.runner.live_executor.completed_trades[-15:]):
+                dur_s = max(0.0, (t["exit_time_ms"] - t["entry_time_ms"]) / 1000.0)
+                recent_trades.append({
+                    "strategy": t["strategy"],
+                    "side": t["side"],
+                    "size_btc": round(float(t["size_btc"]), 4),
+                    "size": round(float(t["size_btc"]), 4),
+                    "coin": coin,
+                    "entry_price": round(float(t["entry_price"]), 2),
+                    "exit_price": round(float(t["exit_price"]), 2),
+                    "net_pnl": round(float(t["net_pnl_usd"]), 2),
+                    "return_bps": round(float(t["return_bps"]), 1),
+                    "exit_reason": t["exit_reason"],
+                    "duration_s": round(dur_s, 1),
+                    "exit_time": time.strftime("%H:%M:%S", time.localtime(t["exit_time_ms"] / 1000.0)),
+                    "is_live": True,
+                })
+        elif not is_live and evaluator and hasattr(evaluator, "strategies"):
             all_closed = []
             for s_name, state in evaluator.strategies.items():
                 for t in getattr(state, "trades", []):
@@ -601,6 +726,7 @@ class DashboardWebServer:
                     "exit_reason": t.exit_reason,
                     "duration_s": round((t.exit_time_ms - t.entry_time_ms) / 1000.0, 1),
                     "exit_time": time.strftime("%H:%M:%S", time.localtime(t.exit_time_ms / 1000.0)),
+                    "is_live": False,
                 })
 
         # 5. Live Exchange Position (if running in live orders mode)
@@ -622,7 +748,51 @@ class DashboardWebServer:
                 "unrealized_bps": round(live_bps, 1),
                 "active_strategy": getattr(lx, "position_strategy", None) or getattr(lx, "strategy_name", "LiveExecution"),
                 "account_value": round(getattr(lx, "account_value", 0.0), 2),
+                "initial_account_value": round(getattr(lx, "initial_account_value", 0.0), 2),
+                "session_realized_pnl": round(getattr(lx, "session_realized_pnl", 0.0), 2),
                 "available_margin": round(getattr(lx, "available_margin", 0.0), 2),
+            }
+
+            # Sync active strategy live position in strategies_data
+            act_strat = live_position_data.get("active_strategy")
+            if act_strat and act_strat in strategies_data and in_pos:
+                strategies_data[act_strat]["in_position"] = True
+                strategies_data[act_strat]["position"] = {
+                    "side": live_position_data["side"],
+                    "size_btc": live_position_data["size"],
+                    "entry_price": live_position_data["entry_price"],
+                    "unrealized_usd": live_position_data["unrealized_usd"],
+                    "unrealized_bps": live_position_data["unrealized_bps"],
+                    "stop_price": 0.0,
+                    "trailing_active": getattr(lx, "trailing_stop_active", False),
+                    "hold_secs": round((now_ms - getattr(lx, "entry_time_ms", now_ms)) / 1000.0, 1) if getattr(lx, "entry_time_ms", 0) > 0 else 0.0,
+                }
+
+        real_acct_val = round(getattr(self.runner.live_executor, "account_value", 0.0), 2) if (hasattr(self.runner, "live_executor") and self.runner.live_executor) else 0.0
+        real_acct_pnl = round(getattr(self.runner.live_executor, "session_realized_pnl", 0.0), 2) if (hasattr(self.runner, "live_executor") and self.runner.live_executor) else 0.0
+
+        if is_live and live_position_data:
+            live_realized = float(live_position_data.get("session_realized_pnl", 0.0))
+            live_unrealized_usd = float(live_position_data.get("unrealized_usd", 0.0))
+            live_trades_n = len(getattr(self.runner.auditor, "trades", [])) if getattr(self.runner, "auditor", None) else len(getattr(self.runner.live_executor, "completed_trades", []))
+            portfolio_payload = {
+                "total_realized_pnl": round(live_realized, 2),
+                "total_unrealized_pnl": round(live_unrealized_usd, 2),
+                "total_pnl": round(live_realized + live_unrealized_usd, 2),
+                "total_trades": live_trades_n,
+                "real_account_value": real_acct_val,
+                "real_account_pnl": real_acct_pnl,
+                "is_live": True,
+            }
+        else:
+            portfolio_payload = {
+                "total_realized_pnl": round(total_realized_pnl, 2),
+                "total_unrealized_pnl": round(total_unrealized_pnl, 2),
+                "total_pnl": round(total_realized_pnl + total_unrealized_pnl, 2),
+                "total_trades": total_trades_count,
+                "real_account_value": real_acct_val,
+                "real_account_pnl": real_acct_pnl,
+                "is_live": False,
             }
 
         snapshot = {
@@ -634,12 +804,7 @@ class DashboardWebServer:
             },
             "signals": signals_data,
             "strategies": strategies_data,
-            "portfolio": {
-                "total_realized_pnl": round(total_realized_pnl, 2),
-                "total_unrealized_pnl": round(total_unrealized_pnl, 2),
-                "total_pnl": round(total_realized_pnl + total_unrealized_pnl, 2),
-                "total_trades": total_trades_count,
-            },
+            "portfolio": portfolio_payload,
             "recent_trades": recent_trades,
             "live_position": live_position_data,
             "is_live_orders": getattr(self.runner, "live_orders", False),

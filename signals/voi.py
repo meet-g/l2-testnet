@@ -104,20 +104,23 @@ class VOISignal(BaseSignal):
         n_recent = len(self.recent_30)
         n_all = len(self.voi_history)
 
+        scale = getattr(book, "notional_scale", 1.0)
+        spread_factor = max(0.2, 1.0 - (book.spread_bps / 5.0))
+
         # Standardize via rolling mean and standard deviation
         if n_all >= 15:
             mean_v = sum(self.voi_history) / n_all
             variance = sum((x - mean_v) ** 2 for x in self.voi_history) / n_all
             std_v = math.sqrt(variance) if variance > 1e-6 else 1.0
 
-            z_score = (cum_voi - mean_v) / (std_v * math.sqrt(n_recent))
+            z_score = (cum_voi - n_recent * mean_v) / (std_v * math.sqrt(n_recent))
             z_score = max(-self.z_score_clip, min(self.z_score_clip, z_score))
             # Smoothly map to [-1.0, 1.0] using tanh
             score = math.tanh(z_score / 1.5)
-            confidence = min(1.0, n_all / self.history_window)
+            confidence = min(1.0, (n_all / self.history_window) * spread_factor)
         else:
-            score = math.tanh(cum_voi / 2.0)
-            confidence = n_all / 30.0
+            score = math.tanh(cum_voi / max(2.0 * scale, 0.01))
+            confidence = min(1.0, (n_all / 30.0) * spread_factor)
 
         return SignalResult(
             name=self.name,

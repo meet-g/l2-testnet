@@ -368,12 +368,14 @@ class QueueReplenishmentSignal(BaseSignal):
             # Informed selling threatens maker buy order
             adverse_drag = min(1.0, abs(vpin_score) / 0.45)
             raw_alpha *= (1.0 - 0.75 * adverse_drag)
+            confidence *= (1.0 - 0.50 * adverse_drag)
             if vpin_score < -0.35:
                 raw_alpha = min(raw_alpha, 0.10)
         elif raw_alpha < 0 and vpin_score > 0.20:
             # Informed buying threatens maker sell order
             adverse_drag = min(1.0, abs(vpin_score) / 0.45)
             raw_alpha *= (1.0 - 0.75 * adverse_drag)
+            confidence *= (1.0 - 0.50 * adverse_drag)
             if vpin_score > 0.35:
                 raw_alpha = max(raw_alpha, -0.10)
 
@@ -382,6 +384,7 @@ class QueueReplenishmentSignal(BaseSignal):
         toxic_ceiling = 0.88 if is_btc else 0.75
         if vpin_raw >= toxic_ceiling and abs(vpin_score) < 0.25:
             raw_alpha *= 0.65
+            confidence *= 0.70
 
         score = max(-1.0, min(1.0, raw_alpha))
         confidence = max(0.0, min(1.0, confidence))

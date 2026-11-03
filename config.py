@@ -376,6 +376,7 @@ LEGACY_SCALPING_STRATEGIES: Tuple[str, ...] = (
     "AdaptiveML_Maker",
     "WOBI_Maker",
     "MicroPrice_Maker",
+    "MicroPrice_FastFill",
     "Absorption_Fade",
     "AdaptiveML_Taker",
     "Composite_Taker",
@@ -541,6 +542,29 @@ DEFAULT_STRATEGIES_JSON = {
             "max_holding_time_secs": 180,
             "min_volatility_bps": 3.8,
         },
+        "MicroPrice_FastFill": {
+            "enabled": False,
+            "description": "High-confidence fast-filling Stoikov MicroPrice with multi-factor gating and defensive hedge",
+            "signal_key": "MicroPrice",
+            "execution_type": "MAKER",
+            "entry_threshold": 0.80,
+            "min_confidence": 0.75,
+            "order_size_btc": 0.1,
+            "take_profit_bps": 16.0,
+            "stop_loss_bps": 12.0,
+            "trailing_stop_activation_bps": 7.0,
+            "trailing_stop_distance_bps": 2.0,
+            "max_holding_time_secs": 120,
+            "min_volatility_bps": 3.5,
+            "exit_reversal_threshold": 0.75,
+            "hedge_trigger_loss_bps": -6.0,
+            "hedge_reversal_threshold": 0.10,
+            "loss_cooldown_secs": 60,
+            "fast_fill_enabled": True,
+            "entry_escalate_secs": 6.0,
+            "exit_escalate_secs": 3.0,
+            "defensive_hedge_market": False,
+        },
         "Absorption_Fade": {
             "enabled": False,
             "description": "Passive fade strategy entering when aggressive market orders are absorbed by resting limit walls",
@@ -662,6 +686,13 @@ class ExecutionStrategyConfig:
     hedge_reversal_threshold: Optional[float] = None
     min_volatility_bps: Optional[float] = None
     loss_cooldown_secs: Optional[int] = None
+    price_concession_ratio: Optional[float] = None
+    exit_concession_ratio: Optional[float] = None
+    fast_fill_enabled: Optional[bool] = None
+    entry_escalate_secs: Optional[float] = None
+    exit_escalate_secs: Optional[float] = None
+    defensive_hedge_market: Optional[bool] = None
+    min_confidence: Optional[float] = None
     coentry_group: Optional[str] = None
     is_scalping: bool = False
 
@@ -785,6 +816,13 @@ class StrategiesConfig:
                 hedge_reversal_threshold=float(s_info["hedge_reversal_threshold"]) if "hedge_reversal_threshold" in s_info else fallback.get("hedge_reversal_threshold"),
                 min_volatility_bps=float(s_info["min_volatility_bps"]) if "min_volatility_bps" in s_info else fallback.get("min_volatility_bps"),
                 loss_cooldown_secs=int(s_info["loss_cooldown_secs"]) if "loss_cooldown_secs" in s_info else fallback.get("loss_cooldown_secs"),
+                price_concession_ratio=float(s_info["price_concession_ratio"]) if "price_concession_ratio" in s_info else fallback.get("price_concession_ratio"),
+                exit_concession_ratio=float(s_info["exit_concession_ratio"]) if "exit_concession_ratio" in s_info else fallback.get("exit_concession_ratio"),
+                fast_fill_enabled=bool(s_info["fast_fill_enabled"]) if "fast_fill_enabled" in s_info else fallback.get("fast_fill_enabled"),
+                entry_escalate_secs=float(s_info["entry_escalate_secs"]) if "entry_escalate_secs" in s_info else fallback.get("entry_escalate_secs"),
+                exit_escalate_secs=float(s_info["exit_escalate_secs"]) if "exit_escalate_secs" in s_info else fallback.get("exit_escalate_secs"),
+                defensive_hedge_market=bool(s_info["defensive_hedge_market"]) if "defensive_hedge_market" in s_info else fallback.get("defensive_hedge_market"),
+                min_confidence=float(s_info["min_confidence"]) if "min_confidence" in s_info else fallback.get("min_confidence"),
                 coentry_group=str(s_info["coentry_group"]) if "coentry_group" in s_info else fallback.get("coentry_group"),
                 is_scalping=is_scalp,
             )
@@ -925,6 +963,34 @@ class StrategiesConfig:
         s = self.get_strategy(name)
         return s.enabled if s else False
 
+    def get_effective_live_strategy(self) -> str:
+        """Returns the configured live strategy if enabled; otherwise dynamically resolves to the first enabled strategy.
+
+        This prevents strategy contamination where a disabled strategy (e.g. Hedged_Convexity)
+        is inadvertently assigned to live orders and exits when running in single-strategy mode (e.g. MicroPrice_FastFill).
+        """
+        current = self.live_execution.active_strategy
+        current_cfg = self.get_strategy(current)
+        if current_cfg and current_cfg.enabled:
+            return current
+        # If in scalping mode or current was scalping, check enabled scalping strategies first
+        if self.is_scalping_mode_active or (current_cfg and current_cfg.is_scalping):
+            for name, s in self.scalping_strategies.items():
+                if s.enabled:
+                    return name
+            for name, s in self.execution_strategies.items():
+                if s.enabled:
+                    return name
+        else:
+            # Check enabled execution strategies first
+            for name, s in self.execution_strategies.items():
+                if s.enabled:
+                    return name
+            for name, s in self.scalping_strategies.items():
+                if s.enabled:
+                    return name
+        return current
+
     def is_signal_enabled(self, name: str) -> bool:
         s = self.alpha_signals.get(name)
         return s.enabled if s else False
@@ -991,6 +1057,20 @@ class StrategiesConfig:
                 p["min_volatility_bps"] = s.min_volatility_bps
             if s.loss_cooldown_secs is not None:
                 p["loss_cooldown_secs"] = s.loss_cooldown_secs
+            if getattr(s, "price_concession_ratio", None) is not None:
+                p["price_concession_ratio"] = s.price_concession_ratio
+            if getattr(s, "exit_concession_ratio", None) is not None:
+                p["exit_concession_ratio"] = s.exit_concession_ratio
+            if getattr(s, "fast_fill_enabled", None) is not None:
+                p["fast_fill_enabled"] = s.fast_fill_enabled
+            if getattr(s, "entry_escalate_secs", None) is not None:
+                p["entry_escalate_secs"] = s.entry_escalate_secs
+            if getattr(s, "exit_escalate_secs", None) is not None:
+                p["exit_escalate_secs"] = s.exit_escalate_secs
+            if getattr(s, "defensive_hedge_market", None) is not None:
+                p["defensive_hedge_market"] = s.defensive_hedge_market
+            if getattr(s, "min_confidence", None) is not None:
+                p["min_confidence"] = s.min_confidence
             if hasattr(s, "coentry_group") and s.coentry_group is not None:
                 p["coentry_group"] = s.coentry_group
             res[s.name] = p
@@ -1039,6 +1119,8 @@ class StrategiesConfig:
                 exec_dict[k]["loss_cooldown_secs"] = v.loss_cooldown_secs
             if v.coentry_group is not None:
                 exec_dict[k]["coentry_group"] = v.coentry_group
+            if getattr(v, "min_confidence", None) is not None:
+                exec_dict[k]["min_confidence"] = v.min_confidence
 
         scalp_dict = {}
         for k, v in self.scalping_strategies.items():
@@ -1064,6 +1146,26 @@ class StrategiesConfig:
                 scalp_dict[k]["exit_reversal_threshold"] = v.exit_reversal_threshold
             if v.min_volatility_bps is not None:
                 scalp_dict[k]["min_volatility_bps"] = v.min_volatility_bps
+            if getattr(v, "hedge_trigger_loss_bps", None) is not None:
+                scalp_dict[k]["hedge_trigger_loss_bps"] = v.hedge_trigger_loss_bps
+            if getattr(v, "hedge_reversal_threshold", None) is not None:
+                scalp_dict[k]["hedge_reversal_threshold"] = v.hedge_reversal_threshold
+            if getattr(v, "loss_cooldown_secs", None) is not None:
+                scalp_dict[k]["loss_cooldown_secs"] = v.loss_cooldown_secs
+            if getattr(v, "price_concession_ratio", None) is not None:
+                scalp_dict[k]["price_concession_ratio"] = v.price_concession_ratio
+            if getattr(v, "exit_concession_ratio", None) is not None:
+                scalp_dict[k]["exit_concession_ratio"] = v.exit_concession_ratio
+            if getattr(v, "fast_fill_enabled", None) is not None:
+                scalp_dict[k]["fast_fill_enabled"] = v.fast_fill_enabled
+            if getattr(v, "entry_escalate_secs", None) is not None:
+                scalp_dict[k]["entry_escalate_secs"] = v.entry_escalate_secs
+            if getattr(v, "exit_escalate_secs", None) is not None:
+                scalp_dict[k]["exit_escalate_secs"] = v.exit_escalate_secs
+            if getattr(v, "defensive_hedge_market", None) is not None:
+                scalp_dict[k]["defensive_hedge_market"] = v.defensive_hedge_market
+            if getattr(v, "min_confidence", None) is not None:
+                scalp_dict[k]["min_confidence"] = v.min_confidence
 
         alpha_dict = {
             k: {
@@ -1121,7 +1223,7 @@ class AppConfig:
     # Logging & storage
     data_dir: str = "data"
     log_dir: str = "logs"
-    sample_rate_hz: float = 10.0  # Sampling frequency for engine loop
+    sample_rate_hz: float = 20.0  # Sampling frequency for engine loop (20Hz = 50ms evaluation tick)
 
     @property
     def coin_data_dir(self) -> str:

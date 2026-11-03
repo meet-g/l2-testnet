@@ -1,0 +1,21 @@
+{
+  "total_files": 10,
+  "total_trades": 145,
+  "win_rate_pct": 44.13793103448276,
+  "gross_pnl_usd": 226.5958164366943,
+  "fees_usd": 387.61252450330153,
+  "net_pnl_usd": -161.01670806660718,
+  "profit_factor": 2.2807474669821675,
+  "avg_holding_duration_secs": 117.87615455686857,
+  "exit_counts": {
+    "DEFENSIVE_MAKER_HEDGE": 14,
+    "SIGNAL_REVERSAL": 44,
+    "TIME_LIMIT": 54,
+    "PROFIT_DECAY_EXIT": 15,
+    "STOP_LOSS": 1,
+    "SESSION_SHUTDOWN": 6,
+    "TAKE_PROFIT": 2,
+    "TRAILING_STOP": 9
+  },
+  "total_elapsed_secs": 8.504425764083862
+}

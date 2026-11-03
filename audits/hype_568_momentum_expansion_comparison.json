@@ -1,0 +1,52 @@
+{
+  "dataset_files": 568,
+  "baseline": {
+    "trades": 1752,
+    "wins": 983,
+    "losses": 769,
+    "win_rate": 56.10730593607306,
+    "gross_pnl": 4979.0777238481705,
+    "fees": 4544.1762038314255,
+    "net_pnl": 434.9015200167484,
+    "profit_factor": 2.6120055186244353,
+    "long_trades": 933,
+    "long_net_pnl": 275.28844689849836,
+    "long_wr": 55.41264737406216,
+    "short_trades": 819,
+    "short_net_pnl": 159.61307311824925,
+    "short_wr": 56.898656898656895,
+    "exit_reasons": {
+      "TIME_LIMIT": 20,
+      "TRAILING_STOP": 867,
+      "DEFENSIVE_MAKER_HEDGE": 641,
+      "TAKE_PROFIT": 108,
+      "PROFIT_DECAY_EXIT": 86,
+      "SESSION_SHUTDOWN": 25,
+      "STOP_LOSS": 5
+    }
+  },
+  "optimized": {
+    "trades": 504,
+    "wins": 363,
+    "losses": 141,
+    "win_rate": 72.02380952380952,
+    "gross_pnl": 1660.9834273097963,
+    "fees": 1336.2044435130056,
+    "net_pnl": 324.77898379679203,
+    "profit_factor": 3.119743417131688,
+    "long_trades": 267,
+    "long_net_pnl": 112.49598840702079,
+    "long_wr": 68.91385767790263,
+    "short_trades": 237,
+    "short_net_pnl": 212.28299538977137,
+    "short_wr": 75.52742616033755,
+    "exit_reasons": {
+      "TIME_LIMIT": 8,
+      "DEFENSIVE_MAKER_HEDGE": 116,
+      "TRAILING_STOP": 334,
+      "SESSION_SHUTDOWN": 5,
+      "TAKE_PROFIT": 26,
+      "STOP_LOSS": 15
+    }
+  }
+}

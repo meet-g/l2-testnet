@@ -83,9 +83,10 @@ class QDAPSignal(BaseSignal):
         a_sz = asks[0].sz
         b_n = bids[0].n
         a_n = asks[0].n
+        scale = getattr(book, "notional_scale", 1.0)
 
         # 1. Log Queue Asymmetry
-        qr = math.log(max(b_sz, 0.005) / max(a_sz, 0.005))
+        qr = math.log(max(b_sz, 0.005 * scale) / max(a_sz, 0.005 * scale))
         s_queue = math.tanh(self.gamma_qr * qr)
 
         # 2. Multi-Tier Queue Pressure Gradient (top 3 levels)
@@ -129,11 +130,11 @@ class QDAPSignal(BaseSignal):
         )
         score = max(-1.0, min(1.0, raw_score))
 
-        # Confidence: conditioned on spread tightness (98% of BTC is 1 tick) and total queue thickness
+        # Confidence: conditioned on spread tightness and queue thickness scaled to asset notional
         spread_bps = book.spread_bps
         spread_conf = max(0.2, 1.0 - (spread_bps / 3.0))
-        depth_conf = min(1.0, (b_sz + a_sz) / (3.0 * scale))
-        confidence = min(1.0, spread_conf * depth_conf)
+        depth_conf = min(1.0, (b_sz + a_sz) / max(0.6 * scale, 0.005))
+        confidence = max(0.0, min(1.0, spread_conf * depth_conf))
 
         is_ask_depleted = (a_sz < 0.8 * scale and b_sz > 3.0 * scale)
         is_bid_depleted = (b_sz < 0.8 * scale and a_sz > 3.0 * scale)

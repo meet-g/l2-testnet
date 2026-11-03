@@ -71,14 +71,33 @@ class MicroPriceSignal(BaseSignal):
         half_spread = spread / 2.0
         p_micro = mid + (half_spread * g_imb)
 
-        # Drift difference in dollars
+        # Drift difference in dollars and bps
         micro_drift = p_micro - mid
+        micro_drift_bps = ((p_micro - mid) / mid) * 10_000.0 if mid > 0 else 0.0
 
         # Normalized drift score [-1.0, 1.0]
         score = max(-1.0, min(1.0, g_imb))
 
-        # Confidence: higher when top-of-book depth is thick and spread is 1 tick
-        confidence = min(1.0, (total_q / 2.0) * (1.0 / max(spread, 1.0)))
+        # Multi-tier depth consensus (verify levels 1-5 support touch imbalance)
+        d5_imb = book.depth_imbalance(5)
+        consensus_factor = 1.0 if (imbalance * d5_imb >= 0) else max(0.2, 1.0 - abs(d5_imb))
+        if imbalance * d5_imb < 0:
+            score *= max(0.4, 1.0 - abs(d5_imb))
+
+        # Robust cross-asset confidence: higher when spread is tight (bps), depth is thick,
+        # participants are distributed across top 3 tiers, and deeper book depth confirms the touch direction
+        scale = getattr(book, "notional_scale", 1.0)
+        spread_factor = max(0.1, min(1.0, 2.5 / max(book.spread_bps, 0.5)))
+        d3_b, d3_a = book.get_depth_volume(3)
+        d3_total = d3_b + d3_a
+        touch_factor = min(1.0, total_q / max(0.35 * scale, 0.01))
+        d3_factor = min(1.0, d3_total / max(1.20 * scale, 0.01))
+        depth_factor = 0.50 * touch_factor + 0.50 * d3_factor
+
+        n_b3, n_a3 = book.get_depth_order_counts(3)
+        n_factor = min(1.0, max(0.3, (n_b3 + n_a3) / 8.0))
+        confidence = min(1.0, spread_factor * depth_factor * (0.6 * consensus_factor + 0.4 * n_factor))
+        confidence = max(0.0, min(1.0, confidence))
 
         return SignalResult(
             name=self.name,
@@ -93,5 +112,8 @@ class MicroPriceSignal(BaseSignal):
                 "spread_bps": book.spread_bps,
                 "imbalance": imbalance,
                 "micro_drift_usd": micro_drift,
+                "micro_drift_bps": micro_drift_bps,
+                "d5_imb": d5_imb,
+                "consensus_factor": consensus_factor,
             },
         )

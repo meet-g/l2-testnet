@@ -1,0 +1,311 @@
+{
+  "dataset_files": 568,
+  "total_data_gb": 3.243558623,
+  "elapsed_seconds": 248.123943567276,
+  "portfolio_overall": {
+    "trades": 1796,
+    "wins": 1119,
+    "losses": 677,
+    "win_rate": 62.30512249443208,
+    "gross_pnl": 6173.7092626783615,
+    "fees": 4581.005754910043,
+    "net_pnl": 1592.7035077683151,
+    "net_per_trade": 0.8868059620090841,
+    "profit_factor": 3.0036556525491824,
+    "avg_return_bps": 1.1032913047559143,
+    "long_trades": 893,
+    "long_wins": 529,
+    "long_wr": 59.238521836506166,
+    "long_net_pnl": 498.22661566675924,
+    "short_trades": 903,
+    "short_wins": 590,
+    "short_wr": 65.33776301218161,
+    "short_net_pnl": 1094.4768921015564,
+    "max_drawdown_usd": 157.69461018877905,
+    "exit_reasons": {
+      "DEFENSIVE_MAKER_HEDGE": 512,
+      "TIME_LIMIT": 24,
+      "TRAILING_STOP": 951,
+      "PROFIT_DECAY_EXIT": 81,
+      "TAKE_PROFIT": 152,
+      "SESSION_SHUTDOWN": 24,
+      "STOP_LOSS": 52
+    },
+    "exec_types": {
+      "MAKER": 1720,
+      "TAKER": 76
+    }
+  },
+  "portfolio_by_strategy": {
+    "Hedged_Convexity": {
+      "trades": 407,
+      "wins": 271,
+      "losses": 136,
+      "win_rate": 66.58476658476658,
+      "gross_pnl": 1952.134294034019,
+      "fees": 1082.4709184887781,
+      "net_pnl": 869.6633755452406,
+      "net_per_trade": 2.1367650504797067,
+      "profit_factor": 3.7679774428476,
+      "avg_return_bps": 2.6627844404076546,
+      "long_trades": 199,
+      "long_wins": 126,
+      "long_wr": 63.31658291457286,
+      "long_net_pnl": 407.8386016905865,
+      "short_trades": 208,
+      "short_wins": 145,
+      "short_wr": 69.71153846153845,
+      "short_net_pnl": 461.82477385465324,
+      "max_drawdown_usd": 70.84209897173912,
+      "exit_reasons": {
+        "PROFIT_DECAY_EXIT": 13,
+        "TAKE_PROFIT": 55,
+        "TRAILING_STOP": 214,
+        "DEFENSIVE_MAKER_HEDGE": 101,
+        "STOP_LOSS": 16,
+        "SESSION_SHUTDOWN": 6,
+        "TIME_LIMIT": 2
+      },
+      "exec_types": {
+        "MAKER": 385,
+        "TAKER": 22
+      }
+    },
+    "Convexity_Cascade": {
+      "trades": 779,
+      "wins": 432,
+      "losses": 347,
+      "win_rate": 55.45571245186136,
+      "gross_pnl": 2532.773971899209,
+      "fees": 2008.0807521367365,
+      "net_pnl": 524.693219762473,
+      "net_per_trade": 0.6735471370506713,
+      "profit_factor": 2.8204008379078833,
+      "avg_return_bps": 0.8058279842711658,
+      "long_trades": 399,
+      "long_wins": 211,
+      "long_wr": 52.88220551378446,
+      "long_net_pnl": 94.28896342458029,
+      "short_trades": 380,
+      "short_wins": 221,
+      "short_wr": 58.15789473684211,
+      "short_net_pnl": 430.40425633789266,
+      "max_drawdown_usd": 109.98616543118044,
+      "exit_reasons": {
+        "DEFENSIVE_MAKER_HEDGE": 254,
+        "TIME_LIMIT": 13,
+        "TRAILING_STOP": 351,
+        "TAKE_PROFIT": 72,
+        "SESSION_SHUTDOWN": 12,
+        "PROFIT_DECAY_EXIT": 68,
+        "STOP_LOSS": 9
+      },
+      "exec_types": {
+        "MAKER": 758,
+        "TAKER": 21
+      }
+    },
+    "Momentum_Expansion": {
+      "trades": 397,
+      "wins": 275,
+      "losses": 122,
+      "win_rate": 69.26952141057934,
+      "gross_pnl": 1011.4384037219756,
+      "fees": 886.1130254222795,
+      "net_pnl": 125.32537829969549,
+      "net_per_trade": 0.3156810536516259,
+      "profit_factor": 2.850828958745176,
+      "avg_return_bps": 0.4637595476325134,
+      "long_trades": 205,
+      "long_wins": 134,
+      "long_wr": 65.3658536585366,
+      "long_net_pnl": -11.777437944021232,
+      "short_trades": 192,
+      "short_wins": 141,
+      "short_wr": 73.4375,
+      "short_net_pnl": 137.10281624371672,
+      "max_drawdown_usd": 62.468627738740366,
+      "exit_reasons": {
+        "TIME_LIMIT": 7,
+        "TRAILING_STOP": 253,
+        "DEFENSIVE_MAKER_HEDGE": 109,
+        "SESSION_SHUTDOWN": 4,
+        "TAKE_PROFIT": 19,
+        "STOP_LOSS": 5
+      },
+      "exec_types": {
+        "MAKER": 388,
+        "TAKER": 9
+      }
+    },
+    "Queue_Replenishment": {
+      "trades": 213,
+      "wins": 141,
+      "losses": 72,
+      "win_rate": 66.19718309859155,
+      "gross_pnl": 677.3625930231581,
+      "fees": 604.3410588622497,
+      "net_pnl": 73.021534160908,
+      "net_per_trade": 0.3428241040418216,
+      "profit_factor": 2.545925570975774,
+      "avg_return_bps": 0.40331162412376814,
+      "long_trades": 90,
+      "long_wins": 58,
+      "long_wr": 64.44444444444444,
+      "long_net_pnl": 7.876488495613736,
+      "short_trades": 123,
+      "short_wins": 83,
+      "short_wr": 67.47967479674797,
+      "short_net_pnl": 65.14504566529423,
+      "max_drawdown_usd": 94.59048870262313,
+      "exit_reasons": {
+        "DEFENSIVE_MAKER_HEDGE": 48,
+        "TRAILING_STOP": 133,
+        "STOP_LOSS": 22,
+        "SESSION_SHUTDOWN": 2,
+        "TAKE_PROFIT": 6,
+        "TIME_LIMIT": 2
+      },
+      "exec_types": {
+        "MAKER": 189,
+        "TAKER": 24
+      }
+    }
+  },
+  "standalone_by_strategy": {
+    "Hedged_Convexity": {
+      "trades": 426,
+      "wins": 281,
+      "losses": 145,
+      "win_rate": 65.96244131455398,
+      "gross_pnl": 2075.9193606160247,
+      "fees": 1142.3952600801967,
+      "net_pnl": 933.5241005358275,
+      "net_per_trade": 2.1913711280183743,
+      "profit_factor": 3.772767649302255,
+      "avg_return_bps": 2.578092925730366,
+      "long_trades": 207,
+      "long_wins": 130,
+      "long_wr": 62.80193236714976,
+      "long_net_pnl": 438.91613330188426,
+      "short_trades": 219,
+      "short_wins": 151,
+      "short_wr": 68.94977168949772,
+      "short_net_pnl": 494.60796723394236,
+      "max_drawdown_usd": 66.38586654038295,
+      "exit_reasons": {
+        "PROFIT_DECAY_EXIT": 13,
+        "TAKE_PROFIT": 58,
+        "TRAILING_STOP": 221,
+        "DEFENSIVE_MAKER_HEDGE": 110,
+        "STOP_LOSS": 16,
+        "SESSION_SHUTDOWN": 6,
+        "TIME_LIMIT": 2
+      },
+      "exec_types": {
+        "MAKER": 404,
+        "TAKER": 22
+      }
+    },
+    "Convexity_Cascade": {
+      "trades": 812,
+      "wins": 449,
+      "losses": 363,
+      "win_rate": 55.29556650246305,
+      "gross_pnl": 2673.8937583215557,
+      "fees": 2124.101024164186,
+      "net_pnl": 549.7927341573709,
+      "net_per_trade": 0.6770846479770577,
+      "profit_factor": 2.8275010675250334,
+      "avg_return_bps": 0.7965762626267149,
+      "long_trades": 414,
+      "long_wins": 220,
+      "long_wr": 53.14009661835749,
+      "long_net_pnl": 101.28809235229042,
+      "short_trades": 398,
+      "short_wins": 229,
+      "short_wr": 57.537688442211056,
+      "short_net_pnl": 448.5046418050798,
+      "max_drawdown_usd": 110.24002667215763,
+      "exit_reasons": {
+        "DEFENSIVE_MAKER_HEDGE": 266,
+        "TIME_LIMIT": 13,
+        "TRAILING_STOP": 367,
+        "TAKE_PROFIT": 73,
+        "SESSION_SHUTDOWN": 13,
+        "PROFIT_DECAY_EXIT": 72,
+        "STOP_LOSS": 8
+      },
+      "exec_types": {
+        "MAKER": 791,
+        "TAKER": 21
+      }
+    },
+    "Momentum_Expansion": {
+      "trades": 503,
+      "wins": 353,
+      "losses": 150,
+      "win_rate": 70.17892644135189,
+      "gross_pnl": 1610.6326247633826,
+      "fees": 1313.2412183533875,
+      "net_pnl": 297.39140640999705,
+      "net_per_trade": 0.5912354004174891,
+      "profit_factor": 3.0342160153593722,
+      "avg_return_bps": 0.6955767703913842,
+      "long_trades": 266,
+      "long_wins": 177,
+      "long_wr": 66.54135338345864,
+      "long_net_pnl": 64.15757073737782,
+      "short_trades": 237,
+      "short_wins": 176,
+      "short_wr": 74.26160337552743,
+      "short_net_pnl": 233.23383567261928,
+      "max_drawdown_usd": 93.00601575059251,
+      "exit_reasons": {
+        "TIME_LIMIT": 7,
+        "TRAILING_STOP": 324,
+        "DEFENSIVE_MAKER_HEDGE": 134,
+        "SESSION_SHUTDOWN": 5,
+        "TAKE_PROFIT": 26,
+        "STOP_LOSS": 7
+      },
+      "exec_types": {
+        "MAKER": 491,
+        "TAKER": 12
+      }
+    },
+    "Queue_Replenishment": {
+      "trades": 213,
+      "wins": 141,
+      "losses": 72,
+      "win_rate": 66.19718309859155,
+      "gross_pnl": 677.3625930231581,
+      "fees": 604.3410588622497,
+      "net_pnl": 73.021534160908,
+      "net_per_trade": 0.3428241040418216,
+      "profit_factor": 2.545925570975774,
+      "avg_return_bps": 0.40331162412376814,
+      "long_trades": 90,
+      "long_wins": 58,
+      "long_wr": 64.44444444444444,
+      "long_net_pnl": 7.876488495613736,
+      "short_trades": 123,
+      "short_wins": 83,
+      "short_wr": 67.47967479674797,
+      "short_net_pnl": 65.14504566529423,
+      "max_drawdown_usd": 94.59048870262313,
+      "exit_reasons": {
+        "DEFENSIVE_MAKER_HEDGE": 48,
+        "TRAILING_STOP": 133,
+        "STOP_LOSS": 22,
+        "SESSION_SHUTDOWN": 2,
+        "TAKE_PROFIT": 6,
+        "TIME_LIMIT": 2
+      },
+      "exec_types": {
+        "MAKER": 189,
+        "TAKER": 24
+      }
+    }
+  }
+}

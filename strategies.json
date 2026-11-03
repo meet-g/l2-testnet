@@ -1,16 +1,15 @@
 {
   "_comment": "Hyperliquid L2 Microstructure Alpha Engine - Strategy & Signal Configuration",
-  "_instructions": "Execution Strategies contains the 4 new primary execution strategies (Hedged_Convexity, Convexity_Cascade, Momentum_Expansion, Queue_Replenishment). Scalping Strategies contains the older legacy micro-scalping strategies (QDAP_Maker, Composite_Maker, AdaptiveML_Maker, WOBI_Maker, MicroPrice_Maker, Absorption_Fade, AdaptiveML_Taker, Composite_Taker). Set 'enabled': true or false to select/deselect any strategy.",
+  "_instructions": "Set 'enabled': true or false to select/deselect any execution strategy, scalping strategy, or alpha signal.",
   "version": "1.1",
   "live_execution": {
-    "_comment": "Configuration for live exchange execution when running with --live-orders",
-    "active_strategy": "Hedged_Convexity",
+    "active_strategy": "MicroPrice_FastFill",
     "order_size_btc": 0.0005,
     "max_position_btc": 0.05
   },
   "execution_strategies": {
     "Hedged_Convexity": {
-      "enabled": true,
+      "enabled": false,
       "description": "Multi-tier order book convexity with automated defensive maker hedging on adverse toxic flow and liquidity wall decay",
       "signal_key": "HedgedConvexity",
       "execution_type": "HEDGED_MAKER",
@@ -20,16 +19,16 @@
       "stop_loss_bps": 8.0,
       "trailing_stop_activation_bps": 5.0,
       "trailing_stop_distance_bps": 2.0,
-      "hedge_trigger_loss_bps": -3.5,
-      "hedge_reversal_threshold": 0.2,
       "max_holding_time_secs": 180,
       "exit_reversal_threshold": 0.85,
+      "hedge_trigger_loss_bps": -3.5,
+      "hedge_reversal_threshold": 0.2,
       "min_volatility_bps": 4.5,
       "loss_cooldown_secs": 60,
       "coentry_group": "triad"
     },
     "Convexity_Cascade": {
-      "enabled": true,
+      "enabled": false,
       "description": "Multi-tier order book convexity and liquidity hole cascade with order count dispersion and trade flow impulse",
       "signal_key": "ConvexityCascade",
       "execution_type": "HEDGED_MAKER",
@@ -39,29 +38,29 @@
       "stop_loss_bps": 8.0,
       "trailing_stop_activation_bps": 6.0,
       "trailing_stop_distance_bps": 2.5,
-      "hedge_trigger_loss_bps": -4.0,
-      "hedge_reversal_threshold": 0.15,
       "max_holding_time_secs": 180,
       "exit_reversal_threshold": 0.8,
+      "hedge_trigger_loss_bps": -4.0,
+      "hedge_reversal_threshold": 0.15,
       "min_volatility_bps": 4.5,
       "loss_cooldown_secs": 60,
       "coentry_group": "triad"
     },
     "Momentum_Expansion": {
-      "enabled": true,
+      "enabled": false,
       "description": "Multi-minute structural trend expansion entering on order book queue exhaustion, 25-level depth support, and CVD acceleration with absorption trap shielding",
       "signal_key": "MomentumExpansion",
       "execution_type": "HEDGED_MAKER",
-      "entry_threshold": 0.7,
+      "entry_threshold": 0.78,
       "order_size_btc": 0.1,
       "take_profit_bps": 20.0,
       "stop_loss_bps": 8.0,
-      "trailing_stop_activation_bps": 5.0,
-      "trailing_stop_distance_bps": 2.0,
-      "hedge_trigger_loss_bps": -3.5,
-      "hedge_reversal_threshold": 0.2,
+      "trailing_stop_activation_bps": 3.5,
+      "trailing_stop_distance_bps": 1.2,
       "max_holding_time_secs": 180,
       "exit_reversal_threshold": 0.65,
+      "hedge_trigger_loss_bps": -4.5,
+      "hedge_reversal_threshold": 0.0,
       "min_volatility_bps": 4.5,
       "loss_cooldown_secs": 60,
       "coentry_group": "triad"
@@ -77,10 +76,10 @@
       "stop_loss_bps": 8.0,
       "trailing_stop_activation_bps": 3.5,
       "trailing_stop_distance_bps": 1.2,
-      "hedge_trigger_loss_bps": -3.5,
-      "hedge_reversal_threshold": -0.1,
       "max_holding_time_secs": 180,
       "exit_reversal_threshold": 0.8,
+      "hedge_trigger_loss_bps": -3.5,
+      "hedge_reversal_threshold": -0.1,
       "min_volatility_bps": 4.5,
       "loss_cooldown_secs": 120,
       "coentry_group": "queue_replenishment"
@@ -156,6 +155,29 @@
       "trailing_stop_distance_bps": 1.0,
       "max_holding_time_secs": 180,
       "min_volatility_bps": 3.8
+    },
+    "MicroPrice_FastFill": {
+      "enabled": true,
+      "description": "High-confidence fast-filling Stoikov MicroPrice with multi-factor gating and defensive hedge",
+      "signal_key": "MicroPrice",
+      "execution_type": "MAKER",
+      "entry_threshold": 0.80,
+      "min_confidence": 0.75,
+      "order_size_btc": 0.1,
+      "take_profit_bps": 16.0,
+      "stop_loss_bps": 12.0,
+      "trailing_stop_activation_bps": 7.0,
+      "trailing_stop_distance_bps": 2.0,
+      "max_holding_time_secs": 120,
+      "exit_reversal_threshold": 0.75,
+      "min_volatility_bps": 3.5,
+      "hedge_trigger_loss_bps": -6.0,
+      "hedge_reversal_threshold": 0.10,
+      "loss_cooldown_secs": 60,
+      "fast_fill_enabled": true,
+      "entry_escalate_secs": 6.0,
+      "exit_escalate_secs": 3.0,
+      "defensive_hedge_market": false
     },
     "Absorption_Fade": {
       "enabled": false,
@@ -233,26 +255,32 @@
     },
     "Sweep": {
       "enabled": false,
+      "weight": 0.0,
       "description": "Aggressive multi-level book sweep and elasticity detector"
     },
     "AdaptiveML": {
       "enabled": true,
+      "weight": 0.0,
       "description": "Online adaptive machine learning model with real-time gradient updates"
     },
     "MomentumExpansion": {
       "enabled": true,
+      "weight": 0.0,
       "description": "Momentum Expansion (QDAP queue exhaustion + rolling CVD volume impulse + 2-min trend alignment)"
     },
     "ConvexityCascade": {
       "enabled": true,
+      "weight": 0.0,
       "description": "Order Book Convexity & Liquidity Hole Cascade (queue depletion + depth slope + hole vacuum + CVD impulse)"
     },
     "HedgedConvexity": {
       "enabled": true,
+      "weight": 0.0,
       "description": "Hedged Convexity Alpha (depth curvature + order count dispersion + dynamic VPIN toxicity shielding & defensive maker hedge triggers)"
     },
     "QueueReplenishment": {
       "enabled": true,
+      "weight": 0.0,
       "description": "Dynamic L1/L3 queue replenishment delta, multi-tier cancellation asymmetry, and trade depletion persistence"
     }
   }
