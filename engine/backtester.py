@@ -257,7 +257,8 @@ class EdgeEvaluator:
         priority_fee_pct = getattr(self.bt_cfg, "priority_fee_bps", 0.0) / 10_000.0
         priority_fee_on_exit = getattr(self.bt_cfg, "priority_fee_on_exit", False)
         fee_hurdle_bps = getattr(self.market_cfg, "taker_fee_bps", 4.5) + getattr(self.bt_cfg, "priority_fee_bps", 0.0)
-        slippage_pct = self.bt_cfg.slippage_bps / 10_000.0
+        force_market = getattr(self.bt_cfg, "force_market_orders", False)
+        slippage_pct = getattr(self.bt_cfg, "market_slippage_pct", 0.01) if force_market else (self.bt_cfg.slippage_bps / 10_000.0)
         spread_bps = ((best_ask - best_bid) / mid_price) * 10_000.0 if mid_price > 0 else 1.0
 
         tp_bps = self.bt_cfg.take_profit_bps
@@ -270,7 +271,10 @@ class EdgeEvaluator:
             state = self.strategies[s_name]
             sig_k = state.signal_key
             score = signals.get(sig_k, 0.0)
-            is_maker = (state.execution_type in ("MAKER", "HEDGED_MAKER"))
+            if force_market:
+                is_maker = False
+            else:
+                is_maker = (state.execution_type in ("MAKER", "HEDGED_MAKER"))
 
             # Strategy-specific execution parameters (with per-strategy overrides)
             params = self.strategy_params.get(s_name, {})
@@ -370,7 +374,7 @@ class EdgeEvaluator:
                                 exit_price = best_ask
                                 fee = exit_price * state.position_btc * maker_fee_pct
                                 exec_label = "MAKER"
-                        elif not is_maker and exit_reason != "STOP_LOSS" and self.bt_cfg.taker_exit_as_maker_on_tp:
+                        elif not is_maker and not force_market and exit_reason != "STOP_LOSS" and self.bt_cfg.taker_exit_as_maker_on_tp:
                             # Smart Taker exits all orderly conditions passively as Maker
                             exit_price = best_ask
                             fee = exit_price * state.position_btc * maker_fee_pct
@@ -518,7 +522,7 @@ class EdgeEvaluator:
                                 exit_price = best_bid
                                 fee = exit_price * abs(state.position_btc) * maker_fee_pct
                                 exec_label = "MAKER"
-                        elif not is_maker and exit_reason != "STOP_LOSS" and self.bt_cfg.taker_exit_as_maker_on_tp:
+                        elif not is_maker and not force_market and exit_reason != "STOP_LOSS" and self.bt_cfg.taker_exit_as_maker_on_tp:
                             # Smart Taker exits all orderly conditions passively as Maker
                             exit_price = best_bid
                             fee = exit_price * abs(state.position_btc) * maker_fee_pct

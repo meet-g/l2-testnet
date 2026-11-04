@@ -63,6 +63,8 @@ class LiveOrderExecutor:
         strategy_name: str = "LiveExecution",
         non_blocking: bool = False,
         priority_fee_bps: Optional[float] = None,
+        force_market_orders: Optional[bool] = None,
+        market_slippage_pct: Optional[float] = None,
     ):
         self.config = config or AppConfig()
         self.console = console or Console()
@@ -138,6 +140,8 @@ class LiveOrderExecutor:
         self.use_ioc_on_marketable: bool = getattr(live_cfg, "use_ioc_on_marketable", True)
         self.use_native_tpsl: bool = getattr(live_cfg, "use_native_tpsl", True)
         self.priority_fee_bps: float = priority_fee_bps if priority_fee_bps is not None else getattr(live_cfg, "priority_fee_bps", 0.0)
+        self.force_market_orders: bool = force_market_orders if force_market_orders is not None else getattr(live_cfg, "force_market_orders", False)
+        self.market_slippage_pct: float = market_slippage_pct if market_slippage_pct is not None else getattr(live_cfg, "market_slippage_pct", 0.01)
 
         self._initialize()
 
@@ -1027,6 +1031,58 @@ class LiveOrderExecutor:
         else:
             return _do_modify()
 
+    def place_market_order(
+        self,
+        is_buy: bool,
+        size_btc: float,
+        slippage_pct: Optional[float] = None,
+        signal_score: float = 0.0,
+        is_exit: bool = False,
+        strategy_name: Optional[str] = None,
+        exit_reason: str = "MARKET_ORDER",
+        reduce_only: Optional[bool] = None,
+        **kwargs,
+    ) -> Optional[Dict[str, Any]]:
+        """Places an aggressive market order (crossing the spread via IOC with slippage tolerance).
+        
+        Hyperliquid represents market orders as Limit Orders with tif="Ioc", post_only=False,
+        and limit_px set beyond the top-of-book by the configured slippage percentage.
+        """
+        slip = slippage_pct if slippage_pct is not None else getattr(self, "market_slippage_pct", 0.01)
+        bid = self.last_best_bid
+        ask = self.last_best_ask
+        if bid <= 0 or ask <= 0:
+            if self.info:
+                try:
+                    mids = self.info.all_mids() if hasattr(self.info, "all_mids") else {}
+                    mid = float(mids.get(self.coin, 0.0))
+                    if mid > 0:
+                        bid = mid
+                        ask = mid
+                except Exception:
+                    pass
+        if is_buy:
+            ref_px = ask if ask > 0 else (bid if bid > 0 else 83000.0)
+            raw_px = ref_px * (1.0 + slip)
+        else:
+            ref_px = bid if bid > 0 else (ask if ask > 0 else 83000.0)
+            raw_px = ref_px * (1.0 - slip)
+
+        limit_px = self.format_price(raw_px)
+        return self.place_limit_order(
+            is_buy=is_buy,
+            size_btc=size_btc,
+            price=limit_px,
+            post_only=False,
+            tif="Ioc",
+            signal_score=signal_score,
+            is_exit=is_exit,
+            strategy_name=strategy_name,
+            exit_reason=exit_reason,
+            reduce_only=reduce_only,
+            **kwargs,
+        )
+
     def place_limit_order(
         self,
         is_buy: bool,
@@ -1110,6 +1166,8 @@ class LiveOrderExecutor:
         custom_tif = kwargs.get("tif")
         if custom_tif:
             tif = custom_tif
+        elif getattr(self, "force_market_orders", False) or not post_only:
+            tif = "Ioc"
         elif post_only:
             tif = "Alo"
         elif getattr(self, "use_ioc_on_marketable", True) or is_smart_taker:
@@ -1594,7 +1652,8 @@ class LiveOrderExecutor:
                     if self.active_order:
                         self.cancel_order(self.active_order["oid"])
                     self.last_loss_exit_time = now
-                    self.place_limit_order(is_buy=False, size_btc=abs(pos), price=best_bid, post_only=False, signal_score=signal_score, is_exit=True, strategy_name=active_strat_name, exit_reason="STOP_LOSS")
+                    exit_px = self.format_price(best_bid * (1.0 - self.market_slippage_pct)) if self.force_market_orders else best_bid
+                    self.place_limit_order(is_buy=False, size_btc=abs(pos), price=exit_px, post_only=False, tif="Ioc", signal_score=signal_score, is_exit=True, strategy_name=active_strat_name, exit_reason="STOP_LOSS")
                     return
 
                 # 1B. Defensive Maker Hedge Escalation (pre-stop-loss blowout prevention)
@@ -1605,7 +1664,8 @@ class LiveOrderExecutor:
                     if self.active_order:
                         self.cancel_order(self.active_order["oid"])
                     self.last_loss_exit_time = now
-                    self.place_limit_order(is_buy=False, size_btc=abs(pos), price=best_bid, post_only=False, signal_score=signal_score, is_exit=True, strategy_name=active_strat_name, exit_reason="DEFENSIVE_HEDGE_ESCALATE")
+                    exit_px = self.format_price(best_bid * (1.0 - self.market_slippage_pct)) if self.force_market_orders else best_bid
+                    self.place_limit_order(is_buy=False, size_btc=abs(pos), price=exit_px, post_only=False, tif="Ioc", signal_score=signal_score, is_exit=True, strategy_name=active_strat_name, exit_reason="DEFENSIVE_HEDGE_ESCALATE")
                     return
 
                 exit_triggered = False
@@ -1633,21 +1693,31 @@ class LiveOrderExecutor:
                         is_defensive_hedge = True
 
                 if not exit_triggered and is_defensive_hedge:
-                    if defensive_hedge_market:
+                    if self.force_market_orders or defensive_hedge_market:
                         self.console.print(f"[bold magenta][LiveExecutor] [{active_strat_name}] Defensive Hedge triggered (signal: {signal_score:.3f}, loss: {gain_bps:+.1f} bps)! Executing immediate containment fill at market...[/bold magenta]")
                         if self.active_order and self.active_order.get("is_exit") and self.active_order.get("pending", False):
                             return
                         if self.active_order:
                             self.cancel_order(self.active_order["oid"])
                         self.last_loss_exit_time = now
-                        self.place_limit_order(is_buy=False, size_btc=abs(pos), price=best_bid, post_only=False, signal_score=signal_score, is_exit=True, strategy_name=active_strat_name, exit_reason="DEFENSIVE_HEDGE")
+                        exit_px = self.format_price(best_bid * (1.0 - self.market_slippage_pct)) if self.force_market_orders else best_bid
+                        self.place_limit_order(is_buy=False, size_btc=abs(pos), price=exit_px, post_only=False, tif="Ioc", signal_score=signal_score, is_exit=True, strategy_name=active_strat_name, exit_reason="DEFENSIVE_HEDGE")
                         return
                     else:
                         exit_triggered = True
 
                 # 1F. Signal Reversal (Alpha Conviction Inverted: Execute Fast Exit)
                 if not exit_triggered and reversal_thresh is not None and signal_score <= -reversal_thresh:
-                    if gain_bps >= fee_hurdle_bps or gain_bps <= -3.0:
+                    if self.force_market_orders:
+                        self.console.print(f"[bold cyan][LiveExecutor] [{active_strat_name}] Signal Reversal triggered (signal: {signal_score:.3f} <= -{reversal_thresh:.2f}, gain: {gain_bps:+.1f} bps)! Executing immediate market cross...[/bold cyan]")
+                        if self.active_order and self.active_order.get("is_exit") and self.active_order.get("pending", False):
+                            return
+                        if self.active_order:
+                            self.cancel_order(self.active_order["oid"])
+                        exit_px = self.format_price(best_bid * (1.0 - self.market_slippage_pct))
+                        self.place_limit_order(is_buy=False, size_btc=abs(pos), price=exit_px, post_only=False, tif="Ioc", signal_score=signal_score, is_exit=True, strategy_name=active_strat_name, exit_reason="SIGNAL_REVERSAL")
+                        return
+                    elif gain_bps >= fee_hurdle_bps or gain_bps <= -3.0:
                         if gain_bps <= 0.0 or fast_fill_enabled:
                             self.console.print(f"[bold cyan][LiveExecutor] [{active_strat_name}] Signal Reversal triggered (signal: {signal_score:.3f} <= -{reversal_thresh:.2f}, gain: {gain_bps:+.1f} bps)! Executing immediate market cross...[/bold cyan]")
                             if self.active_order and self.active_order.get("is_exit") and self.active_order.get("pending", False):
@@ -1669,6 +1739,16 @@ class LiveOrderExecutor:
                     target_exit_px = self.format_price(best_ask)
 
                 if exit_triggered:
+                    if self.force_market_orders:
+                        self.console.print(f"[bold magenta][LiveExecutor] [{active_strat_name}] Forced Market Exit: selling position at market with {self.market_slippage_pct*100:.2f}% slippage...[/bold magenta]")
+                        if self.active_order and self.active_order.get("is_exit") and self.active_order.get("pending", False):
+                            return
+                        if self.active_order:
+                            self.cancel_order(self.active_order["oid"])
+                        exit_px = self.format_price(best_bid * (1.0 - self.market_slippage_pct))
+                        self.place_limit_order(is_buy=False, size_btc=abs(pos), price=exit_px, post_only=False, tif="Ioc", signal_score=signal_score, is_exit=True, strategy_name=active_strat_name, exit_reason="FORCED_MARKET_EXIT")
+                        return
+
                     # Check resting exit order persistence with fast-fill escalation
                     if self.active_order and self.active_order.get("is_exit") and not self.active_order.get("is_buy"):
                         if self.active_order.get("pending", False):
@@ -1718,7 +1798,8 @@ class LiveOrderExecutor:
                     if self.active_order:
                         self.cancel_order(self.active_order["oid"])
                     self.last_loss_exit_time = now
-                    self.place_limit_order(is_buy=True, size_btc=abs(pos), price=best_ask, post_only=False, signal_score=signal_score, is_exit=True, strategy_name=active_strat_name, exit_reason="STOP_LOSS")
+                    exit_px = self.format_price(best_ask * (1.0 + self.market_slippage_pct)) if self.force_market_orders else best_ask
+                    self.place_limit_order(is_buy=True, size_btc=abs(pos), price=exit_px, post_only=False, tif="Ioc", signal_score=signal_score, is_exit=True, strategy_name=active_strat_name, exit_reason="STOP_LOSS")
                     return
 
                 # 1B. Defensive Maker Hedge Escalation (pre-stop-loss blowout prevention)
@@ -1729,7 +1810,8 @@ class LiveOrderExecutor:
                     if self.active_order:
                         self.cancel_order(self.active_order["oid"])
                     self.last_loss_exit_time = now
-                    self.place_limit_order(is_buy=True, size_btc=abs(pos), price=best_ask, post_only=False, signal_score=signal_score, is_exit=True, strategy_name=active_strat_name, exit_reason="DEFENSIVE_HEDGE_ESCALATE")
+                    exit_px = self.format_price(best_ask * (1.0 + self.market_slippage_pct)) if self.force_market_orders else best_ask
+                    self.place_limit_order(is_buy=True, size_btc=abs(pos), price=exit_px, post_only=False, tif="Ioc", signal_score=signal_score, is_exit=True, strategy_name=active_strat_name, exit_reason="DEFENSIVE_HEDGE_ESCALATE")
                     return
 
                 exit_triggered = False
@@ -1757,21 +1839,31 @@ class LiveOrderExecutor:
                         is_defensive_hedge = True
 
                 if not exit_triggered and is_defensive_hedge:
-                    if defensive_hedge_market:
+                    if self.force_market_orders or defensive_hedge_market:
                         self.console.print(f"[bold magenta][LiveExecutor] [{active_strat_name}] Defensive Hedge triggered (signal: {signal_score:.3f}, loss: {gain_bps:+.1f} bps)! Executing immediate containment fill at market...[/bold magenta]")
                         if self.active_order and self.active_order.get("is_exit") and self.active_order.get("pending", False):
                             return
                         if self.active_order:
                             self.cancel_order(self.active_order["oid"])
                         self.last_loss_exit_time = now
-                        self.place_limit_order(is_buy=True, size_btc=abs(pos), price=best_ask, post_only=False, signal_score=signal_score, is_exit=True, strategy_name=active_strat_name, exit_reason="DEFENSIVE_HEDGE")
+                        exit_px = self.format_price(best_ask * (1.0 + self.market_slippage_pct)) if self.force_market_orders else best_ask
+                        self.place_limit_order(is_buy=True, size_btc=abs(pos), price=exit_px, post_only=False, tif="Ioc", signal_score=signal_score, is_exit=True, strategy_name=active_strat_name, exit_reason="DEFENSIVE_HEDGE")
                         return
                     else:
                         exit_triggered = True
 
                 # 1F. Signal Reversal (Alpha Conviction Inverted: Execute Fast Exit)
                 if not exit_triggered and reversal_thresh is not None and signal_score >= reversal_thresh:
-                    if gain_bps >= fee_hurdle_bps or gain_bps <= -3.0:
+                    if self.force_market_orders:
+                        self.console.print(f"[bold cyan][LiveExecutor] [{active_strat_name}] Signal Reversal triggered (signal: {signal_score:.3f} >= +{reversal_thresh:.2f}, gain: {gain_bps:+.1f} bps)! Executing immediate market cross...[/bold cyan]")
+                        if self.active_order and self.active_order.get("is_exit") and self.active_order.get("pending", False):
+                            return
+                        if self.active_order:
+                            self.cancel_order(self.active_order["oid"])
+                        exit_px = self.format_price(best_ask * (1.0 + self.market_slippage_pct))
+                        self.place_limit_order(is_buy=True, size_btc=abs(pos), price=exit_px, post_only=False, tif="Ioc", signal_score=signal_score, is_exit=True, strategy_name=active_strat_name, exit_reason="SIGNAL_REVERSAL")
+                        return
+                    elif gain_bps >= fee_hurdle_bps or gain_bps <= -3.0:
                         if gain_bps <= 0.0 or fast_fill_enabled:
                             self.console.print(f"[bold cyan][LiveExecutor] [{active_strat_name}] Signal Reversal triggered (signal: {signal_score:.3f} >= +{reversal_thresh:.2f}, gain: {gain_bps:+.1f} bps)! Executing immediate market cross...[/bold cyan]")
                             if self.active_order and self.active_order.get("is_exit") and self.active_order.get("pending", False):
@@ -1793,6 +1885,16 @@ class LiveOrderExecutor:
                     target_exit_px = self.format_price(best_bid)
 
                 if exit_triggered:
+                    if self.force_market_orders:
+                        self.console.print(f"[bold magenta][LiveExecutor] [{active_strat_name}] Forced Market Exit: buying to cover position at market with {self.market_slippage_pct*100:.2f}% slippage...[/bold magenta]")
+                        if self.active_order and self.active_order.get("is_exit") and self.active_order.get("pending", False):
+                            return
+                        if self.active_order:
+                            self.cancel_order(self.active_order["oid"])
+                        exit_px = self.format_price(best_ask * (1.0 + self.market_slippage_pct))
+                        self.place_limit_order(is_buy=True, size_btc=abs(pos), price=exit_px, post_only=False, tif="Ioc", signal_score=signal_score, is_exit=True, strategy_name=active_strat_name, exit_reason="FORCED_MARKET_EXIT")
+                        return
+
                     # Check resting exit order persistence with fast-fill escalation
                     if self.active_order and self.active_order.get("is_exit") and self.active_order.get("is_buy"):
                         if self.active_order.get("pending", False):
@@ -1864,6 +1966,23 @@ class LiveOrderExecutor:
 
         # Bullish Entry: Fast-fill quoting or immediate marketable fill
         if signal_score >= maker_threshold:
+            if self.force_market_orders:
+                if self.active_order and not self.active_order.get("is_exit"):
+                    self.cancel_order(self.active_order["oid"])
+                entry_px = self.format_price(best_ask * (1.0 + self.market_slippage_pct))
+                self.console.print(f"[bold green][LiveExecutor] [{active_strat_name}] Forced Market Buy at ${entry_px:,.2f} (slippage: {self.market_slippage_pct*100:.2f}%)...[/bold green]")
+                self.place_limit_order(
+                    is_buy=True,
+                    size_btc=order_size,
+                    price=entry_px,
+                    post_only=False,
+                    tif="Ioc",
+                    signal_score=signal_score,
+                    is_exit=False,
+                    strategy_name=active_strat_name,
+                )
+                return
+
             if is_smart_taker:
                 # Immediate Marketable Taker Fill: Cross spread immediately at best_ask
                 spread_bps = ((best_ask - best_bid) / mid_price) * 10_000.0 if mid_price > 0 else 0.0
@@ -1956,6 +2075,23 @@ class LiveOrderExecutor:
 
         # Bearish Entry: Fast-fill quoting or immediate marketable fill
         elif signal_score <= -maker_threshold:
+            if self.force_market_orders:
+                if self.active_order and not self.active_order.get("is_exit"):
+                    self.cancel_order(self.active_order["oid"])
+                entry_px = self.format_price(best_bid * (1.0 - self.market_slippage_pct))
+                self.console.print(f"[bold red][LiveExecutor] [{active_strat_name}] Forced Market Sell at ${entry_px:,.2f} (slippage: {self.market_slippage_pct*100:.2f}%)...[/bold red]")
+                self.place_limit_order(
+                    is_buy=False,
+                    size_btc=order_size,
+                    price=entry_px,
+                    post_only=False,
+                    tif="Ioc",
+                    signal_score=signal_score,
+                    is_exit=False,
+                    strategy_name=active_strat_name,
+                )
+                return
+
             if is_smart_taker:
                 # Immediate Marketable Taker Fill: Cross spread immediately at best_bid
                 spread_bps = ((best_ask - best_bid) / mid_price) * 10_000.0 if mid_price > 0 else 0.0

@@ -126,6 +126,8 @@ class L2EngineRunner:
                 strategy_name=active_name,
                 non_blocking=True,
                 priority_fee_bps=self.config.strategies.live_execution.priority_fee_bps,
+                force_market_orders=getattr(self.config.strategies.live_execution, "force_market_orders", False),
+                market_slippage_pct=getattr(self.config.strategies.live_execution, "market_slippage_pct", 0.01),
             )
 
         self.dashboard = TerminalDashboard(console=self.console)
@@ -1265,7 +1267,13 @@ def print_strategies_status(cfg: Optional[AppConfig] = None, console: Optional[C
     coin = cfg.market.coin.upper()
     console.print(f"Active Live Strategy:    [bold yellow]{active_live}[/bold yellow] ({live_status}) - [dim cyan]{active_category}[/dim cyan]")
     console.print(f"Default Live Order Size: [white]{strat_cfg.live_execution.order_size_btc} {coin}[/white]")
-    console.print(f"Max Position Guardrail:  [white]{strat_cfg.live_execution.max_position_btc} {coin}[/white]\n")
+    console.print(f"Max Position Guardrail:  [white]{strat_cfg.live_execution.max_position_btc} {coin}[/white]")
+    mkt_forced = getattr(strat_cfg.live_execution, "force_market_orders", False)
+    mkt_slip = getattr(strat_cfg.live_execution, "market_slippage_pct", 0.01)
+    if mkt_forced:
+        console.print(f"Forced Market Orders:    [bold red]ENABLED (Taker IOC)[/bold red] [dim]|[/dim] Slippage Tolerance: [bold yellow]{mkt_slip*100:.2f}%[/bold yellow] ({mkt_slip*10000:.1f} bps)\n")
+    else:
+        console.print(f"Forced Market Orders:    [dim green]DISABLED (Standard Maker/Taker Hybrid)[/dim green]\n")
 
     table_exec = Table(title="Primary Execution Strategies (4 New Core Microstructure Strategies)", header_style="bold cyan")
     table_exec.add_column("Strategy Name", justify="left", style="bold")
@@ -1710,6 +1718,20 @@ def main():
         default=None,
         help="Sequencer priority fee in bps (e.g. 0.5 for Tier 1: p=5,000, 1.0 for Tier 2: p=10,000). Deducted from undelegated staking balance.",
     )
+    parser.add_argument(
+        "--market",
+        nargs="?",
+        const="true",
+        default=None,
+        type=str,
+        help="Force program to execute via market orders (aggressive IOC taker crossing the spread with slippage). Usage: --market true, --market false, or simply --market.",
+    )
+    parser.add_argument(
+        "--slippage",
+        type=float,
+        default=None,
+        help="Market order slippage tolerance percentage (e.g. 1.0 for 1.0%% = 100 bps, 0.5 for 0.5%% = 50 bps, 0.05 for 0.05%% = 5 bps).",
+    )
     args = parser.parse_args()
 
     cfg = AppConfig()
@@ -1771,6 +1793,28 @@ def main():
         cfg.account.secret_key = args.secret_key.strip()
     if args.priority_fee is not None:
         cfg.strategies.live_execution.priority_fee_bps = float(args.priority_fee)
+
+    # Market order and slippage configuration
+    force_market = None
+    if args.market is not None:
+        force_market = str(args.market).strip().lower() in ("true", "1", "yes", "t", "on")
+    elif args.slippage is not None:
+        force_market = True
+
+    market_slippage = None
+    if args.slippage is not None:
+        market_slippage = float(args.slippage) / 100.0  # 1.0% -> 0.01
+
+    if force_market is not None:
+        cfg.strategies.live_execution.force_market_orders = force_market
+        cfg.backtest.force_market_orders = force_market
+
+    if market_slippage is not None:
+        cfg.strategies.live_execution.market_slippage_pct = market_slippage
+        cfg.backtest.market_slippage_pct = market_slippage
+
+    if should_save and (force_market is not None or market_slippage is not None):
+        cfg.strategies.save()
     
     # Configure asset and fee schedule (auto-detects XYZ stocks like SKHYNIX)
     is_stock_override = True if args.xyz_stock else None
@@ -1878,20 +1922,32 @@ def main():
     elif args.mode == "place-order":
         from engine.live_executor import LiveOrderExecutor
         p_fee = args.priority_fee if args.priority_fee is not None else cfg.strategies.live_execution.priority_fee_bps
+        force_mkt = getattr(cfg.strategies.live_execution, "force_market_orders", False)
+        mkt_slip = getattr(cfg.strategies.live_execution, "market_slippage_pct", 0.01)
         executor = LiveOrderExecutor(
             config=cfg,
             console=console,
             default_order_size_btc=args.order_size,
             priority_fee_bps=p_fee,
+            force_market_orders=force_mkt,
+            market_slippage_pct=mkt_slip,
         )
         is_buy = args.side.upper() == "BUY"
-        px = args.price
-        if px <= 0:
-            info = executor.info
-            mids = info.all_mids() if info else {}
-            mid = float(mids.get(cfg.market.coin, 83000.0))
-            px = round(mid * 0.95 if is_buy else mid * 1.05, 1)
-        executor.place_limit_order(is_buy=is_buy, size_btc=args.order_size, price=px, post_only=True)
+        if force_mkt:
+            executor.place_market_order(
+                is_buy=is_buy,
+                size_btc=args.order_size,
+                slippage_pct=mkt_slip,
+                strategy_name="ManualMarketOrder",
+            )
+        else:
+            px = args.price
+            if px <= 0:
+                info = executor.info
+                mids = info.all_mids() if info else {}
+                mid = float(mids.get(cfg.market.coin, 83000.0))
+                px = round(mid * 0.95 if is_buy else mid * 1.05, 1)
+            executor.place_limit_order(is_buy=is_buy, size_btc=args.order_size, price=px, post_only=True)
 
     elif args.mode == "cancel-orders":
         from engine.live_executor import LiveOrderExecutor
@@ -1921,6 +1977,11 @@ def main():
             console.print(f"[bold cyan]Priority Fee:[/bold cyan] [bold yellow]{p_fee:.1f} bps[/bold yellow] (p={int(round(p_fee * 10000))}) [Sequencer Priority Bidding - Staking Balance Active]")
         else:
             console.print(f"[bold cyan]Priority Fee:[/bold cyan] [dim]0.0 bps (Standard Consensus Queue)[/dim]")
+        if getattr(cfg.strategies.live_execution, "force_market_orders", False):
+            m_slip = getattr(cfg.strategies.live_execution, "market_slippage_pct", 0.01)
+            console.print(f"[bold cyan]Execution Mode:[/bold cyan] [bold magenta]FORCED MARKET ORDERS (Taker IOC)[/bold magenta] | Slippage: [bold yellow]{m_slip*100:.2f}%[/bold yellow] ({m_slip*10000:.1f} bps)")
+        else:
+            console.print(f"[bold cyan]Execution Mode:[/bold cyan] [bold green]Standard Maker / Smart Taker Hybrid[/bold green]")
         if args.live_orders:
             cfg.backtest.order_size_btc = args.order_size
             net = cfg.hyperliquid.network_name.upper()
@@ -1966,6 +2027,11 @@ def main():
             console.print(f"[bold cyan]Priority Fee:[/bold cyan] [bold yellow]{p_fee:.1f} bps[/bold yellow] (p={int(round(p_fee * 10000))}) [Sequencer Priority Bidding - Staking Balance Active]")
         else:
             console.print(f"[bold cyan]Priority Fee:[/bold cyan] [dim]0.0 bps (Standard Consensus Queue)[/dim]")
+        if getattr(cfg.strategies.live_execution, "force_market_orders", False):
+            m_slip = getattr(cfg.strategies.live_execution, "market_slippage_pct", 0.01)
+            console.print(f"[bold cyan]Execution Mode:[/bold cyan] [bold magenta]FORCED MARKET ORDERS (Taker IOC)[/bold magenta] | Slippage: [bold yellow]{m_slip*100:.2f}%[/bold yellow] ({m_slip*10000:.1f} bps)")
+        else:
+            console.print(f"[bold cyan]Execution Mode:[/bold cyan] [bold green]Standard Maker / Smart Taker Hybrid[/bold green]")
         runner = L2EngineRunner(
             config=cfg,
             record_data=True,

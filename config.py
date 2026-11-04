@@ -338,6 +338,8 @@ class BacktestConfig:
     max_spread_bps: float = 1.5  # Reject entries when spread exceeds 1.5 bps
     priority_fee_bps: float = 0.0  # Hyperliquid write priority fee (Optimization 5) in basis points
     priority_fee_on_exit: bool = False  # Whether priority fee is also bid on exit orders
+    force_market_orders: bool = False  # Forces all strategy entries and exits to use aggressive IOC market orders
+    market_slippage_pct: float = 0.01  # Slippage percentage for market orders (0.01 = 1.0% = 100 bps)
     
     # -------------------------------------------------------------------------
     # 1. Passive Maker Execution (Avellaneda-Stoikov Micro-Scalp)
@@ -399,6 +401,8 @@ DEFAULT_STRATEGIES_JSON = {
         "use_ioc_on_marketable": True,
         "use_native_tpsl": True,
         "priority_fee_bps": 0.0,
+        "force_market_orders": False,
+        "market_slippage_pct": 0.01,
     },
     "execution_strategies": {
         "Hedged_Convexity": {
@@ -791,6 +795,8 @@ class LiveExecutionConfig:
     use_ioc_on_marketable: bool = True
     use_native_tpsl: bool = True
     priority_fee_bps: float = 0.0
+    force_market_orders: bool = False
+    market_slippage_pct: float = 0.01
 
 
 @dataclass
@@ -834,6 +840,8 @@ class StrategiesConfig:
             use_ioc_on_marketable=bool(live_raw.get("use_ioc_on_marketable", True)),
             use_native_tpsl=bool(live_raw.get("use_native_tpsl", True)),
             priority_fee_bps=float(live_raw.get("priority_fee_bps", 0.0)),
+            force_market_orders=bool(live_raw.get("force_market_orders", False)),
+            market_slippage_pct=float(live_raw.get("market_slippage_pct", 0.01)),
         )
 
         def _parse_strat_item(s_name: str, s_info: dict, fallback: dict, is_scalp: bool = False) -> ExecutionStrategyConfig:
@@ -1228,6 +1236,8 @@ class StrategiesConfig:
                 "use_ioc_on_marketable": self.live_execution.use_ioc_on_marketable,
                 "use_native_tpsl": self.live_execution.use_native_tpsl,
                 "priority_fee_bps": self.live_execution.priority_fee_bps,
+                "force_market_orders": getattr(self.live_execution, "force_market_orders", False),
+                "market_slippage_pct": getattr(self.live_execution, "market_slippage_pct", 0.01),
             },
             "execution_strategies": exec_dict,
             "scalping_strategies": scalp_dict,
