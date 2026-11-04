@@ -3,7 +3,7 @@
   "_instructions": "Set 'enabled': true or false to select/deselect any execution strategy, scalping strategy, or alpha signal.",
   "version": "1.1",
   "live_execution": {
-    "active_strategy": "Instant_FastFill",
+    "active_strategy": "Composite_Maker",
     "order_size_btc": 0.0005,
     "max_position_btc": 0.05,
     "penny_jumping": true,
@@ -91,7 +91,7 @@
   },
   "scalping_strategies": {
     "QDAP_Maker": {
-      "enabled": false,
+      "enabled": true,
       "description": "Passive quoting targeting depleted queue imbalances with order count anti-spoofing",
       "signal_key": "QDAP",
       "execution_type": "MAKER",
@@ -105,7 +105,7 @@
       "min_volatility_bps": 3.8
     },
     "Composite_Maker": {
-      "enabled": false,
+      "enabled": true,
       "description": "Passive Avellaneda-Stoikov spread capture and maker rebate quoting off Composite Alpha ensemble",
       "signal_key": "CompositeAlpha",
       "execution_type": "MAKER",
@@ -119,7 +119,7 @@
       "min_volatility_bps": 3.8
     },
     "AdaptiveML_Maker": {
-      "enabled": false,
+      "enabled": true,
       "description": "Passive maker execution driven by machine-learning online feature drift prediction",
       "signal_key": "AdaptiveML",
       "execution_type": "MAKER",
@@ -133,7 +133,7 @@
       "min_volatility_bps": 3.8
     },
     "WOBI_Maker": {
-      "enabled": false,
+      "enabled": true,
       "description": "Passive quoting biased by anti-spoofed Weighted Order Book Imbalance",
       "signal_key": "WOBI",
       "execution_type": "MAKER",
@@ -147,7 +147,7 @@
       "min_volatility_bps": 3.8
     },
     "MicroPrice_Maker": {
-      "enabled": false,
+      "enabled": true,
       "description": "Passive quoting tracking Stoikov MicroPrice fair value drift",
       "signal_key": "MicroPrice",
       "execution_type": "MAKER",
@@ -184,7 +184,7 @@
       "min_confidence": 0.75
     },
     "Absorption_Fade": {
-      "enabled": false,
+      "enabled": true,
       "description": "Passive fade strategy entering when aggressive market orders are absorbed by resting limit walls",
       "signal_key": "Absorption",
       "execution_type": "MAKER",
@@ -198,7 +198,7 @@
       "min_volatility_bps": 3.8
     },
     "AdaptiveML_Taker": {
-      "enabled": false,
+      "enabled": true,
       "description": "Aggressive market entry on strong ML model conviction with trailing stop",
       "signal_key": "AdaptiveML",
       "execution_type": "SMART_TAKER",
@@ -212,7 +212,7 @@
       "min_volatility_bps": 4.5
     },
     "Composite_Taker": {
-      "enabled": false,
+      "enabled": true,
       "description": "Aggressive market entry on extreme multi-factor composite dislocation",
       "signal_key": "CompositeAlpha",
       "execution_type": "SMART_TAKER",

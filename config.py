@@ -958,12 +958,12 @@ class StrategiesConfig:
         """Selects all scalping strategies and disables the 4 core execution strategies (or vice versa).
 
         Args:
-            enabled: If True, enables all 8 legacy scalping strategies and disables the 4 core execution strategies.
+            enabled: If True, enables all legacy scalping strategies (10) and disables the 4 core execution strategies.
                      If False, enables the primary core execution strategies and disables all scalping strategies.
             save: If True, immediately persists changes to strategies.json.
         """
         if enabled:
-            # Enable all 8 legacy scalping strategies
+            # Enable all legacy scalping strategies
             for s in self.scalping_strategies.values():
                 s.enabled = True
             # Disable the 4 core execution strategies

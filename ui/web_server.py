@@ -250,7 +250,9 @@ def create_web_app(runner_ref: Any, broadcaster: TelemetryBroadcaster) -> FastAP
                 if act_strat and not runner.config.strategies.is_strategy_enabled(act_strat):
                     executor.cancel_order(executor.active_order["oid"])
 
-        mode_desc = "Scalping Mode (8 scalping ON, 4 core OFF)" if req.scalping else "Core Mode (4 core ON, scalping OFF)"
+        num_sc = len(runner.config.strategies.scalping_strategies)
+        num_ex = len(runner.config.strategies.execution_strategies)
+        mode_desc = f"Scalping Mode ({num_sc} scalping ON, {num_ex} core OFF)" if req.scalping else f"Core Mode ({num_ex} core ON, {num_sc} scalping OFF)"
         logger.info(f"Switched strategy preset to: {mode_desc} (Config saved: {req.save})")
 
         return {

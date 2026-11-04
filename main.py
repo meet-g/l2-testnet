@@ -1625,7 +1625,7 @@ def handle_audit_mode(cfg: AppConfig, args: argparse.Namespace, console: Console
 
 def main():
     parser = argparse.ArgumentParser(description="Hyperliquid L2 Microstructure Alpha Engine")
-    parser.add_argument("mode", choices=["live", "test-connection", "testnet", "check-account", "transfer-to-perp", "place-order", "cancel-orders", "benchmark", "replay", "train-ml", "collect", "strategies", "audit"], help="Execution mode")
+    parser.add_argument("mode", nargs="?", choices=["live", "test-connection", "testnet", "check-account", "transfer-to-perp", "place-order", "cancel-orders", "benchmark", "replay", "train-ml", "collect", "strategies", "audit"], default="strategies", help="Execution mode (default: strategies)")
     parser.add_argument("--strategies-config", type=str, default="strategies.json", help="Path to strategies configuration JSON (default: strategies.json)")
     parser.add_argument("--strategy", type=str, default="", help="Active strategy to use for live execution or audit filter (overrides config)")
     parser.add_argument("--session", type=str, default="", help="Session ID or 'latest' to inspect in audit mode")
@@ -1674,12 +1674,17 @@ def main():
         const="true",
         default=None,
         type=str,
-        help="Toggle scalping mode: --scalping true (or --scalping) enables all 8 scalping strategies and disables the 4 core execution strategies; --scalping false enables core strategies and disables scalping strategies.",
+        help="Toggle scalping mode: --scalping true (or --scalping) enables all 10 scalping strategies and disables the 4 core execution strategies; --scalping false enables core strategies and disables all scalping strategies.",
     )
     parser.add_argument(
         "--save-config",
         action="store_true",
         help="Persist modified strategy configuration to strategies.json",
+    )
+    parser.add_argument(
+        "--no-save",
+        action="store_true",
+        help="Do not persist strategy configuration changes to strategies.json (in-memory run only)",
     )
     parser.add_argument(
         "--stock", "--xyz-stock",
@@ -1712,16 +1717,23 @@ def main():
         from config import StrategiesConfig
         cfg.strategies = StrategiesConfig.load(args.strategies_config)
 
+    # Determine persistence: when --scalping is passed, persist by default unless --no-save is requested
+    should_save = False
+    scalp_flag = None
     if args.scalping is not None:
         scalp_flag = str(args.scalping).strip().lower() in ("true", "1", "yes", "t", "on")
-        cfg.strategies.set_scalping_mode(enabled=scalp_flag, save=args.save_config)
+        should_save = False if args.no_save else True
+        cfg.strategies.set_scalping_mode(enabled=scalp_flag, save=should_save)
         console = Console()
+        num_scalp = len(cfg.strategies.scalping_strategies)
+        num_core = len(cfg.strategies.execution_strategies)
+        save_msg = f" (Saved to {cfg.strategies.filepath})" if should_save else ""
         if scalp_flag:
-            save_msg = f" (Saved to {cfg.strategies.filepath})" if args.save_config else ""
-            console.print(f"[bold yellow]⚡ Scalping Mode Activated (--scalping true): 8 scalping strategies ENABLED, 4 core execution strategies DISABLED.{save_msg}[/bold yellow]")
+            console.print(f"[bold yellow]⚡ Scalping Mode Activated (--scalping true): {num_scalp} scalping strategies ENABLED, {num_core} core execution strategies DISABLED.{save_msg}[/bold yellow]")
         else:
-            save_msg = f" (Saved to {cfg.strategies.filepath})" if args.save_config else ""
-            console.print(f"[bold cyan]🛡️ Core Mode Activated (--scalping false): Core execution strategies ENABLED, 8 scalping strategies DISABLED.{save_msg}[/bold cyan]")
+            console.print(f"[bold cyan]🛡️ Core Mode Activated (--scalping false): Core execution strategies ENABLED, {num_scalp} scalping strategies DISABLED.{save_msg}[/bold cyan]")
+    elif args.save_config:
+        should_save = True
 
     if args.strategy:
         strat_name = args.strategy.strip()
@@ -1729,10 +1741,27 @@ def main():
         if args.mode not in ("audit",) and strat_name not in valid_strats:
             Console().print(f"[bold red]Error: Unknown strategy '{strat_name}'. Valid strategies: {', '.join(valid_strats)}[/bold red]")
             sys.exit(1)
-        strat_obj = cfg.strategies.get_strategy(strat_name)
-        if strat_obj:
-            strat_obj.enabled = True
-        cfg.strategies.live_execution.active_strategy = strat_name
+
+        # Conflict resolution between --scalping and --strategy
+        if args.scalping is not None:
+            if not scalp_flag and cfg.strategies.is_scalping_strategy(strat_name):
+                Console().print(f"[bold yellow]⚠ Conflict Guard: '{strat_name}' is a scalping strategy, but '--scalping false' was specified. Scalping strategies remain DISABLED.[/bold yellow]")
+            elif scalp_flag and cfg.strategies.is_execution_strategy(strat_name):
+                Console().print(f"[bold yellow]⚠ Conflict Guard: '{strat_name}' is a core execution strategy, but '--scalping true' was specified. Core execution strategies remain DISABLED.[/bold yellow]")
+            else:
+                strat_obj = cfg.strategies.get_strategy(strat_name)
+                if strat_obj:
+                    strat_obj.enabled = True
+                cfg.strategies.live_execution.active_strategy = strat_name
+                if should_save:
+                    cfg.strategies.save()
+        else:
+            strat_obj = cfg.strategies.get_strategy(strat_name)
+            if strat_obj:
+                strat_obj.enabled = True
+            cfg.strategies.live_execution.active_strategy = strat_name
+            if should_save:
+                cfg.strategies.save()
 
     if args.use_testnet is not None:
         cfg.hyperliquid.use_testnet = args.use_testnet
