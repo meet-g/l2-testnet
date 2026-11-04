@@ -552,6 +552,10 @@ DEFAULT_STRATEGIES_JSON = {
             "trailing_stop_distance_bps": 1.0,
             "max_holding_time_secs": 180,
             "min_volatility_bps": 3.8,
+            "trend_filter_enabled": True,
+            "trend_window_secs": 60.0,
+            "max_counter_trend_bps": 1.0,
+            "require_cvd_alignment": True,
         },
         "MicroPrice_FastFill": {
             "enabled": False,
@@ -575,6 +579,10 @@ DEFAULT_STRATEGIES_JSON = {
             "entry_escalate_secs": 6.0,
             "exit_escalate_secs": 3.0,
             "defensive_hedge_market": False,
+            "trend_filter_enabled": True,
+            "trend_window_secs": 60.0,
+            "max_counter_trend_bps": 1.0,
+            "require_cvd_alignment": True,
         },
         "Absorption_Fade": {
             "enabled": False,
@@ -730,6 +738,10 @@ class ExecutionStrategyConfig:
     defensive_hedge_market: Optional[bool] = None
     min_confidence: Optional[float] = None
     coentry_group: Optional[str] = None
+    trend_filter_enabled: Optional[bool] = None
+    trend_window_secs: Optional[float] = None
+    max_counter_trend_bps: Optional[float] = None
+    require_cvd_alignment: Optional[bool] = None
     is_scalping: bool = False
 
 
@@ -872,6 +884,10 @@ class StrategiesConfig:
                 defensive_hedge_market=bool(s_info["defensive_hedge_market"]) if "defensive_hedge_market" in s_info else fallback.get("defensive_hedge_market"),
                 min_confidence=float(s_info["min_confidence"]) if "min_confidence" in s_info else fallback.get("min_confidence"),
                 coentry_group=str(s_info["coentry_group"]) if "coentry_group" in s_info else fallback.get("coentry_group"),
+                trend_filter_enabled=bool(s_info["trend_filter_enabled"]) if "trend_filter_enabled" in s_info else fallback.get("trend_filter_enabled"),
+                trend_window_secs=float(s_info["trend_window_secs"]) if "trend_window_secs" in s_info else fallback.get("trend_window_secs"),
+                max_counter_trend_bps=float(s_info["max_counter_trend_bps"]) if "max_counter_trend_bps" in s_info else fallback.get("max_counter_trend_bps"),
+                require_cvd_alignment=bool(s_info["require_cvd_alignment"]) if "require_cvd_alignment" in s_info else fallback.get("require_cvd_alignment"),
                 is_scalping=is_scalp,
             )
 

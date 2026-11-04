@@ -133,6 +133,7 @@ class LiveOrderExecutor:
         self.trough_unrealized_bps: float = 0.0
         self.last_best_bid: float = 0.0
         self.last_best_ask: float = 0.0
+        self._price_history: List[Tuple[float, float]] = []
 
         # Execution Speed & Optimization Guardrails (Optimizations 1-5)
         live_cfg = getattr(getattr(self.config, "strategies", None), "live_execution", None) or getattr(self.config, "live_execution", None)
@@ -1612,6 +1613,12 @@ class LiveOrderExecutor:
         mid_price = (best_bid + best_ask) / 2.0 if (best_bid > 0 and best_ask > 0) else best_bid
         self.last_best_bid = best_bid
         self.last_best_ask = best_ask
+
+        if mid_price > 0:
+            self._price_history.append((now, mid_price))
+            cutoff_sec = now - 300.0
+            while self._price_history and self._price_history[0][0] < cutoff_sec:
+                self._price_history.pop(0)
         tick_size = 10.0 ** (-self.max_price_decimals) if self.max_price_decimals > 0 else (0.10 if "xyz:" in str(self.coin).lower() else 1.0)
 
         if self.capital_usd is not None and self.capital_usd > 0 and mid_price > 0:
@@ -1966,6 +1973,28 @@ class LiveOrderExecutor:
 
         # Bullish Entry: Fast-fill quoting or immediate marketable fill
         if signal_score >= maker_threshold:
+            strat_trend_filter = getattr(strat_cfg, "trend_filter_enabled", False)
+            if strat_trend_filter and len(self._price_history) >= 5:
+                trend_win = getattr(strat_cfg, "trend_window_secs", 60.0) or 60.0
+                max_drift = getattr(strat_cfg, "max_counter_trend_bps", 1.0) or 1.0
+                cutoff = now - trend_win
+                past_px = None
+                for t_sec, px in self._price_history:
+                    if t_sec >= cutoff:
+                        past_px = px
+                        break
+                if past_px is None and self._price_history:
+                    past_px = self._price_history[0][1]
+                if past_px and past_px > 0:
+                    trend_bps = ((mid_price - past_px) / past_px) * 10_000.0
+                    if trend_bps < -max_drift:
+                        self.console.print(
+                            f"[dim yellow][LiveExecutor] [{active_strat_name}] Trend Filter: Rejecting counter-trend BUY. "
+                            f"Trend={trend_bps:+.2f} bps < -{max_drift:.2f} bps[/dim yellow]"
+                        )
+                        if self.active_order and not self.active_order.get("is_exit"):
+                            self.cancel_order(self.active_order["oid"])
+                        return
             if self.force_market_orders:
                 if self.active_order and not self.active_order.get("is_exit"):
                     self.cancel_order(self.active_order["oid"])
@@ -2075,6 +2104,28 @@ class LiveOrderExecutor:
 
         # Bearish Entry: Fast-fill quoting or immediate marketable fill
         elif signal_score <= -maker_threshold:
+            strat_trend_filter = getattr(strat_cfg, "trend_filter_enabled", False)
+            if strat_trend_filter and len(self._price_history) >= 5:
+                trend_win = getattr(strat_cfg, "trend_window_secs", 60.0) or 60.0
+                max_drift = getattr(strat_cfg, "max_counter_trend_bps", 1.0) or 1.0
+                cutoff = now - trend_win
+                past_px = None
+                for t_sec, px in self._price_history:
+                    if t_sec >= cutoff:
+                        past_px = px
+                        break
+                if past_px is None and self._price_history:
+                    past_px = self._price_history[0][1]
+                if past_px and past_px > 0:
+                    trend_bps = ((mid_price - past_px) / past_px) * 10_000.0
+                    if trend_bps > max_drift:
+                        self.console.print(
+                            f"[dim yellow][LiveExecutor] [{active_strat_name}] Trend Filter: Rejecting counter-trend SELL. "
+                            f"Trend={trend_bps:+.2f} bps > +{max_drift:.2f} bps[/dim yellow]"
+                        )
+                        if self.active_order and not self.active_order.get("is_exit"):
+                            self.cancel_order(self.active_order["oid"])
+                        return
             if self.force_market_orders:
                 if self.active_order and not self.active_order.get("is_exit"):
                     self.cancel_order(self.active_order["oid"])

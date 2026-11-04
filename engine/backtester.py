@@ -633,6 +633,26 @@ class EdgeEvaluator:
                     if cur_conf < min_conf:
                         continue
 
+                # Trend Filter Gate: Suppress counter-trend entries for strategies configured with trend_filter_enabled
+                strat_trend_filter = params.get("trend_filter_enabled", False)
+                if strat_trend_filter and len(self.rolling_prices) >= 5:
+                    trend_win_secs = params.get("trend_window_secs", 60.0) or 60.0
+                    max_drift = params.get("max_counter_trend_bps", 1.0) or 1.0
+                    cutoff_ms = timestamp_ms - int(trend_win_secs * 1000)
+                    past_px = None
+                    for t_ms, px in self.rolling_prices:
+                        if t_ms >= cutoff_ms:
+                            past_px = px
+                            break
+                    if past_px is None and self.rolling_prices:
+                        past_px = self.rolling_prices[0][1]
+                    if past_px and past_px > 0:
+                        trend_bps = ((mid_price - past_px) / past_px) * 10_000.0
+                        if score >= entry_thresh and trend_bps < -max_drift:
+                            continue
+                        if score <= -entry_thresh and trend_bps > max_drift:
+                            continue
+
                 # Post-Loss Whipsaw Cooldown with Escalation: Prevent rapid-fire churn after loss
                 loss_cooldown_sec = params.get("loss_cooldown_secs")
                 base_cooldown_ms = (loss_cooldown_sec if loss_cooldown_sec is not None else 60) * 1000
