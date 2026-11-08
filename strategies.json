@@ -28,7 +28,7 @@
       "max_holding_time_secs": 180,
       "exit_reversal_threshold": 0.85,
       "hedge_trigger_loss_bps": -3.5,
-      "hedge_reversal_threshold": -0.2,
+      "hedge_reversal_threshold": 0.2,
       "min_volatility_bps": 4.5,
       "loss_cooldown_secs": 60,
       "coentry_group": "triad"
@@ -47,7 +47,7 @@
       "max_holding_time_secs": 180,
       "exit_reversal_threshold": 0.8,
       "hedge_trigger_loss_bps": -4.0,
-      "hedge_reversal_threshold": -0.15,
+      "hedge_reversal_threshold": 0.15,
       "min_volatility_bps": 4.5,
       "loss_cooldown_secs": 60,
       "coentry_group": "triad"
@@ -66,7 +66,7 @@
       "max_holding_time_secs": 180,
       "exit_reversal_threshold": 0.65,
       "hedge_trigger_loss_bps": -4.5,
-      "hedge_reversal_threshold": -0.15,
+      "hedge_reversal_threshold": 0.0,
       "min_volatility_bps": 4.5,
       "loss_cooldown_secs": 60,
       "coentry_group": "triad"
@@ -85,7 +85,7 @@
       "max_holding_time_secs": 180,
       "exit_reversal_threshold": 0.8,
       "hedge_trigger_loss_bps": -3.5,
-      "hedge_reversal_threshold": -0.15,
+      "hedge_reversal_threshold": -0.1,
       "min_volatility_bps": 4.5,
       "loss_cooldown_secs": 120,
       "coentry_group": "queue_replenishment"
