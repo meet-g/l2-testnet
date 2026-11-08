@@ -406,6 +406,10 @@ LEGACY_SCALPING_STRATEGIES: Tuple[str, ...] = (
     "Dynamic_Spread_Scalper",
 )
 
+# Canonical aliases for program separation
+CORE_EXECUTION_STRATEGIES: Tuple[str, ...] = NEW_EXECUTION_STRATEGIES
+SCALPING_STRATEGIES: Tuple[str, ...] = LEGACY_SCALPING_STRATEGIES
+
 
 DEFAULT_STRATEGIES_JSON = {
     "_comment": "Hyperliquid L2 Microstructure Alpha Engine - Strategy & Signal Configuration",
@@ -784,6 +788,58 @@ DEFAULT_STRATEGIES_JSON = {
     },
 }
 
+DEFAULT_CORE_STRATEGIES_JSON = {
+    "_comment": "Hyperliquid L2 Microstructure Alpha Engine - Core Execution Strategy Configuration",
+    "_instructions": "Configuration for the 4 core execution strategies: Hedged_Convexity, Convexity_Cascade, Momentum_Expansion, Queue_Replenishment.",
+    "version": "1.1",
+    "program": "core_execution",
+    "live_execution": {
+        "active_strategy": "Hedged_Convexity",
+        "order_size_btc": DEFAULT_STRATEGIES_JSON["live_execution"]["order_size_btc"],
+        "max_position_btc": DEFAULT_STRATEGIES_JSON["live_execution"]["max_position_btc"],
+        "penny_jumping": DEFAULT_STRATEGIES_JSON["live_execution"]["penny_jumping"],
+        "use_ioc_on_marketable": DEFAULT_STRATEGIES_JSON["live_execution"]["use_ioc_on_marketable"],
+        "use_native_tpsl": DEFAULT_STRATEGIES_JSON["live_execution"]["use_native_tpsl"],
+        "priority_fee_bps": DEFAULT_STRATEGIES_JSON["live_execution"]["priority_fee_bps"],
+        "force_market_orders": DEFAULT_STRATEGIES_JSON["live_execution"]["force_market_orders"],
+        "market_slippage_pct": DEFAULT_STRATEGIES_JSON["live_execution"]["market_slippage_pct"],
+    },
+    "execution_strategies": {
+        k: dict(v) for k, v in DEFAULT_STRATEGIES_JSON["execution_strategies"].items()
+        if k in NEW_EXECUTION_STRATEGIES
+    },
+    "alpha_signals": {
+        k: dict(v) for k, v in DEFAULT_STRATEGIES_JSON["alpha_signals"].items()
+        if k in ("HedgedConvexity", "ConvexityCascade", "MomentumExpansion", "QueueReplenishment", "VPIN", "VOI", "Absorption")
+    },
+}
+
+DEFAULT_SCALPER_STRATEGIES_JSON = {
+    "_comment": "Hyperliquid L2 Microstructure Alpha Engine - Scalping Strategy Configuration",
+    "_instructions": "Configuration for the 11 high-frequency scalping strategies (maker & smart taker).",
+    "version": "1.1",
+    "program": "scalper",
+    "live_execution": {
+        "active_strategy": "Composite_Maker",
+        "order_size_btc": DEFAULT_STRATEGIES_JSON["live_execution"]["order_size_btc"],
+        "max_position_btc": DEFAULT_STRATEGIES_JSON["live_execution"]["max_position_btc"],
+        "penny_jumping": DEFAULT_STRATEGIES_JSON["live_execution"]["penny_jumping"],
+        "use_ioc_on_marketable": DEFAULT_STRATEGIES_JSON["live_execution"]["use_ioc_on_marketable"],
+        "use_native_tpsl": DEFAULT_STRATEGIES_JSON["live_execution"]["use_native_tpsl"],
+        "priority_fee_bps": DEFAULT_STRATEGIES_JSON["live_execution"]["priority_fee_bps"],
+        "force_market_orders": DEFAULT_STRATEGIES_JSON["live_execution"]["force_market_orders"],
+        "market_slippage_pct": DEFAULT_STRATEGIES_JSON["live_execution"]["market_slippage_pct"],
+    },
+    "scalping_strategies": {
+        k: dict(v) for k, v in DEFAULT_STRATEGIES_JSON.get("scalping_strategies", {}).items()
+        if k in LEGACY_SCALPING_STRATEGIES
+    },
+    "alpha_signals": {
+        k: dict(v) for k, v in DEFAULT_STRATEGIES_JSON["alpha_signals"].items()
+        if k in ("WOBI", "VOI", "MicroPrice", "Absorption", "VPIN", "Sweep", "AdaptiveML", "CompositeAlpha", "InstantFill", "DynamicSpread", "QDAP")
+    },
+}
+
 
 @dataclass
 class ExecutionStrategyConfig:
@@ -910,8 +966,17 @@ class StrategiesConfig:
     alpha_signals: Dict[str, AlphaSignalConfig] = field(default_factory=dict)
     queue_replenishment: QueueReplenishmentConfig = field(default_factory=QueueReplenishmentConfig)
 
+    @property
+    def program_name(self) -> str:
+        return "unified"
+
     @classmethod
     def load(cls, filepath: str = "strategies.json") -> "StrategiesConfig":
+        if cls is CoreStrategiesConfig:
+            return CoreStrategiesConfig._load_core(filepath)
+        if cls in (ScalperStrategiesConfig, ScalpingStrategiesConfig):
+            return ScalperStrategiesConfig._load_scalper(filepath)
+
         if not os.path.exists(filepath):
             try:
                 with open(filepath, "w", encoding="utf-8") as f:
@@ -925,6 +990,13 @@ class StrategiesConfig:
                     raw_data = json.load(f)
             except Exception:
                 raw_data = DEFAULT_STRATEGIES_JSON
+
+        # Auto-dispatch based on filename or program metadata
+        fname = os.path.basename(filepath).lower()
+        if raw_data.get("program") == "core_execution" or (fname.startswith("strategies_core") and fname.endswith(".json")):
+            return CoreStrategiesConfig._load_core(filepath, raw_data=raw_data)
+        if raw_data.get("program") in ("scalper", "scalping") or (fname.startswith("strategies_scalp") and fname.endswith(".json")):
+            return ScalperStrategiesConfig._load_scalper(filepath, raw_data=raw_data)
 
         # Parse live_execution
         live_raw = raw_data.get("live_execution", {})
@@ -1072,13 +1144,14 @@ class StrategiesConfig:
         core_any = any(s.enabled for s in self.execution_strategies.values())
         return scalp_any and not core_any
 
-    def set_scalping_mode(self, enabled: bool = True, save: bool = False) -> None:
+    def set_scalping_mode(self, enabled: bool = True, save: bool = False, enable_queue_replenishment: bool = True) -> None:
         """Selects all scalping strategies and disables the 4 core execution strategies (or vice versa).
 
         Args:
-            enabled: If True, enables all legacy scalping strategies (10) and disables the 4 core execution strategies.
+            enabled: If True, enables all legacy scalping strategies (11) and disables the 4 core execution strategies.
                      If False, enables the primary core execution strategies and disables all scalping strategies.
             save: If True, immediately persists changes to strategies.json.
+            enable_queue_replenishment: If False when core mode is activated, keeps Queue_Replenishment off by default (Triad active).
         """
         if enabled:
             # Enable all legacy scalping strategies
@@ -1091,9 +1164,12 @@ class StrategiesConfig:
             if self.is_execution_strategy(self.live_execution.active_strategy):
                 self.live_execution.active_strategy = "Composite_Maker"
         else:
-            # Enable core execution strategies (all 4 primary execution strategies enabled)
-            for s in self.execution_strategies.values():
-                s.enabled = True
+            # Enable core execution strategies (all 4 primary execution strategies enabled or triad active)
+            for name, s in self.execution_strategies.items():
+                if name == "Queue_Replenishment":
+                    s.enabled = enable_queue_replenishment
+                else:
+                    s.enabled = True
             # Disable all legacy scalping strategies
             for s in self.scalping_strategies.values():
                 s.enabled = False
@@ -1459,6 +1535,454 @@ class StrategiesConfig:
 
 
 @dataclass
+class CoreStrategiesConfig(StrategiesConfig):
+    """Configuration specifically managing the 4 core execution strategies for Program 1."""
+    filepath: str = "strategies_core.json"
+
+    @classmethod
+    def load(cls, filepath: str = "strategies_core.json") -> "CoreStrategiesConfig":
+        return cls._load_core(filepath)
+
+    @classmethod
+    def _load_core(cls, filepath: str = "strategies_core.json", raw_data: Optional[dict] = None) -> "CoreStrategiesConfig":
+        if raw_data is None:
+            if not os.path.exists(filepath):
+                try:
+                    with open(filepath, "w", encoding="utf-8") as f:
+                        json.dump(DEFAULT_CORE_STRATEGIES_JSON, f, indent=2)
+                except Exception:
+                    pass
+                raw_data = DEFAULT_CORE_STRATEGIES_JSON
+            else:
+                try:
+                    with open(filepath, "r", encoding="utf-8") as f:
+                        raw_data = json.load(f)
+                except Exception:
+                    raw_data = DEFAULT_CORE_STRATEGIES_JSON
+
+        live_raw = raw_data.get("live_execution", {})
+        live_cfg = LiveExecutionConfig(
+            active_strategy=live_raw.get("active_strategy", "Hedged_Convexity"),
+            order_size_btc=float(live_raw.get("order_size_btc", 0.0005)),
+            max_position_btc=float(live_raw.get("max_position_btc", 0.05)),
+            penny_jumping=bool(live_raw.get("penny_jumping", True)),
+            use_ioc_on_marketable=bool(live_raw.get("use_ioc_on_marketable", True)),
+            use_native_tpsl=bool(live_raw.get("use_native_tpsl", True)),
+            priority_fee_bps=float(live_raw.get("priority_fee_bps", 0.0)),
+            force_market_orders=bool(live_raw.get("force_market_orders", False)),
+            market_slippage_pct=float(live_raw.get("market_slippage_pct", 0.0005)),
+        )
+
+        def _parse_strat_item(s_name: str, s_info: dict, fallback: dict) -> ExecutionStrategyConfig:
+            return ExecutionStrategyConfig(
+                name=s_name,
+                enabled=bool(s_info.get("enabled", fallback.get("enabled", True))),
+                description=str(s_info.get("description", fallback.get("description", ""))),
+                signal_key=str(s_info.get("signal_key", fallback.get("signal_key", "CompositeAlpha"))),
+                execution_type=str(s_info.get("execution_type", fallback.get("execution_type", "HEDGED_MAKER"))),
+                entry_threshold=float(s_info.get("entry_threshold", fallback.get("entry_threshold", 0.8))),
+                order_size_btc=float(s_info.get("order_size_btc", fallback.get("order_size_btc", 0.1))),
+                take_profit_bps=float(s_info["take_profit_bps"]) if "take_profit_bps" in s_info else fallback.get("take_profit_bps"),
+                stop_loss_bps=float(s_info["stop_loss_bps"]) if "stop_loss_bps" in s_info else fallback.get("stop_loss_bps"),
+                trailing_stop_activation_bps=float(s_info["trailing_stop_activation_bps"]) if "trailing_stop_activation_bps" in s_info else fallback.get("trailing_stop_activation_bps"),
+                trailing_stop_distance_bps=float(s_info["trailing_stop_distance_bps"]) if "trailing_stop_distance_bps" in s_info else fallback.get("trailing_stop_distance_bps"),
+                max_holding_time_secs=int(s_info["max_holding_time_secs"]) if "max_holding_time_secs" in s_info else fallback.get("max_holding_time_secs"),
+                exit_reversal_threshold=float(s_info["exit_reversal_threshold"]) if "exit_reversal_threshold" in s_info else fallback.get("exit_reversal_threshold"),
+                hedge_trigger_loss_bps=float(s_info["hedge_trigger_loss_bps"]) if "hedge_trigger_loss_bps" in s_info else fallback.get("hedge_trigger_loss_bps"),
+                hedge_reversal_threshold=float(s_info["hedge_reversal_threshold"]) if "hedge_reversal_threshold" in s_info else fallback.get("hedge_reversal_threshold"),
+                min_volatility_bps=float(s_info["min_volatility_bps"]) if "min_volatility_bps" in s_info else fallback.get("min_volatility_bps"),
+                loss_cooldown_secs=int(s_info["loss_cooldown_secs"]) if "loss_cooldown_secs" in s_info else fallback.get("loss_cooldown_secs"),
+                price_concession_ratio=float(s_info["price_concession_ratio"]) if "price_concession_ratio" in s_info else fallback.get("price_concession_ratio"),
+                exit_concession_ratio=float(s_info["exit_concession_ratio"]) if "exit_concession_ratio" in s_info else fallback.get("exit_concession_ratio"),
+                fast_fill_enabled=bool(s_info["fast_fill_enabled"]) if "fast_fill_enabled" in s_info else fallback.get("fast_fill_enabled"),
+                entry_escalate_secs=float(s_info["entry_escalate_secs"]) if "entry_escalate_secs" in s_info else fallback.get("entry_escalate_secs"),
+                exit_escalate_secs=float(s_info["exit_escalate_secs"]) if "exit_escalate_secs" in s_info else fallback.get("exit_escalate_secs"),
+                defensive_hedge_market=bool(s_info["defensive_hedge_market"]) if "defensive_hedge_market" in s_info else fallback.get("defensive_hedge_market"),
+                min_confidence=float(s_info["min_confidence"]) if "min_confidence" in s_info else fallback.get("min_confidence"),
+                coentry_group=str(s_info["coentry_group"]) if "coentry_group" in s_info else fallback.get("coentry_group"),
+                trend_filter_enabled=bool(s_info["trend_filter_enabled"]) if "trend_filter_enabled" in s_info else fallback.get("trend_filter_enabled"),
+                trend_window_secs=float(s_info["trend_window_secs"]) if "trend_window_secs" in s_info else fallback.get("trend_window_secs"),
+                max_counter_trend_bps=float(s_info["max_counter_trend_bps"]) if "max_counter_trend_bps" in s_info else fallback.get("max_counter_trend_bps"),
+                require_cvd_alignment=bool(s_info["require_cvd_alignment"]) if "require_cvd_alignment" in s_info else fallback.get("require_cvd_alignment"),
+                dynamic_tp_enabled=bool(s_info["dynamic_tp_enabled"]) if "dynamic_tp_enabled" in s_info else fallback.get("dynamic_tp_enabled"),
+                dynamic_tp_spread_mult=float(s_info["dynamic_tp_spread_mult"]) if "dynamic_tp_spread_mult" in s_info else fallback.get("dynamic_tp_spread_mult"),
+                dynamic_tp_vol_mult=float(s_info["dynamic_tp_vol_mult"]) if "dynamic_tp_vol_mult" in s_info else fallback.get("dynamic_tp_vol_mult"),
+                dynamic_tp_min_bps=float(s_info["dynamic_tp_min_bps"]) if "dynamic_tp_min_bps" in s_info else fallback.get("dynamic_tp_min_bps"),
+                dynamic_tp_max_bps=float(s_info["dynamic_tp_max_bps"]) if "dynamic_tp_max_bps" in s_info else fallback.get("dynamic_tp_max_bps"),
+                tiered_trailing_ratchet=bool(s_info["tiered_trailing_ratchet"]) if "tiered_trailing_ratchet" in s_info else fallback.get("tiered_trailing_ratchet"),
+                exhaustion_exit_enabled=bool(s_info["exhaustion_exit_enabled"]) if "exhaustion_exit_enabled" in s_info else fallback.get("exhaustion_exit_enabled"),
+                exhaustion_min_gain_bps=float(s_info["exhaustion_min_gain_bps"]) if "exhaustion_min_gain_bps" in s_info else fallback.get("exhaustion_min_gain_bps"),
+                exhaustion_score_threshold=float(s_info["exhaustion_score_threshold"]) if "exhaustion_score_threshold" in s_info else fallback.get("exhaustion_score_threshold"),
+                emergency_slippage_pct=float(s_info["emergency_slippage_pct"]) if "emergency_slippage_pct" in s_info else fallback.get("emergency_slippage_pct"),
+                is_scalping=False,
+            )
+
+        exec_strategies: Dict[str, ExecutionStrategyConfig] = {}
+        defaults_exec = DEFAULT_CORE_STRATEGIES_JSON["execution_strategies"]
+        exec_raw = raw_data.get("execution_strategies", defaults_exec)
+        for s_name in NEW_EXECUTION_STRATEGIES:
+            s_info = exec_raw.get(s_name, defaults_exec.get(s_name, {}))
+            fallback = defaults_exec.get(s_name, {})
+            exec_strategies[s_name] = _parse_strat_item(s_name, s_info, fallback)
+
+        alpha_signals: Dict[str, AlphaSignalConfig] = {}
+        defaults_alpha = DEFAULT_CORE_STRATEGIES_JSON["alpha_signals"]
+        alpha_raw = raw_data.get("alpha_signals", defaults_alpha)
+        for a_name, a_info in alpha_raw.items():
+            fallback = defaults_alpha.get(a_name, {})
+            alpha_signals[a_name] = AlphaSignalConfig(
+                name=a_name,
+                enabled=bool(a_info.get("enabled", fallback.get("enabled", True))),
+                weight=float(a_info.get("weight", fallback.get("weight", 0.0))),
+                description=str(a_info.get("description", fallback.get("description", ""))),
+            )
+
+        return cls(
+            filepath=filepath,
+            live_execution=live_cfg,
+            execution_strategies=exec_strategies,
+            scalping_strategies={},
+            alpha_signals=alpha_signals,
+        )
+
+    @property
+    def all_strategies(self) -> Dict[str, ExecutionStrategyConfig]:
+        return self.execution_strategies
+
+    def is_execution_strategy(self, name: str) -> bool:
+        return name in self.execution_strategies
+
+    def is_scalping_strategy(self, name: str) -> bool:
+        return False
+
+    @property
+    def is_scalping_mode_active(self) -> bool:
+        return False
+
+    def get_strategy(self, name: str) -> Optional[ExecutionStrategyConfig]:
+        return self.execution_strategies.get(name)
+
+    def get_strategy_category(self, name: str) -> str:
+        return "execution" if name in self.execution_strategies else "unknown"
+
+    def get_effective_live_strategy(self) -> str:
+        current = self.live_execution.active_strategy
+        current_cfg = self.execution_strategies.get(current)
+        if current_cfg and current_cfg.enabled:
+            return current
+        for name, s in self.execution_strategies.items():
+            if s.enabled:
+                return name
+        return current or "Hedged_Convexity"
+
+    def get_enabled_strategy_defs(self, include_scalping: bool = False) -> Dict[str, Tuple[str, str]]:
+        return {
+            s.name: (s.signal_key, s.execution_type)
+            for s in self.execution_strategies.values()
+            if s.enabled
+        }
+
+    @property
+    def program_name(self) -> str:
+        return "core_execution"
+
+    def set_scalping_mode(self, enabled: bool = False, save: bool = False, enable_queue_replenishment: bool = True):
+        """In CoreStrategiesConfig, scalping mode cannot be enabled. Preserves core strategies."""
+        if not enabled:
+            for name, s in self.execution_strategies.items():
+                if name == "Queue_Replenishment":
+                    s.enabled = enable_queue_replenishment
+                else:
+                    s.enabled = True
+            if self.live_execution.active_strategy not in self.execution_strategies:
+                self.live_execution.active_strategy = "Hedged_Convexity"
+        if save:
+            self.save()
+
+    def get_strategy_params(self, include_scalping: bool = False) -> Dict[str, Dict[str, Any]]:
+        return super().get_strategy_params(include_scalping=False)
+
+    def to_dict(self) -> Dict[str, Any]:
+        exec_dict = {}
+        for k, v in self.execution_strategies.items():
+            exec_dict[k] = {
+                "enabled": v.enabled,
+                "description": v.description,
+                "signal_key": v.signal_key,
+                "execution_type": v.execution_type,
+                "entry_threshold": v.entry_threshold,
+                "order_size_btc": v.order_size_btc,
+            }
+            for attr in (
+                "take_profit_bps", "stop_loss_bps", "trailing_stop_activation_bps",
+                "trailing_stop_distance_bps", "max_holding_time_secs", "exit_reversal_threshold",
+                "hedge_trigger_loss_bps", "hedge_reversal_threshold", "min_volatility_bps",
+                "loss_cooldown_secs", "coentry_group", "fast_fill_enabled", "entry_escalate_secs",
+                "exit_escalate_secs", "defensive_hedge_market", "min_confidence", "trend_filter_enabled",
+                "trend_window_secs", "max_counter_trend_bps", "require_cvd_alignment", "dynamic_tp_enabled",
+                "dynamic_tp_spread_mult", "dynamic_tp_vol_mult", "dynamic_tp_min_bps", "dynamic_tp_max_bps",
+                "tiered_trailing_ratchet", "exhaustion_exit_enabled", "exhaustion_min_gain_bps",
+                "exhaustion_score_threshold", "emergency_slippage_pct"
+            ):
+                val = getattr(v, attr, None)
+                if val is not None:
+                    exec_dict[k][attr] = val
+
+        alpha_dict = {
+            k: {
+                "enabled": v.enabled,
+                "weight": v.weight,
+                "description": v.description,
+            }
+            for k, v in self.alpha_signals.items()
+        }
+
+        return {
+            "_comment": "Hyperliquid L2 Microstructure Alpha Engine - Core Execution Strategy Configuration",
+            "_instructions": "Configuration for the 4 core execution strategies: Hedged_Convexity, Convexity_Cascade, Momentum_Expansion, Queue_Replenishment.",
+            "version": "1.1",
+            "program": "core_execution",
+            "live_execution": {
+                "active_strategy": self.live_execution.active_strategy,
+                "order_size_btc": self.live_execution.order_size_btc,
+                "max_position_btc": self.live_execution.max_position_btc,
+                "penny_jumping": self.live_execution.penny_jumping,
+                "use_ioc_on_marketable": self.live_execution.use_ioc_on_marketable,
+                "use_native_tpsl": self.live_execution.use_native_tpsl,
+                "priority_fee_bps": self.live_execution.priority_fee_bps,
+                "force_market_orders": getattr(self.live_execution, "force_market_orders", False),
+                "market_slippage_pct": getattr(self.live_execution, "market_slippage_pct", 0.0005),
+            },
+            "execution_strategies": exec_dict,
+            "alpha_signals": alpha_dict,
+        }
+
+
+@dataclass
+class ScalperStrategiesConfig(StrategiesConfig):
+    """Configuration specifically managing the 11 scalping strategies for Program 2."""
+    filepath: str = "strategies_scalper.json"
+
+    @classmethod
+    def load(cls, filepath: str = "strategies_scalper.json") -> "ScalperStrategiesConfig":
+        return cls._load_scalper(filepath)
+
+    @classmethod
+    def _load_scalper(cls, filepath: str = "strategies_scalper.json", raw_data: Optional[dict] = None) -> "ScalperStrategiesConfig":
+        if raw_data is None:
+            if not os.path.exists(filepath):
+                try:
+                    with open(filepath, "w", encoding="utf-8") as f:
+                        json.dump(DEFAULT_SCALPER_STRATEGIES_JSON, f, indent=2)
+                except Exception:
+                    pass
+                raw_data = DEFAULT_SCALPER_STRATEGIES_JSON
+            else:
+                try:
+                    with open(filepath, "r", encoding="utf-8") as f:
+                        raw_data = json.load(f)
+                except Exception:
+                    raw_data = DEFAULT_SCALPER_STRATEGIES_JSON
+
+        live_raw = raw_data.get("live_execution", {})
+        live_cfg = LiveExecutionConfig(
+            active_strategy=live_raw.get("active_strategy", "Composite_Maker"),
+            order_size_btc=float(live_raw.get("order_size_btc", 0.0005)),
+            max_position_btc=float(live_raw.get("max_position_btc", 0.05)),
+            penny_jumping=bool(live_raw.get("penny_jumping", True)),
+            use_ioc_on_marketable=bool(live_raw.get("use_ioc_on_marketable", True)),
+            use_native_tpsl=bool(live_raw.get("use_native_tpsl", True)),
+            priority_fee_bps=float(live_raw.get("priority_fee_bps", 0.0)),
+            force_market_orders=bool(live_raw.get("force_market_orders", False)),
+            market_slippage_pct=float(live_raw.get("market_slippage_pct", 0.0005)),
+        )
+
+        def _parse_strat_item(s_name: str, s_info: dict, fallback: dict) -> ScalpingStrategyConfig:
+            return ScalpingStrategyConfig(
+                name=s_name,
+                enabled=bool(s_info.get("enabled", fallback.get("enabled", False))),
+                description=str(s_info.get("description", fallback.get("description", ""))),
+                signal_key=str(s_info.get("signal_key", fallback.get("signal_key", "CompositeAlpha"))),
+                execution_type=str(s_info.get("execution_type", fallback.get("execution_type", "MAKER"))),
+                entry_threshold=float(s_info.get("entry_threshold", fallback.get("entry_threshold", 0.4))),
+                order_size_btc=float(s_info.get("order_size_btc", fallback.get("order_size_btc", 0.1))),
+                take_profit_bps=float(s_info["take_profit_bps"]) if "take_profit_bps" in s_info else fallback.get("take_profit_bps"),
+                stop_loss_bps=float(s_info["stop_loss_bps"]) if "stop_loss_bps" in s_info else fallback.get("stop_loss_bps"),
+                trailing_stop_activation_bps=float(s_info["trailing_stop_activation_bps"]) if "trailing_stop_activation_bps" in s_info else fallback.get("trailing_stop_activation_bps"),
+                trailing_stop_distance_bps=float(s_info["trailing_stop_distance_bps"]) if "trailing_stop_distance_bps" in s_info else fallback.get("trailing_stop_distance_bps"),
+                max_holding_time_secs=int(s_info["max_holding_time_secs"]) if "max_holding_time_secs" in s_info else fallback.get("max_holding_time_secs"),
+                exit_reversal_threshold=float(s_info["exit_reversal_threshold"]) if "exit_reversal_threshold" in s_info else fallback.get("exit_reversal_threshold"),
+                hedge_trigger_loss_bps=float(s_info["hedge_trigger_loss_bps"]) if "hedge_trigger_loss_bps" in s_info else fallback.get("hedge_trigger_loss_bps"),
+                hedge_reversal_threshold=float(s_info["hedge_reversal_threshold"]) if "hedge_reversal_threshold" in s_info else fallback.get("hedge_reversal_threshold"),
+                min_volatility_bps=float(s_info["min_volatility_bps"]) if "min_volatility_bps" in s_info else fallback.get("min_volatility_bps"),
+                loss_cooldown_secs=int(s_info["loss_cooldown_secs"]) if "loss_cooldown_secs" in s_info else fallback.get("loss_cooldown_secs"),
+                price_concession_ratio=float(s_info["price_concession_ratio"]) if "price_concession_ratio" in s_info else fallback.get("price_concession_ratio"),
+                exit_concession_ratio=float(s_info["exit_concession_ratio"]) if "exit_concession_ratio" in s_info else fallback.get("exit_concession_ratio"),
+                fast_fill_enabled=bool(s_info["fast_fill_enabled"]) if "fast_fill_enabled" in s_info else fallback.get("fast_fill_enabled"),
+                entry_escalate_secs=float(s_info["entry_escalate_secs"]) if "entry_escalate_secs" in s_info else fallback.get("entry_escalate_secs"),
+                exit_escalate_secs=float(s_info["exit_escalate_secs"]) if "exit_escalate_secs" in s_info else fallback.get("exit_escalate_secs"),
+                defensive_hedge_market=bool(s_info["defensive_hedge_market"]) if "defensive_hedge_market" in s_info else fallback.get("defensive_hedge_market"),
+                min_confidence=float(s_info["min_confidence"]) if "min_confidence" in s_info else fallback.get("min_confidence"),
+                coentry_group=str(s_info["coentry_group"]) if "coentry_group" in s_info else fallback.get("coentry_group"),
+                trend_filter_enabled=bool(s_info["trend_filter_enabled"]) if "trend_filter_enabled" in s_info else fallback.get("trend_filter_enabled"),
+                trend_window_secs=float(s_info["trend_window_secs"]) if "trend_window_secs" in s_info else fallback.get("trend_window_secs"),
+                max_counter_trend_bps=float(s_info["max_counter_trend_bps"]) if "max_counter_trend_bps" in s_info else fallback.get("max_counter_trend_bps"),
+                require_cvd_alignment=bool(s_info["require_cvd_alignment"]) if "require_cvd_alignment" in s_info else fallback.get("require_cvd_alignment"),
+                dynamic_tp_enabled=bool(s_info["dynamic_tp_enabled"]) if "dynamic_tp_enabled" in s_info else fallback.get("dynamic_tp_enabled"),
+                dynamic_tp_spread_mult=float(s_info["dynamic_tp_spread_mult"]) if "dynamic_tp_spread_mult" in s_info else fallback.get("dynamic_tp_spread_mult"),
+                dynamic_tp_vol_mult=float(s_info["dynamic_tp_vol_mult"]) if "dynamic_tp_vol_mult" in s_info else fallback.get("dynamic_tp_vol_mult"),
+                dynamic_tp_min_bps=float(s_info["dynamic_tp_min_bps"]) if "dynamic_tp_min_bps" in s_info else fallback.get("dynamic_tp_min_bps"),
+                dynamic_tp_max_bps=float(s_info["dynamic_tp_max_bps"]) if "dynamic_tp_max_bps" in s_info else fallback.get("dynamic_tp_max_bps"),
+                tiered_trailing_ratchet=bool(s_info["tiered_trailing_ratchet"]) if "tiered_trailing_ratchet" in s_info else fallback.get("tiered_trailing_ratchet"),
+                exhaustion_exit_enabled=bool(s_info["exhaustion_exit_enabled"]) if "exhaustion_exit_enabled" in s_info else fallback.get("exhaustion_exit_enabled"),
+                exhaustion_min_gain_bps=float(s_info["exhaustion_min_gain_bps"]) if "exhaustion_min_gain_bps" in s_info else fallback.get("exhaustion_min_gain_bps"),
+                exhaustion_score_threshold=float(s_info["exhaustion_score_threshold"]) if "exhaustion_score_threshold" in s_info else fallback.get("exhaustion_score_threshold"),
+                emergency_slippage_pct=float(s_info["emergency_slippage_pct"]) if "emergency_slippage_pct" in s_info else fallback.get("emergency_slippage_pct"),
+                is_scalping=True,
+            )
+
+        scalp_strategies: Dict[str, ScalpingStrategyConfig] = {}
+        defaults_scalp = DEFAULT_SCALPER_STRATEGIES_JSON["scalping_strategies"]
+        scalp_raw = raw_data.get("scalping_strategies", defaults_scalp)
+        for s_name in LEGACY_SCALPING_STRATEGIES:
+            s_info = scalp_raw.get(s_name, defaults_scalp.get(s_name, {}))
+            fallback = defaults_scalp.get(s_name, {})
+            scalp_strategies[s_name] = _parse_strat_item(s_name, s_info, fallback)
+
+        alpha_signals: Dict[str, AlphaSignalConfig] = {}
+        defaults_alpha = DEFAULT_SCALPER_STRATEGIES_JSON["alpha_signals"]
+        alpha_raw = raw_data.get("alpha_signals", defaults_alpha)
+        for a_name, a_info in alpha_raw.items():
+            fallback = defaults_alpha.get(a_name, {})
+            alpha_signals[a_name] = AlphaSignalConfig(
+                name=a_name,
+                enabled=bool(a_info.get("enabled", fallback.get("enabled", True))),
+                weight=float(a_info.get("weight", fallback.get("weight", 0.0))),
+                description=str(a_info.get("description", fallback.get("description", ""))),
+            )
+
+        return cls(
+            filepath=filepath,
+            live_execution=live_cfg,
+            execution_strategies={},
+            scalping_strategies=scalp_strategies,
+            alpha_signals=alpha_signals,
+        )
+
+    @property
+    def all_strategies(self) -> Dict[str, ScalpingStrategyConfig]:
+        return self.scalping_strategies
+
+    def is_execution_strategy(self, name: str) -> bool:
+        return False
+
+    def is_scalping_strategy(self, name: str) -> bool:
+        return name in self.scalping_strategies
+
+    @property
+    def is_scalping_mode_active(self) -> bool:
+        return True
+
+    def get_strategy(self, name: str) -> Optional[ScalpingStrategyConfig]:
+        return self.scalping_strategies.get(name)
+
+    def get_strategy_category(self, name: str) -> str:
+        return "scalping" if name in self.scalping_strategies else "unknown"
+
+    def get_effective_live_strategy(self) -> str:
+        current = self.live_execution.active_strategy
+        current_cfg = self.scalping_strategies.get(current)
+        if current_cfg and current_cfg.enabled:
+            return current
+        for name, s in self.scalping_strategies.items():
+            if s.enabled:
+                return name
+        return current or "Composite_Maker"
+
+    def get_enabled_strategy_defs(self, include_scalping: bool = True) -> Dict[str, Tuple[str, str]]:
+        return {
+            s.name: (s.signal_key, s.execution_type)
+            for s in self.scalping_strategies.values()
+            if s.enabled
+        }
+
+    @property
+    def program_name(self) -> str:
+        return "scalper"
+
+    def set_scalping_mode(self, enabled: bool = True, save: bool = False, enable_queue_replenishment: bool = False):
+        """In ScalperStrategiesConfig, core mode cannot be enabled. Preserves scalping strategies."""
+        if enabled:
+            for s in self.scalping_strategies.values():
+                s.enabled = True
+            if self.live_execution.active_strategy not in self.scalping_strategies:
+                self.live_execution.active_strategy = "Composite_Maker"
+        if save:
+            self.save()
+
+    def get_strategy_params(self, include_scalping: bool = True) -> Dict[str, Dict[str, Any]]:
+        return super().get_strategy_params(include_scalping=True)
+
+    def to_dict(self) -> Dict[str, Any]:
+        scalp_dict = {}
+        for k, v in self.scalping_strategies.items():
+            scalp_dict[k] = {
+                "enabled": v.enabled,
+                "description": v.description,
+                "signal_key": v.signal_key,
+                "execution_type": v.execution_type,
+                "entry_threshold": v.entry_threshold,
+                "order_size_btc": v.order_size_btc,
+            }
+            for attr in (
+                "take_profit_bps", "stop_loss_bps", "trailing_stop_activation_bps",
+                "trailing_stop_distance_bps", "max_holding_time_secs", "exit_reversal_threshold",
+                "min_volatility_bps", "loss_cooldown_secs", "price_concession_ratio", "exit_concession_ratio",
+                "fast_fill_enabled", "entry_escalate_secs", "exit_escalate_secs", "defensive_hedge_market",
+                "min_confidence", "trend_filter_enabled", "trend_window_secs", "max_counter_trend_bps",
+                "require_cvd_alignment", "dynamic_tp_enabled", "dynamic_tp_spread_mult", "dynamic_tp_vol_mult",
+                "dynamic_tp_min_bps", "dynamic_tp_max_bps", "tiered_trailing_ratchet", "exhaustion_exit_enabled",
+                "exhaustion_min_gain_bps", "exhaustion_score_threshold", "emergency_slippage_pct"
+            ):
+                val = getattr(v, attr, None)
+                if val is not None:
+                    scalp_dict[k][attr] = val
+
+        alpha_dict = {
+            k: {
+                "enabled": v.enabled,
+                "weight": v.weight,
+                "description": v.description,
+            }
+            for k, v in self.alpha_signals.items()
+        }
+
+        return {
+            "_comment": "Hyperliquid L2 Microstructure Alpha Engine - Scalping Strategy Configuration",
+            "_instructions": "Configuration for the 11 high-frequency scalping strategies (maker & smart taker).",
+            "version": "1.1",
+            "program": "scalper",
+            "live_execution": {
+                "active_strategy": self.live_execution.active_strategy,
+                "order_size_btc": self.live_execution.order_size_btc,
+                "max_position_btc": self.live_execution.max_position_btc,
+                "penny_jumping": self.live_execution.penny_jumping,
+                "use_ioc_on_marketable": self.live_execution.use_ioc_on_marketable,
+                "use_native_tpsl": self.live_execution.use_native_tpsl,
+                "priority_fee_bps": self.live_execution.priority_fee_bps,
+                "force_market_orders": getattr(self.live_execution, "force_market_orders", False),
+                "market_slippage_pct": getattr(self.live_execution, "market_slippage_pct", 0.0005),
+            },
+            "scalping_strategies": scalp_dict,
+            "alpha_signals": alpha_dict,
+        }
+
+
+# Canonical alias for scalping config
+ScalpingStrategiesConfig = ScalperStrategiesConfig
+
+
+@dataclass
 class AppConfig:
     hyperliquid: HyperliquidConfig = field(default_factory=HyperliquidConfig)
     account: AccountConfig = field(default_factory=AccountConfig)
@@ -1487,4 +2011,18 @@ class AppConfig:
         """Returns the coin-specific data directory (e.g. data/btc or data/xyz_skhy)."""
         safe_coin = self.market.safe_coin.lower()
         return os.path.join(self.data_dir, safe_coin)
+
+    @classmethod
+    def for_core(cls, strategies_config: str = "strategies_core.json", **kwargs) -> "AppConfig":
+        """Instantiates an AppConfig configured for the Core Execution Strategy program."""
+        strat_cfg = CoreStrategiesConfig.load(strategies_config)
+        cfg = cls(strategies=strat_cfg, **kwargs)
+        return cfg
+
+    @classmethod
+    def for_scalper(cls, strategies_config: str = "strategies_scalper.json", **kwargs) -> "AppConfig":
+        """Instantiates an AppConfig configured for the Scalping Strategy program."""
+        strat_cfg = ScalperStrategiesConfig.load(strategies_config)
+        cfg = cls(strategies=strat_cfg, **kwargs)
+        return cfg
 

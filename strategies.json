@@ -15,7 +15,7 @@
   },
   "execution_strategies": {
     "Hedged_Convexity": {
-      "enabled": true,
+      "enabled": false,
       "description": "Multi-tier order book convexity with automated defensive maker hedging on adverse toxic flow and liquidity wall decay",
       "signal_key": "HedgedConvexity",
       "execution_type": "HEDGED_MAKER",
@@ -34,7 +34,7 @@
       "coentry_group": "triad"
     },
     "Convexity_Cascade": {
-      "enabled": true,
+      "enabled": false,
       "description": "Multi-tier order book convexity and liquidity hole cascade with order count dispersion and trade flow impulse",
       "signal_key": "ConvexityCascade",
       "execution_type": "HEDGED_MAKER",
@@ -53,7 +53,7 @@
       "coentry_group": "triad"
     },
     "Momentum_Expansion": {
-      "enabled": true,
+      "enabled": false,
       "description": "Multi-minute structural trend expansion entering on order book queue exhaustion, 25-level depth support, and CVD acceleration with absorption trap shielding",
       "signal_key": "MomentumExpansion",
       "execution_type": "HEDGED_MAKER",
@@ -72,7 +72,7 @@
       "coentry_group": "triad"
     },
     "Queue_Replenishment": {
-      "enabled": true,
+      "enabled": false,
       "description": "Orthogonal queue replenishment dynamics with multi-tier cancellation asymmetry, depletion persistence, and defensive maker hedging",
       "signal_key": "QueueReplenishment",
       "execution_type": "HEDGED_MAKER",

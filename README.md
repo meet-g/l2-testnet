@@ -22,13 +22,48 @@ High-performance quantitative market microstructure research engine and real-tim
 
 ---
 
-## 2. Project Architecture
+## 2. Project Architecture & Program Separation
 
+The codebase is cleanly separated into **two dedicated, standalone programs** sharing a high-performance microstructure core:
+
+### Program 1: Core Execution Alpha Engine (`main_core.py`)
+- **Focus**: Multi-tier order book convexity, cascade hole dynamics, structural trend expansion, and orthogonal queue replenishment.
+- **Entry Point**: `python main_core.py [live|benchmark|replay|strategies|place-order]`
+- **Configuration**: `strategies_core.json` (`CoreStrategiesConfig`)
+- **Active Strategies**:
+  1. `Hedged_Convexity` (Multi-tier convexity + defensive maker hedging)
+  2. `Convexity_Cascade` (Liquidity hole vacuum cascades + depth curvature)
+  3. `Momentum_Expansion` (High-conviction taker momentum capture)
+  4. `Queue_Replenishment` (L1/L3 queue replenishment delta & cancellation asymmetry)
+
+### Program 2: High-Frequency Scalping Engine (`main_scalper.py` / `scalper.py`)
+- **Focus**: Sub-second spread capture, microprice queue jumping, machine learning feature-drift prediction, and dynamic volatility take-profit scalping.
+- **Entry Point**: `python main_scalper.py [live|benchmark|replay|strategies|place-order]` (or `python scalper.py [mode]`)
+- **Configuration**: `strategies_scalper.json` (`ScalperStrategiesConfig`)
+- **Active Strategies**:
+  1. `QDAP_Maker`
+  2. `Composite_Maker`
+  3. `AdaptiveML_Maker`
+  4. `WOBI_Maker`
+  5. `MicroPrice_Maker`
+  6. `MicroPrice_FastFill`
+  7. `Absorption_Fade`
+  8. `AdaptiveML_Taker`
+  9. `Composite_Taker`
+  10. `Instant_FastFill`
+  11. `Dynamic_Spread_Scalper`
+
+### Shared Engine Directory Layout
 ```
 D:\Hyperliquid\L2 - Testnet\
-├── config.py                 # Hyperliquid endpoints, fee schedules, horizons, signal weights
-├── strategies.json           # Interactive strategy selector & alpha signal weights config
-├── main.py                   # CLI runner: live dashboard, benchmark, replay, test-connection
+├── main_core.py              # Program 1: Core Execution Strategy Engine entry point
+├── strategies_core.json      # Program 1: Dedicated core execution strategies config
+├── main_scalper.py           # Program 2: Scalping Strategy Engine entry point
+├── scalper.py                # Program 2: Scalping CLI alias
+├── strategies_scalper.json   # Program 2: Dedicated scalping strategies config
+├── main.py                   # Unified dispatcher & backwards-compatible CLI runner
+├── strategies.json           # Unified strategy configuration
+├── config.py                 # CoreStrategiesConfig, ScalperStrategiesConfig, fee schedules, AppConfig
 ├── core/
 │   ├── orderbook.py          # L2 book manager (20 depth levels, weighted mid, spread, order counts)
 │   └── trade_stream.py       # High-speed trade stream, rolling CVD, VPIN volume bucketizer
@@ -37,6 +72,8 @@ D:\Hyperliquid\L2 - Testnet\
 │   ├── hedged_convexity.py   # Hedged Convexity (Defensive Maker Hedging & VPIN Toxicity Shield)
 │   ├── convexity_cascade.py  # Convexity Cascade (Liquidity Hole & Depth Curvature)
 │   ├── momentum_expansion.py # Momentum Expansion (QDAP + CVD Impulse + Trend Alignment)
+│   ├── queue_replenishment.py# Queue Replenishment Delta & Cancellation Asymmetry
+│   ├── dynamic_spread.py     # Dynamic Spread Scalper Factor
 │   ├── qdap.py               # Queue Depletion & Asymmetric Pressure (Touch Exhaustion & Anti-Spoofing)
 │   ├── wobi.py               # Multi-level WOBI with order concentration anti-spoofing
 │   ├── voi.py                # Volume Order Imbalance (Cont-Kukanov-Stoikov)
@@ -47,9 +84,13 @@ D:\Hyperliquid\L2 - Testnet\
 │   └── composite_alpha.py    # Multi-factor alpha ensemble with regime switching
 ├── engine/
 │   ├── backtester.py         # Multi-horizon forward IC evaluator & live paper execution simulator
+│   ├── live_executor.py      # Real-time exchange WebSocket/REST executor with Alo/IOC logic
+│   ├── trade_auditor.py      # Structured transaction & lifecycle execution auditor
 │   └── data_collector.py     # Real-time L2 recorder (JSONL) and high-speed offline replay engine
 ├── ui/
-│   └── dashboard.py          # Rich interactive terminal dashboard
+│   ├── dashboard.py          # Rich interactive terminal dashboard
+│   ├── web_server.py         # Hardware-accelerated FastAPI + WebSocket telemetry server
+│   └── static/index.html     # High-speed Web UI dashboard
 ├── data/                     # Stored L2 book and trade tick recordings (partitioned by coin)
 │   ├── btc/                  # BTC L2 recordings & snippets
 │   ├── eth/                  # ETH L2 recordings

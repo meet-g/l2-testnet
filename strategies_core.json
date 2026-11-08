@@ -1,0 +1,132 @@
+{
+  "_comment": "Hyperliquid L2 Microstructure Alpha Engine - Core Execution Strategy Configuration",
+  "_instructions": "Configuration for the 4 core execution strategies: Hedged_Convexity, Convexity_Cascade, Momentum_Expansion, Queue_Replenishment.",
+  "version": "1.1",
+  "program": "core_execution",
+  "live_execution": {
+    "active_strategy": "Hedged_Convexity",
+    "order_size_btc": 0.0005,
+    "max_position_btc": 0.05,
+    "penny_jumping": true,
+    "use_ioc_on_marketable": true,
+    "use_native_tpsl": true,
+    "priority_fee_bps": 0.0,
+    "force_market_orders": false,
+    "market_slippage_pct": 0.0005
+  },
+  "execution_strategies": {
+    "Hedged_Convexity": {
+      "enabled": true,
+      "description": "Multi-tier order book convexity with automated defensive maker hedging on adverse toxic flow and liquidity wall decay",
+      "signal_key": "HedgedConvexity",
+      "execution_type": "HEDGED_MAKER",
+      "entry_threshold": 0.86,
+      "order_size_btc": 0.1,
+      "take_profit_bps": 20.0,
+      "stop_loss_bps": 8.0,
+      "trailing_stop_activation_bps": 5.0,
+      "trailing_stop_distance_bps": 2.0,
+      "max_holding_time_secs": 180,
+      "exit_reversal_threshold": 0.85,
+      "hedge_trigger_loss_bps": -3.5,
+      "hedge_reversal_threshold": 0.2,
+      "min_volatility_bps": 4.5,
+      "loss_cooldown_secs": 60,
+      "coentry_group": "triad"
+    },
+    "Convexity_Cascade": {
+      "enabled": true,
+      "description": "Multi-tier order book convexity and liquidity hole cascade with order count dispersion and trade flow impulse",
+      "signal_key": "ConvexityCascade",
+      "execution_type": "HEDGED_MAKER",
+      "entry_threshold": 0.8,
+      "order_size_btc": 0.1,
+      "take_profit_bps": 20.0,
+      "stop_loss_bps": 8.0,
+      "trailing_stop_activation_bps": 6.0,
+      "trailing_stop_distance_bps": 2.5,
+      "max_holding_time_secs": 180,
+      "exit_reversal_threshold": 0.8,
+      "hedge_trigger_loss_bps": -4.0,
+      "hedge_reversal_threshold": 0.15,
+      "min_volatility_bps": 4.5,
+      "loss_cooldown_secs": 60,
+      "coentry_group": "triad"
+    },
+    "Momentum_Expansion": {
+      "enabled": true,
+      "description": "Multi-minute structural trend expansion entering on order book queue exhaustion, 25-level depth support, and CVD acceleration with absorption trap shielding",
+      "signal_key": "MomentumExpansion",
+      "execution_type": "HEDGED_MAKER",
+      "entry_threshold": 0.78,
+      "order_size_btc": 0.1,
+      "take_profit_bps": 20.0,
+      "stop_loss_bps": 8.0,
+      "trailing_stop_activation_bps": 3.5,
+      "trailing_stop_distance_bps": 1.2,
+      "max_holding_time_secs": 180,
+      "exit_reversal_threshold": 0.65,
+      "hedge_trigger_loss_bps": -4.5,
+      "hedge_reversal_threshold": 0.0,
+      "min_volatility_bps": 4.5,
+      "loss_cooldown_secs": 60,
+      "coentry_group": "triad"
+    },
+    "Queue_Replenishment": {
+      "enabled": true,
+      "description": "Orthogonal queue replenishment dynamics with multi-tier cancellation asymmetry, depletion persistence, and defensive maker hedging",
+      "signal_key": "QueueReplenishment",
+      "execution_type": "HEDGED_MAKER",
+      "entry_threshold": 0.985,
+      "order_size_btc": 0.1,
+      "take_profit_bps": 30.0,
+      "stop_loss_bps": 8.0,
+      "trailing_stop_activation_bps": 3.5,
+      "trailing_stop_distance_bps": 1.2,
+      "max_holding_time_secs": 180,
+      "exit_reversal_threshold": 0.8,
+      "hedge_trigger_loss_bps": -3.5,
+      "hedge_reversal_threshold": -0.1,
+      "min_volatility_bps": 4.5,
+      "loss_cooldown_secs": 120,
+      "coentry_group": "queue_replenishment"
+    }
+  },
+  "alpha_signals": {
+    "HedgedConvexity": {
+      "enabled": true,
+      "weight": 0.0,
+      "description": "Hedged Convexity Alpha (depth curvature + order count dispersion + dynamic VPIN toxicity shielding & defensive maker hedge triggers)"
+    },
+    "ConvexityCascade": {
+      "enabled": true,
+      "weight": 0.0,
+      "description": "Order Book Convexity & Liquidity Hole Cascade (queue depletion + depth slope + hole vacuum + CVD impulse)"
+    },
+    "MomentumExpansion": {
+      "enabled": true,
+      "weight": 0.0,
+      "description": "Momentum Expansion (QDAP queue exhaustion + rolling CVD volume impulse + 2-min trend alignment)"
+    },
+    "QueueReplenishment": {
+      "enabled": true,
+      "weight": 0.0,
+      "description": "Dynamic L1/L3 queue replenishment delta, multi-tier cancellation asymmetry, and trade depletion persistence"
+    },
+    "VPIN": {
+      "enabled": true,
+      "weight": 0.15,
+      "description": "Volume-Synchronized Probability of Toxicity (Easley et al.)"
+    },
+    "VOI": {
+      "enabled": true,
+      "weight": 0.25,
+      "description": "Volume Order Imbalance (Cont-Kukanov-Stoikov delta queues)"
+    },
+    "Absorption": {
+      "enabled": true,
+      "weight": 0.15,
+      "description": "CVD vs Price Divergence (Passive Limit Wall Absorption)"
+    }
+  }
+}

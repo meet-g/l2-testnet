@@ -1341,6 +1341,9 @@ def print_strategies_status(cfg: Optional[AppConfig] = None, console: Optional[C
     console.print("[bold cyan]================================================================================[/bold cyan]")
     console.print(f"[bold cyan]           STRATEGY & ALPHA SIGNAL CONFIGURATION ({strat_cfg.filepath})           [/bold cyan]")
     console.print("[bold cyan]================================================================================[/bold cyan]\n")
+    console.print("[dim cyan]ℹ Note: Core execution and scalping strategies are separated into two dedicated programs:[/dim cyan]")
+    console.print("  • [bold cyan]Core Program:[/bold cyan]    [green]python main_core.py[/green]    (Config: strategies_core.json)")
+    console.print("  • [bold yellow]Scalper Program:[/bold yellow] [green]python main_scalper.py[/green] (Config: strategies_scalper.json)\n")
 
     active_live = strat_cfg.get_effective_live_strategy()
     active_strat = strat_cfg.get_strategy(active_live)

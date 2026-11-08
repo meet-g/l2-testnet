@@ -49,7 +49,9 @@ class AdaptiveAlphaSignal(BaseSignal):
         if os.path.exists(lgb_path):
             try:
                 import lightgbm as lgb
-                self.lgb_booster = lgb.Booster(model_file=lgb_path)
+                with open(lgb_path, "rb") as f:
+                    model_bytes = f.read().replace(b"\r\n", b"\n")
+                self.lgb_booster = lgb.Booster(model_str=model_bytes.decode("utf-8"))
                 print(f"[{name}] Loaded pre-trained LightGBM booster from {lgb_path}")
             except Exception as e:
                 print(f"[{name}] Warning: Failed to load LightGBM booster: {e}")

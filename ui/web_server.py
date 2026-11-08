@@ -191,6 +191,7 @@ def create_web_app(runner_ref: Any, broadcaster: TelemetryBroadcaster) -> FastAP
             "execution_strategies": exec_defs,
             "scalping_strategies": scalp_defs,
             "is_scalping_mode": runner.config.strategies.is_scalping_mode_active,
+            "program_name": getattr(runner.config.strategies, "program_name", "unified"),
             "active_live_strategy": getattr(runner.config.strategies.live_execution, "active_strategy", "Hedged_Convexity"),
         }
 
@@ -200,7 +201,7 @@ def create_web_app(runner_ref: Any, broadcaster: TelemetryBroadcaster) -> FastAP
         if not runner:
             raise HTTPException(status_code=503, detail="Engine runner unavailable")
 
-        runner.config.strategies.set_scalping_mode(enabled=req.scalping, save=req.save)
+        runner.config.strategies.set_scalping_mode(enabled=req.scalping, save=req.save, enable_queue_replenishment=False)
 
         # Synchronize evaluator strategy definitions and close positions of newly disabled strategies
         if hasattr(runner, "evaluator") and runner.evaluator:
@@ -259,6 +260,7 @@ def create_web_app(runner_ref: Any, broadcaster: TelemetryBroadcaster) -> FastAP
             "status": "ok",
             "scalping_mode": req.scalping,
             "is_scalping_mode": runner.config.strategies.is_scalping_mode_active,
+            "program_name": getattr(runner.config.strategies, "program_name", "unified"),
             "active_live_strategy": getattr(runner.config.strategies.live_execution, "active_strategy", "Hedged_Convexity"),
             "enabled_count": sum(1 for s in runner.config.strategies.all_strategies.values() if s.enabled),
             "disabled_count": sum(1 for s in runner.config.strategies.all_strategies.values() if not s.enabled),
@@ -814,6 +816,11 @@ class DashboardWebServer:
                 getattr(self.runner.config.strategies, "is_scalping_mode_active", False)
                 if hasattr(self.runner, "config") and hasattr(self.runner.config, "strategies")
                 else False
+            ),
+            "program_name": (
+                getattr(self.runner.config.strategies, "program_name", "unified")
+                if hasattr(self.runner, "config") and hasattr(self.runner.config, "strategies")
+                else "unified"
             ),
         }
 

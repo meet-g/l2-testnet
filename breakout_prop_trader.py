@@ -401,10 +401,11 @@ class BreakoutRiskSupervisor:
 _GLOBAL_STRATEGIES_CFG: Optional[StrategiesConfig] = None
 
 
-def _init_prop_worker(strategies_path: str = "strategies.json") -> None:
+def _init_prop_worker(strategies_path: Optional[str] = None) -> None:
     """One-time worker process initialization for multiprocessing.Pool."""
     global _GLOBAL_STRATEGIES_CFG
-    _GLOBAL_STRATEGIES_CFG = StrategiesConfig.load(strategies_path)
+    path = strategies_path or ("strategies_core.json" if os.path.exists("strategies_core.json") else "strategies.json")
+    _GLOBAL_STRATEGIES_CFG = StrategiesConfig.load(path)
 
     # Disable heavy unused features in worker processes
     import main
@@ -481,7 +482,8 @@ def _install_prop_worker_accelerators() -> None:
         cvd = 0.0
         buy_vol = 0.0
         sell_vol = 0.0
-        for ts, is_b, sz in reversed(self._cvd_history):
+        history_source = self._cvd_history if (hasattr(self, "_cvd_history") and self._cvd_history) else [(t.timestamp_ms, t.side == "B", t.size) for t in self.trades]
+        for ts, is_b, sz in reversed(history_source):
             if ts < cutoff_ms:
                 break
             if is_b:
@@ -542,7 +544,7 @@ def replay_prop_dataset(arg: Any) -> Dict[str, Any]:
         strategies_filter = None
 
     if _GLOBAL_STRATEGIES_CFG is None:
-        _init_prop_worker("strategies.json")
+        _init_prop_worker()
 
     from main import L2EngineRunner
 
@@ -784,6 +786,7 @@ def run_all_crypto_backtest(
     max_files_per_coin: int = 0,
     workers: Optional[int] = None,
     strategies_filter: Optional[List[str]] = None,
+    strategies_config: Optional[str] = None,
     capital: float = 5000.0,
     console: Optional[Console] = None,
 ) -> Dict[str, Any]:
@@ -814,7 +817,8 @@ def run_all_crypto_backtest(
     console.print(f"Prop Firm Model:  [bold green]$5,000 Capital[/bold green] | [bold green]+9.0% Target ($450)[/bold green] | [bold yellow]3.0% Max DD ($150)[/bold yellow] | [bold yellow]3.0% Daily Loss ($150)[/bold yellow]")
     console.print(f"Real Capital Loss:[bold red] Strictly Capped at $20.00[/bold red] (One-time Challenge Evaluation Fee)\n")
 
-    cfg_sample = StrategiesConfig.load("strategies.json")
+    strat_file = strategies_config or ("strategies_core.json" if os.path.exists("strategies_core.json") else "strategies.json")
+    cfg_sample = StrategiesConfig.load(strat_file)
     active_strats = strategies_filter or [s for s, st in cfg_sample.execution_strategies.items() if st.enabled]
     console.print(f"Active Strategies:[bold yellow] {', '.join(active_strats)}[/bold yellow]\n")
 
@@ -825,7 +829,7 @@ def run_all_crypto_backtest(
     with multiprocessing.Pool(
         processes=num_workers,
         initializer=_init_prop_worker,
-        initargs=("strategies.json",),
+        initargs=(strat_file,),
     ) as pool:
         completed = 0
         running_net = 0.0
@@ -1416,6 +1420,7 @@ def main():
     parser.add_argument("--max-files", type=int, default=0, help="Max files per coin (0 = all available crypto data)")
     parser.add_argument("--workers", type=int, default=0, help="Parallel worker processes (default: all CPU cores)")
     parser.add_argument("--capital", type=float, default=5000.0, help="Virtual account size (default: $5,000.00)")
+    parser.add_argument("--strategies-config", type=str, default="strategies_core.json" if os.path.exists("strategies_core.json") else "strategies.json", help="Path to strategies configuration JSON (default: strategies_core.json)")
     parser.add_argument("--cdp-port", type=int, default=9222, help="Chrome DevTools Protocol port for live mode (default: 9222)")
 
     args = parser.parse_args()
@@ -1455,6 +1460,7 @@ def main():
             sys.exit(1)
 
         console.print(f"[bold cyan]Replaying single session: {args.replay}...[/bold cyan]")
+        _init_prop_worker(args.strategies_config)
         res = replay_prop_dataset((args.replay, os.path.getsize(args.replay) / (1024.0 * 1024.0), args.capital))
 
         if res.get("error"):
@@ -1512,6 +1518,7 @@ def main():
             coins=args.coins,
             max_files_per_coin=args.max_files,
             workers=args.workers,
+            strategies_config=args.strategies_config,
             capital=args.capital,
             console=console,
         )
