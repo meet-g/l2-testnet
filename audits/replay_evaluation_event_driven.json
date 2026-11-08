@@ -1,0 +1,778 @@
+{
+  "Hedged_Convexity": {
+    "trades": 7,
+    "wins": 6,
+    "losses": 1,
+    "win_rate": 85.71428571428571,
+    "gross_pnl": 60.71686962399971,
+    "fees": 17.851952134673397,
+    "net_pnl": 42.86491748932631,
+    "profit_factor": 7.579599432528652,
+    "avg_return_bps": 7.204334618893138,
+    "exit_reasons": {
+      "TRAILING_STOP": 6,
+      "DEFENSIVE_MAKER_HEDGE": 1
+    },
+    "trades_detail": [
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793937243102,
+        "exit_time_ms": 1793937264250,
+        "hold_s": 21.148,
+        "entry_price": 77.546,
+        "exit_price": 77.682,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 12.354778837999527,
+        "return_bps": 14.5353467619214
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793940720490,
+        "exit_time_ms": 1793940722517,
+        "hold_s": 2.027,
+        "entry_price": 77.944,
+        "exit_price": 77.8785726,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 4.585990238695976,
+        "return_bps": 5.3954139010064095
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793940729111,
+        "exit_time_ms": 1793940802452,
+        "hold_s": 73.341,
+        "entry_price": 77.954,
+        "exit_price": 77.90757839999999,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 2.5125392876898376,
+        "return_bps": 2.955892351900118
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793950356678,
+        "exit_time_ms": 1793950414469,
+        "hold_s": 57.791,
+        "entry_price": 76.931,
+        "exit_price": 76.831,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 8.50062549299937,
+        "return_bps": 10.000610937072741
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793950657431,
+        "exit_time_ms": 1793950669920,
+        "hold_s": 12.489,
+        "entry_price": 77.168,
+        "exit_price": 77.132,
+        "exit_reason": "DEFENSIVE_MAKER_HEDGE",
+        "net_pnl": -6.51482175000015,
+        "return_bps": -7.664446402654127
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793951243574,
+        "exit_time_ms": 1793951258539,
+        "hold_s": 14.965,
+        "entry_price": 77.34,
+        "exit_price": 77.4540061,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 9.97749119944122,
+        "return_bps": 11.738686201835717
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793956770968,
+        "exit_time_ms": 1793956781483,
+        "hold_s": 10.515,
+        "entry_price": 78.318,
+        "exit_price": 78.447,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 11.448314182500532,
+        "return_bps": 13.468838581169706
+      }
+    ]
+  },
+  "Convexity_Cascade": {
+    "trades": 20,
+    "wins": 11,
+    "losses": 9,
+    "win_rate": 55.00000000000001,
+    "gross_pnl": 34.32449599306412,
+    "fees": 57.370027707819986,
+    "net_pnl": -23.045531714755878,
+    "profit_factor": 0.7203309922953128,
+    "avg_return_bps": -1.328448190000212,
+    "exit_reasons": {
+      "DEFENSIVE_MAKER_HEDGE": 5,
+      "STOP_LOSS": 3,
+      "TAKE_PROFIT": 2,
+      "TRAILING_STOP": 9,
+      "PROFIT_DECAY_EXIT": 1
+    },
+    "trades_detail": [
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793928802009,
+        "exit_time_ms": 1793928807830,
+        "hold_s": 5.821,
+        "entry_price": 77.436,
+        "exit_price": 77.4,
+        "exit_reason": "DEFENSIVE_MAKER_HEDGE",
+        "net_pnl": -6.5005799040001495,
+        "return_bps": -7.648303114830485
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793932694732,
+        "exit_time_ms": 1793932750339,
+        "hold_s": 55.607,
+        "entry_price": 78.058,
+        "exit_price": 77.9490575510812,
+        "exit_reason": "STOP_LOSS",
+        "net_pnl": -16.957246400301024,
+        "return_bps": -19.950322172845443
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793933897584,
+        "exit_time_ms": 1793933936443,
+        "hold_s": 38.859,
+        "entry_price": 78.16,
+        "exit_price": 78.13,
+        "exit_reason": "DEFENSIVE_MAKER_HEDGE",
+        "net_pnl": -5.811446190000122,
+        "return_bps": -6.837704708290831
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793934734756,
+        "exit_time_ms": 1793934828565,
+        "hold_s": 93.809,
+        "entry_price": 77.843,
+        "exit_price": 77.682,
+        "exit_reason": "TAKE_PROFIT",
+        "net_pnl": 15.033700500000148,
+        "return_bps": 17.68575851393206
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793935082707,
+        "exit_time_ms": 1793935104251,
+        "hold_s": 21.544,
+        "entry_price": 77.586,
+        "exit_price": 77.68772871821112,
+        "exit_reason": "STOP_LOSS",
+        "net_pnl": -16.250607092475597,
+        "return_bps": -19.117636704342978
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793936274102,
+        "exit_time_ms": 1793936292394,
+        "hold_s": 18.292,
+        "entry_price": 77.285,
+        "exit_price": 77.338160625,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 3.295787256669798,
+        "return_bps": 3.8774860459667266
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793937028190,
+        "exit_time_ms": 1793937087014,
+        "hold_s": 58.824,
+        "entry_price": 77.099,
+        "exit_price": 77.102,
+        "exit_reason": "PROFIT_DECAY_EXIT",
+        "net_pnl": -2.8808490375000124,
+        "return_bps": -3.3891684717052244
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793937452518,
+        "exit_time_ms": 1793937571783,
+        "hold_s": 119.265,
+        "entry_price": 77.457,
+        "exit_price": 77.495,
+        "exit_reason": "DEFENSIVE_MAKER_HEDGE",
+        "net_pnl": -6.721397300001198,
+        "return_bps": -7.906683708381543
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793937748546,
+        "exit_time_ms": 1793937778447,
+        "hold_s": 29.901,
+        "entry_price": 77.435,
+        "exit_price": 77.37683937499999,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 3.8352374650224204,
+        "return_bps": 4.512022869989476
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793940300568,
+        "exit_time_ms": 1793940348946,
+        "hold_s": 48.378,
+        "entry_price": 77.902,
+        "exit_price": 77.99520031037578,
+        "exit_reason": "STOP_LOSS",
+        "net_pnl": -15.27499412024558,
+        "return_bps": -17.969172873025986
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793942509656,
+        "exit_time_ms": 1793942593297,
+        "hold_s": 83.641,
+        "entry_price": 77.696,
+        "exit_price": 77.532,
+        "exit_reason": "TAKE_PROFIT",
+        "net_pnl": 15.395715678000164,
+        "return_bps": 18.111073929159996
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793946011389,
+        "exit_time_ms": 1793946032791,
+        "hold_s": 21.402,
+        "entry_price": 77.562,
+        "exit_price": 77.53,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 0.9574001579996136,
+        "return_bps": 1.1263505324767895
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793946205345,
+        "exit_time_ms": 1793946227546,
+        "hold_s": 22.201,
+        "entry_price": 77.568,
+        "exit_price": 77.6,
+        "exit_reason": "DEFENSIVE_MAKER_HEDGE",
+        "net_pnl": -6.057609167999614,
+        "return_bps": -7.126031353134859
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793946506862,
+        "exit_time_ms": 1793946547875,
+        "hold_s": 41.013,
+        "entry_price": 77.663,
+        "exit_price": 77.60389612499999,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 3.9198248516183876,
+        "return_bps": 4.6114418167280755
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793947161389,
+        "exit_time_ms": 1793947255456,
+        "hold_s": 94.067,
+        "entry_price": 77.738,
+        "exit_price": 77.68141550000001,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 3.637915396382902,
+        "return_bps": 4.279964454319044
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793951177235,
+        "exit_time_ms": 1793951182559,
+        "hold_s": 5.324,
+        "entry_price": 77.368,
+        "exit_price": 77.39964525000002,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 0.4630655694640131,
+        "return_bps": 1.0896111069854812
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793951386291,
+        "exit_time_ms": 1793951445172,
+        "hold_s": 58.881,
+        "entry_price": 77.393,
+        "exit_price": 77.26981262500001,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 10.981676889657937,
+        "return_bps": 12.919508625616832
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793952311385,
+        "exit_time_ms": 1793952324770,
+        "hold_s": 13.385,
+        "entry_price": 77.521,
+        "exit_price": 77.49,
+        "exit_reason": "DEFENSIVE_MAKER_HEDGE",
+        "net_pnl": -5.948150906000648,
+        "return_bps": -6.998316585184132
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793952568417,
+        "exit_time_ms": 1793952572649,
+        "hold_s": 4.232,
+        "entry_price": 77.445,
+        "exit_price": 77.413848625,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 0.8695788362372552,
+        "return_bps": 1.0229902132149544
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793955675651,
+        "exit_time_ms": 1793955696415,
+        "hold_s": 20.764,
+        "entry_price": 77.555,
+        "exit_price": 77.58709837500001,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 0.9674458027154271,
+        "return_bps": 1.1381677833478043
+      }
+    ]
+  },
+  "Momentum_Expansion": {
+    "trades": 34,
+    "wins": 25,
+    "losses": 9,
+    "win_rate": 73.52941176470588,
+    "gross_pnl": 75.79072907276708,
+    "fees": 84.14419751912214,
+    "net_pnl": -8.353468446355098,
+    "profit_factor": 0.8912082312528051,
+    "avg_return_bps": -0.6905456468129838,
+    "exit_reasons": {
+      "TRAILING_STOP": 24,
+      "DEFENSIVE_MAKER_HEDGE": 6,
+      "STOP_LOSS": 3,
+      "TAKE_PROFIT": 1
+    },
+    "trades_detail": [
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793928400256,
+        "exit_time_ms": 1793928413666,
+        "hold_s": 13.41,
+        "entry_price": 77.152,
+        "exit_price": 77.1932357,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 1.9923048764398081,
+        "return_bps": 2.3439333581762543
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793928500697,
+        "exit_time_ms": 1793928502898,
+        "hold_s": 2.201,
+        "entry_price": 77.368,
+        "exit_price": 77.44070599999999,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 5.436388493825628,
+        "return_bps": 6.3960156783161795
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793928802580,
+        "exit_time_ms": 1793928807830,
+        "hold_s": 5.25,
+        "entry_price": 77.441,
+        "exit_price": 77.4,
+        "exit_reason": "DEFENSIVE_MAKER_HEDGE",
+        "net_pnl": -3.5247311119998255,
+        "return_bps": -8.2935589674716
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793929396302,
+        "exit_time_ms": 1793929409721,
+        "hold_s": 13.419,
+        "entry_price": 77.79,
+        "exit_price": 77.86415518000001,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 5.551179017555562,
+        "return_bps": 6.531309515748208
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793929442206,
+        "exit_time_ms": 1793929460017,
+        "hold_s": 17.811,
+        "entry_price": 77.875,
+        "exit_price": 77.92214822,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 2.595439403767707,
+        "return_bps": 3.053437915505215
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793931708791,
+        "exit_time_ms": 1793931714212,
+        "hold_s": 5.421,
+        "entry_price": 78.036,
+        "exit_price": 78.065,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 0.6083018619996037,
+        "return_bps": 0.7156760982106157
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793932423363,
+        "exit_time_ms": 1793932462994,
+        "hold_s": 39.631,
+        "entry_price": 77.814,
+        "exit_price": 77.777,
+        "exit_reason": "DEFENSIVE_MAKER_HEDGE",
+        "net_pnl": -6.590790739499118,
+        "return_bps": -7.754215179786661
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793932695218,
+        "exit_time_ms": 1793932741847,
+        "hold_s": 46.629,
+        "entry_price": 78.064,
+        "exit_price": 77.94755387080852,
+        "exit_reason": "STOP_LOSS",
+        "net_pnl": -8.886357071910876,
+        "return_bps": -20.910038997916732
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793936044376,
+        "exit_time_ms": 1793936059426,
+        "hold_s": 15.05,
+        "entry_price": 77.237,
+        "exit_price": 77.20576358,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 0.8881041012030448,
+        "return_bps": 1.0448367314886706
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793936477623,
+        "exit_time_ms": 1793936497361,
+        "hold_s": 19.738,
+        "entry_price": 77.312,
+        "exit_price": 77.22205028416079,
+        "exit_reason": "STOP_LOSS",
+        "net_pnl": -14.984430445071126,
+        "return_bps": -17.629402740465025
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793942192455,
+        "exit_time_ms": 1793942286405,
+        "hold_s": 93.95,
+        "entry_price": 77.705,
+        "exit_price": 77.81316129999999,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 9.279944857308067,
+        "return_bps": 10.91738958947197
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793942821204,
+        "exit_time_ms": 1793942850921,
+        "hold_s": 29.717,
+        "entry_price": 77.644,
+        "exit_price": 77.68917617999999,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 2.3947880051345973,
+        "return_bps": 2.817500846554061
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793946012346,
+        "exit_time_ms": 1793946027174,
+        "hold_s": 14.828,
+        "entry_price": 77.553,
+        "exit_price": 77.52080138,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 0.4897777286565437,
+        "return_bps": 1.152444108287574
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793946147153,
+        "exit_time_ms": 1793946198854,
+        "hold_s": 51.701,
+        "entry_price": 77.581,
+        "exit_price": 77.62918337999999,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 2.7282469591312557,
+        "return_bps": 3.2097875115019585
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793946537839,
+        "exit_time_ms": 1793946550532,
+        "hold_s": 12.693,
+        "entry_price": 77.598,
+        "exit_price": 77.633,
+        "exit_reason": "DEFENSIVE_MAKER_HEDGE",
+        "net_pnl": -3.192250280499813,
+        "return_bps": -7.511102090259617
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793946750194,
+        "exit_time_ms": 1793946793647,
+        "hold_s": 43.453,
+        "entry_price": 77.61,
+        "exit_price": 77.57180749999999,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 1.6335158663908835,
+        "return_bps": 1.9218179197278786
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793947161389,
+        "exit_time_ms": 1793947252100,
+        "hold_s": 90.711,
+        "entry_price": 77.738,
+        "exit_price": 77.67131944,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 2.370992091131989,
+        "return_bps": 5.578888327972765
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793948643953,
+        "exit_time_ms": 1793948712318,
+        "hold_s": 68.365,
+        "entry_price": 77.262,
+        "exit_price": 77.297,
+        "exit_reason": "DEFENSIVE_MAKER_HEDGE",
+        "net_pnl": -6.401387176999624,
+        "return_bps": -7.530720147031734
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793949486122,
+        "exit_time_ms": 1793949493097,
+        "hold_s": 6.975,
+        "entry_price": 77.443,
+        "exit_price": 77.403,
+        "exit_reason": "DEFENSIVE_MAKER_HEDGE",
+        "net_pnl": -6.939784543999126,
+        "return_bps": -8.164314398976284
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793950508640,
+        "exit_time_ms": 1793950512364,
+        "hold_s": 3.724,
+        "entry_price": 76.927,
+        "exit_price": 76.968,
+        "exit_reason": "DEFENSIVE_MAKER_HEDGE",
+        "net_pnl": -7.081309624999648,
+        "return_bps": -8.330527643089786
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793951173904,
+        "exit_time_ms": 1793951181977,
+        "hold_s": 8.073,
+        "entry_price": 77.353,
+        "exit_price": 77.40970972000001,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 3.6808000051320104,
+        "return_bps": 4.330189332283795
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793952568921,
+        "exit_time_ms": 1793952572384,
+        "hold_s": 3.463,
+        "entry_price": 77.426,
+        "exit_price": 77.3989009,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 0.21271877743990086,
+        "return_bps": 0.5005250000001196
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793952585758,
+        "exit_time_ms": 1793952642964,
+        "hold_s": 57.206,
+        "entry_price": 77.396,
+        "exit_price": 77.35578157999998,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 1.867730842962093,
+        "return_bps": 2.1972263118270217
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793952687851,
+        "exit_time_ms": 1793952689395,
+        "hold_s": 1.544,
+        "entry_price": 77.344,
+        "exit_price": 77.31377653999999,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 0.772024807738318,
+        "return_bps": 0.9082531959818454
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793953580353,
+        "exit_time_ms": 1793953631366,
+        "hold_s": 51.013,
+        "entry_price": 77.617,
+        "exit_price": 77.58983405000001,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 0.425438124977346,
+        "return_bps": 0.5005249999996129
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793954901907,
+        "exit_time_ms": 1793954991864,
+        "hold_s": 89.957,
+        "entry_price": 77.611,
+        "exit_price": 77.57980845999998,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 0.8666228594216516,
+        "return_bps": 1.0195614965691868
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793955675651,
+        "exit_time_ms": 1793955692026,
+        "hold_s": 16.375,
+        "entry_price": 77.555,
+        "exit_price": 77.59518746,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 0.9269382670787185,
+        "return_bps": 2.1810240321060554
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793955844491,
+        "exit_time_ms": 1793955872889,
+        "hold_s": 28.398,
+        "entry_price": 77.836,
+        "exit_price": 77.70697530882059,
+        "exit_reason": "STOP_LOSS",
+        "net_pnl": -19.18297072346701,
+        "return_bps": -22.56902077038636
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793956178930,
+        "exit_time_ms": 1793956260533,
+        "hold_s": 81.603,
+        "entry_price": 77.902,
+        "exit_price": 77.8747343,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 0.4254795969777039,
+        "return_bps": 0.5005250000001222
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793956338575,
+        "exit_time_ms": 1793956349910,
+        "hold_s": 11.335,
+        "entry_price": 77.892,
+        "exit_price": 78.053,
+        "exit_reason": "TAKE_PROFIT",
+        "net_pnl": 15.015812240000148,
+        "return_bps": 17.66654470292217
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793956511043,
+        "exit_time_ms": 1793956535752,
+        "hold_s": 24.709,
+        "entry_price": 78.033,
+        "exit_price": 78.1206244,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 6.993453746115735,
+        "return_bps": 8.227462271089887
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793956630650,
+        "exit_time_ms": 1793956634526,
+        "hold_s": 3.876,
+        "entry_price": 78.151,
+        "exit_price": 78.17835285,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 0.4245389036050744,
+        "return_bps": 0.49947499999996986
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793956636226,
+        "exit_time_ms": 1793956692497,
+        "hold_s": 56.271,
+        "entry_price": 78.178,
+        "exit_price": 78.2053623,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 0.42456843156892976,
+        "return_bps": 0.4994750000009173
+      },
+      {
+        "side": "SHORT",
+        "entry_time_ms": 1793958651634,
+        "exit_time_ms": 1793958695183,
+        "hold_s": 43.549,
+        "entry_price": 77.865,
+        "exit_price": 77.83774724999999,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 0.42543340652875994,
+        "return_bps": 0.5005250000003059
+      }
+    ]
+  },
+  "Queue_Replenishment": {
+    "trades": 3,
+    "wins": 3,
+    "losses": 0,
+    "win_rate": 100.0,
+    "gross_pnl": 26.051544868798974,
+    "fees": 7.6538110597303195,
+    "net_pnl": 18.397733809068654,
+    "profit_factor": 99.0,
+    "avg_return_bps": 7.2149125773956095,
+    "exit_reasons": {
+      "TRAILING_STOP": 3
+    },
+    "trades_detail": [
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793937213978,
+        "exit_time_ms": 1793937224364,
+        "hold_s": 10.386,
+        "entry_price": 77.522,
+        "exit_price": 77.59518746,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 5.4737150482516235,
+        "return_bps": 6.4394471093366725
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793937224827,
+        "exit_time_ms": 1793937263264,
+        "hold_s": 38.437,
+        "entry_price": 77.594,
+        "exit_price": 77.6881763,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 7.764630463214797,
+        "return_bps": 9.135239007526469
+      },
+      {
+        "side": "LONG",
+        "entry_time_ms": 1793951246245,
+        "exit_time_ms": 1793951258023,
+        "hold_s": 11.778,
+        "entry_price": 77.39,
+        "exit_price": 77.46020365999999,
+        "exit_reason": "TRAILING_STOP",
+        "net_pnl": 5.159388297602233,
+        "return_bps": 6.070051615323688
+      }
+    ]
+  }
+}

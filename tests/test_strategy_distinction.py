@@ -38,12 +38,13 @@ class TestStrategyDistinction(unittest.TestCase):
             "AdaptiveML_Taker",
             "Composite_Taker",
             "Instant_FastFill",
+            "Dynamic_Spread_Scalper",
         )
 
         self.assertEqual(NEW_EXECUTION_STRATEGIES, expected_new)
         self.assertEqual(LEGACY_SCALPING_STRATEGIES, expected_legacy)
         self.assertEqual(len(NEW_EXECUTION_STRATEGIES), 4)
-        self.assertEqual(len(LEGACY_SCALPING_STRATEGIES), 10)
+        self.assertEqual(len(LEGACY_SCALPING_STRATEGIES), 11)
 
         # Ensure no overlap
         overlap = set(NEW_EXECUTION_STRATEGIES).intersection(set(LEGACY_SCALPING_STRATEGIES))
@@ -74,7 +75,7 @@ class TestStrategyDistinction(unittest.TestCase):
             self.assertFalse(cfg.is_scalping_strategy(name))
             self.assertEqual(cfg.get_strategy_category(name), "execution")
 
-        self.assertEqual(len(cfg.scalping_strategies), 10)
+        self.assertEqual(len(cfg.scalping_strategies), 11)
         for name in LEGACY_SCALPING_STRATEGIES:
             self.assertIn(name, cfg.scalping_strategies)
             strat = cfg.scalping_strategies[name]
@@ -86,7 +87,7 @@ class TestStrategyDistinction(unittest.TestCase):
 
         # Verify all_strategies union
         all_strats = cfg.all_strategies
-        self.assertEqual(len(all_strats), 14)
+        self.assertEqual(len(all_strats), 15)
         for name in NEW_EXECUTION_STRATEGIES + LEGACY_SCALPING_STRATEGIES:
             self.assertIn(name, all_strats)
             self.assertIsNotNone(cfg.get_strategy(name))
@@ -102,7 +103,7 @@ class TestStrategyDistinction(unittest.TestCase):
             self.assertIn("entry_threshold", exec_params[name])
 
         scalp_params = cfg.get_scalping_strategy_params()
-        self.assertEqual(len(scalp_params), 10)
+        self.assertEqual(len(scalp_params), 11)
         for name in LEGACY_SCALPING_STRATEGIES:
             self.assertIn(name, scalp_params)
             self.assertIn("entry_threshold", scalp_params[name])
@@ -187,7 +188,7 @@ class TestStrategyDistinction(unittest.TestCase):
 
             for name in LEGACY_SCALPING_STRATEGIES:
                 self.assertFalse(cfg.scalping_strategies[name].enabled, f"{name} should be disabled in core mode")
-            for name in ("Hedged_Convexity", "Convexity_Cascade", "Momentum_Expansion"):
+            for name in ("Hedged_Convexity", "Convexity_Cascade", "Momentum_Expansion", "Queue_Replenishment"):
                 self.assertTrue(cfg.execution_strategies[name].enabled, f"{name} should be enabled in core mode")
             self.assertEqual(cfg.live_execution.active_strategy, "Hedged_Convexity")
         finally:

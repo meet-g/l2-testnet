@@ -63,6 +63,8 @@ class QueueReplenishmentSignal(BaseSignal):
         # State tracking buffers
         self.b1_history: Deque[float] = deque(maxlen=baseline_window)
         self.a1_history: Deque[float] = deque(maxlen=baseline_window)
+        self.b1_time_history: Deque[Tuple[int, float]] = deque(maxlen=5000)
+        self.a1_time_history: Deque[Tuple[int, float]] = deque(maxlen=5000)
         self.price_history: List[Tuple[int, float]] = []
         self._head_idx: int = 0
 
@@ -78,6 +80,8 @@ class QueueReplenishmentSignal(BaseSignal):
 
         self.tau_b: int = 0
         self.tau_a: int = 0
+        self.tau_b_start_ms: int = 0
+        self.tau_a_start_ms: int = 0
 
         # Snapshot cache for between-snapshot evaluation ticks
         self.last_s_rep1: float = 0.0
@@ -188,6 +192,9 @@ class QueueReplenishmentSignal(BaseSignal):
             self.prev_timestamp_ms = now_ms
             self.b1_history.append(q_b1)
             self.a1_history.append(q_a1)
+            if now_ms > 0:
+                self.b1_time_history.append((now_ms, q_b1))
+                self.a1_time_history.append((now_ms, q_a1))
             self.price_history.append((now_ms, mid))
             self.is_initialized = True
             return SignalResult(
@@ -244,14 +251,27 @@ class QueueReplenishmentSignal(BaseSignal):
             c_b = max(0.0, -(delta_d3_b + vol_sold))
             c_a = max(0.0, -(delta_d3_a + vol_bought))
 
-            # Rolling median baseline calculation
-            if self.b1_history:
+            # Rolling median baseline calculation (60s rolling time baseline for 20 Hz frequency invariance)
+            if now_ms > 0:
+                cutoff_base = now_ms - 60_000
+                while self.b1_time_history and self.b1_time_history[0][0] < cutoff_base:
+                    self.b1_time_history.popleft()
+                while self.a1_time_history and self.a1_time_history[0][0] < cutoff_base:
+                    self.a1_time_history.popleft()
+
+            if now_ms > 0 and len(self.b1_time_history) >= 10:
+                sorted_b = sorted(v for _, v in self.b1_time_history)
+                base_b = max(sorted_b[len(sorted_b) // 2], 0.01 * scale)
+            elif self.b1_history:
                 sorted_b = sorted(self.b1_history)
                 base_b = max(sorted_b[len(sorted_b) // 2], 0.01 * scale)
             else:
                 base_b = 0.20 * scale
 
-            if self.a1_history:
+            if now_ms > 0 and len(self.a1_time_history) >= 10:
+                sorted_a = sorted(v for _, v in self.a1_time_history)
+                base_a = max(sorted_a[len(sorted_a) // 2], 0.01 * scale)
+            elif self.a1_history:
                 sorted_a = sorted(self.a1_history)
                 base_a = max(sorted_a[len(sorted_a) // 2], 0.01 * scale)
             else:
@@ -260,16 +280,30 @@ class QueueReplenishmentSignal(BaseSignal):
             # Depletion latency counter update (< 30% baseline)
             # Only record healthy depths to prevent baseline poisoning
             if q_b1 < self.depletion_threshold * base_b:
+                if self.tau_b_start_ms == 0:
+                    self.tau_b_start_ms = now_ms
                 self.tau_b = min(self.tau_b + 1, 50)
+                tau_b_sec = min(5.0, max(0.05, (now_ms - self.tau_b_start_ms) / 1000.0)) if (now_ms >= self.tau_b_start_ms and now_ms > 0) else (self.tau_b * 0.1)
             else:
                 self.tau_b = 0
+                self.tau_b_start_ms = 0
+                tau_b_sec = 0.0
                 self.b1_history.append(q_b1)
+                if now_ms > 0 and (not self.b1_time_history or (now_ms - self.b1_time_history[-1][0] >= 500)):
+                    self.b1_time_history.append((now_ms, q_b1))
 
             if q_a1 < self.depletion_threshold * base_a:
+                if self.tau_a_start_ms == 0:
+                    self.tau_a_start_ms = now_ms
                 self.tau_a = min(self.tau_a + 1, 50)
+                tau_a_sec = min(5.0, max(0.05, (now_ms - self.tau_a_start_ms) / 1000.0)) if (now_ms >= self.tau_a_start_ms and now_ms > 0) else (self.tau_a * 0.1)
             else:
                 self.tau_a = 0
+                self.tau_a_start_ms = 0
+                tau_a_sec = 0.0
                 self.a1_history.append(q_a1)
+                if now_ms > 0 and (not self.a1_time_history or (now_ms - self.a1_time_history[-1][0] >= 500)):
+                    self.a1_time_history.append((now_ms, q_a1))
 
             kappa_touch = max(self.kappa_touch_btc * scale, 1e-6)
             kappa_multi = max(self.kappa_multi_btc * scale, 1e-6)
@@ -277,7 +311,12 @@ class QueueReplenishmentSignal(BaseSignal):
 
             s_rep1 = math.tanh((r_b1 - r_a1) / kappa_touch)
             s_rep3 = math.tanh((r_b3 - r_a3) / kappa_multi)
-            s_lat = math.tanh((self.tau_a - self.tau_b) / max(self.kappa_lat, 1e-4))
+            eff_kappa_lat = max(self.kappa_lat, 1e-4)
+            # Use real elapsed seconds when available, otherwise scale snapshot count
+            if tau_a_sec > 0.0 or tau_b_sec > 0.0:
+                s_lat = math.tanh((tau_a_sec - tau_b_sec) / eff_kappa_lat)
+            else:
+                s_lat = math.tanh(((self.tau_a - self.tau_b) * 0.1) / eff_kappa_lat)
             s_canc = (c_a - c_b) / max(c_a + c_b + eps_canc, 1e-6)
 
             qrl_core = (
@@ -322,7 +361,7 @@ class QueueReplenishmentSignal(BaseSignal):
             c_a = self.last_c_a
 
         # Step 4: High-Frequency CVD Flow
-        cvd_fast, buy_vol_fast, sell_vol_fast = trades.get_cvd_in_window(self.cvd_window_secs)
+        cvd_fast, buy_vol_fast, sell_vol_fast = trades.get_cvd_in_window(self.cvd_window_secs, now_ms=now_ms)
         total_vol_fast = buy_vol_fast + sell_vol_fast
         s_cvd = math.tanh(cvd_fast / max(self.cvd_scale_btc * scale, 0.1 * scale))
 

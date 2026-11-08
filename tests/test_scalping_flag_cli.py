@@ -38,7 +38,7 @@ class TestScalpingFlagCLI(unittest.TestCase):
         ]
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
         self.assertEqual(res.returncode, 0, f"Command failed: {res.stderr}")
-        self.assertIn("10 scalping strategies DISABLED", res.stdout)
+        self.assertIn("11 scalping strategies DISABLED", res.stdout)
         self.assertIn("Core execution strategies ENABLED", res.stdout)
 
         # Check loaded config from disk (persisted)
@@ -48,7 +48,7 @@ class TestScalpingFlagCLI(unittest.TestCase):
             self.assertFalse(s.enabled, f"Scalping strategy {s.name} should be DISABLED on disk")
 
         # Check that core strategies are enabled
-        for name in ("Hedged_Convexity", "Convexity_Cascade", "Momentum_Expansion"):
+        for name in ("Hedged_Convexity", "Convexity_Cascade", "Momentum_Expansion", "Queue_Replenishment"):
             self.assertTrue(cfg.execution_strategies[name].enabled, f"Core strategy {name} should be ENABLED on disk")
 
         self.assertEqual(cfg.live_execution.active_strategy, "Hedged_Convexity")
@@ -64,7 +64,7 @@ class TestScalpingFlagCLI(unittest.TestCase):
         ]
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
         self.assertEqual(res.returncode, 0, f"Command failed: {res.stderr}")
-        self.assertIn("10 scalping strategies ENABLED", res.stdout)
+        self.assertIn("11 scalping strategies ENABLED", res.stdout)
         self.assertIn("core execution strategies DISABLED", res.stdout)
 
         # Check loaded config from disk (persisted)
@@ -128,7 +128,7 @@ class TestScalpingFlagCLI(unittest.TestCase):
         ]
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
         self.assertEqual(res.returncode, 0, f"Command without mode failed: {res.stderr}")
-        self.assertIn("10 scalping strategies DISABLED", res.stdout)
+        self.assertIn("11 scalping strategies DISABLED", res.stdout)
 
 
 if __name__ == "__main__":

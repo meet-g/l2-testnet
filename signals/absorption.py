@@ -48,12 +48,17 @@ class AbsorptionSignal(BaseSignal):
 
         now_ms = timestamp_ms or book.last_update_time_ms
         mid = book.mid_price
-        self.price_history.append((now_ms, mid))
+
+        # Downsample price_history snapshots (500ms intervals) rather than raw tick appending,
+        # so price_delta_bps evaluates across the true window_secs lookback and sub-second 20ms
+        # trade bursts cannot falsely displace history or trigger false BEARISH_ABSORPTION.
+        if not self.price_history or (now_ms - self.price_history[-1][0]) >= 500:
+            self.price_history.append((now_ms, mid))
 
         scale = getattr(book, "notional_scale", 1.0)
 
         # Need at least 5 seconds of trade history
-        cvd, buy_vol, sell_vol = trades.get_cvd_in_window(self.window_secs)
+        cvd, buy_vol, sell_vol = trades.get_cvd_in_window(self.window_secs, now_ms=now_ms)
         total_vol = buy_vol + sell_vol
         if total_vol < 0.5 * scale:
             return SignalResult(name=self.name, score=0.0, raw_value=0.0, confidence=0.1)

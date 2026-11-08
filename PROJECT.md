@@ -1,108 +1,65 @@
-# Project: Orthogonal Microstructure Strategy Research & Production Integration
+# Project: Root Cause Diagnostic Investigation — Hyperliquid Paper vs. Live Discrepancies
 
-## Architecture
-The system architecture integrates an orthogonal market microstructure strategy (`Queue_Replenishment`) into the existing Hyperliquid high-frequency trading and offline L2 replay platform. The architecture comprises five decoupled layers:
+## Architecture & Diagnostic Framework
+The diagnostic investigation analyzes the root causes of the severe performance discrepancy between theoretical paper backtesting (`engine/backtester.py`, `EdgeEvaluator`) and live execution on Hyperliquid (`engine/live_executor.py`). The investigation spans four core vectors:
 
-1. **Market Microstructure Feature Extraction Layer (`signals/queue_replenishment.py`)**:
-   - Computes dynamic Level-1 queue replenishment deltas ($R_{b1}, R_{a1}$) accounting for aggressive trade depletion and resting quote updates.
-   - Computes multi-tier (Levels 1-3) depth replenishment ($R_{b3}, R_{a3}$) and order cancellation asymmetry ($C_a, C_b$).
-   - Tracks depletion latency persistence ($\tau_a, \tau_b$) across consecutive depleted order book snapshots.
-   - Applies active taker flow gating ($|S_{cvd}| \ge 0.18$) and 2-minute macro trend alignment to eliminate dead spreads and toxic adverse selection.
-   - Scales notional depth thresholds dynamically via `book.notional_scale` ($85,000 / P_{mid}$) for cross-coin portability.
-   - Returns a strictly normalized `SignalResult` with `score` $\in [-1.0, 1.0]$ and `confidence` $\in [0.0, 1.0]$.
+1. **Vector 1: Slippage & Execution Type**
+   - Determination of Maker vs Taker execution frequency and causes (`force_market_orders: true`, automated IOC escalation on `Alo` rejections).
+   - Fee impact quantification (maker rebate/fee vs taker fee).
+   - Spread-crossing penalty drag (paying full bid-ask spread on entry and exit).
 
-2. **Composite Alpha Aggregation Layer (`signals/composite_alpha.py`)**:
-   - Instantiates `QueueReplenishmentSignal` alongside existing sub-signals.
-   - Exposes `signal_queue_replenishment` for direct engine and backtest extraction.
+2. **Vector 2: Queue Priority & Adverse Selection**
+   - Fill mechanism comparison: `EdgeEvaluator` instantaneous touch fill vs. Hyperliquid strict FIFO queue priority.
+   - Queue depth and order cancellation dynamics (94.6% of resting quotes cancelled as market drifts away).
+   - Quantitative measurement of post-fill price drift (-0.82 bps 1s, -1.36 bps 30s) proving toxic flow and adverse sweeps.
 
-3. **Configuration & Parameter Management Layer (`strategies.json`, `config.py`)**:
-   - Registers strategy parameters (`entry_threshold: 0.82`, `order_size_btc: 0.1`, `take_profit_bps: 20.0`, `stop_loss_bps: 8.0`, `trailing_stop_activation_bps: 5.0`, `trailing_stop_distance_bps: 2.0`, `hedge_trigger_loss_bps: -3.5`, `hedge_reversal_threshold: 0.15`, `min_volatility_bps: 4.5`, `loss_cooldown_secs: 120`).
-   - Registers dataclass definitions and programmatic fallback defaults in `config.py`.
+3. **Vector 3: Latency & Order Lifecycle**
+   - Book data staleness: WebSocket `l2Book` subscription omits `"fast": true`, causing ~1,000 ms lag.
+   - Wire latency: synchronous HTTP POST over Python `requests` with single-threaded queue averaging 608.5 ms.
+   - Total latency ~1,608 ms causing 53.8% `Alo` order rejections ("Post only order would have immediately matched").
+   - State synchronization lag: 5-second REST polling in `sync_state()` causing 1,998 order rejections (`Reduce only...` and `Insufficient margin`).
 
-4. **Execution & Risk Management Engine Layer (`engine/backtester.py`, `main.py`)**:
-   - Implements `HEDGED_MAKER` lifecycle: passive maker entry at inside quotes (1.5 bps fee), maker take profit (+20 bps), trailing stop fee ratchet (+5 bps activation, 2 bps distance), defensive maker hedge exit (-3.5 bps loss on signal reversal saving 3.0 bps taker fee), and emergency taker stop loss (-8 bps, 4.5 bps taker fee + 0.2 bps slippage).
-   - Enforces co-entry protection (+0.04 conviction hurdle boost, 50% size discount) when multiple strategies hold simultaneous positions in the same direction.
-   - Routes live and paper trading in `main.py`.
+4. **Vector 4: Exit Logic Disparities & Historical Audits**
+   - Trailing stop ratchet simulation defect: `backtester.py` assumes trailing stops fill passively as Maker at `max(best_ask, limit)` earning maker fees in declining markets.
+   - Emergency IOC stop loss defect: `live_executor.py` places client-side IOC stops at exact `best_bid` with 0 bps slippage buffer, causing 11-second, 11-reject cascades (-23.81 bps loss).
+   - Orphaned native on-chain TPSL brackets: `place_bracket_order` implemented but never called by `on_signal_update`.
+   - Actionable 5-point prioritized remediation architecture for `engine/backtester.py` and `engine/live_executor.py`.
 
-5. **Multi-Core Parallel Replay & Verification Layer (`scripts/test_all_strategies_all_data.py`)**:
-   - Saturates 12 CPU cores using multiprocessing with LPT bin packing.
-   - Wires `QueueReplenishment` signal caller in `active_sig_callers` and `sub_sigs` for high-throughput parallel evaluation across all 505 HYPE recording datasets.
+---
 
 ## Feature Inventory
-| # | Feature | Description | Milestone | Source |
-|---|---------|-------------|-----------|--------|
-| F1 | Level-1 Dynamic Queue Replenishment Delta | Real-time calculation of $R_{b1} = \Delta Q_{b1} + Vol_{sold}$ and $R_{a1} = \Delta Q_{a1} + Vol_{bought}$ | M1 | Survey R1/R2 |
-| F2 | Multi-Tier Depth & Cancellation Asymmetry | 3-level replenishment $R_{b3}, R_{a3}$ and multi-tier cancellation asymmetry $S_{canc} = \frac{C_a - C_b}{C_a + C_b + \epsilon}$ | M1 | Survey R1/R2 |
-| F3 | Depletion Latency Persistence Tracker | Tracks consecutive depleted snapshots $\tau_a, \tau_b$ to measure depth elasticity and replenishment delays | M1 | Survey R1/R2 |
-| F4 | Trend & Flow Directional Gating | Active trade flow gate ($|S_{cvd}| \ge 0.18$), 2-min macro trend alignment, and sign consistency | M1 | Survey R1/R2 |
-| F5 | Composite Alpha Model Integration | Instantiate and expose `signal_queue_replenishment` in `signals/composite_alpha.py` | M1 | Survey R1 |
-| F6 | Strategy Parameter Registration in `strategies.json` | Configure `Queue_Replenishment` parameters and register in `execution_strategies` | M2 | Survey R1/R2 |
-| F7 | Config Class Models & Defaults in `config.py` | Add `QueueReplenishmentConfig` dataclass and update `DEFAULT_STRATEGIES_JSON` | M2 | Survey R1 |
-| F8 | Backtester Strategy Registry & Engine Integration | Register `Queue_Replenishment` in `engine/backtester.py:strategy_defs` and `unique_signals` as `HEDGED_MAKER` | M2 | Survey R1 |
-| F9 | CLI & Runtime Routing in `main.py` | Register strategy in `main.py` for live/paper trading and strategy list validation | M2 | Survey R1 |
-| F10 | Replay Script Caller Hook in `scripts/test_all_strategies_all_data.py` | Wire `QueueReplenishment` into `active_sig_callers` and `sub_sigs` for multi-core replay | M2 | Survey R3 |
-| F11 | Standalone 505 HYPE Dataset Backtest Evaluation | Execute parallel replay of `Queue_Replenishment` across all 505 HYPE datasets, achieving positive Net PnL (> $0) under VIP 0 retail fees | M3 | Survey R3 |
-| F12 | Combined Portfolio Synergy Evaluation | Execute 4-strategy parallel replay across all 505 HYPE datasets, expanding Net PnL beyond the +$1,694.20 Triad baseline | M3 | Survey R3 |
-| F13 | Audit Artifact Generation & Performance Documentation | Generate `audits/queue_replenishment_505_eval.json` and comprehensive synergy audit report | M3 | Survey R3 |
-| F14 | Adversarial Robustness & Extreme Condition Testing | Verify strategy behavior under zero volatility, spread spikes, order book collapse, and rapid reversals | M4 | Final Gate |
-| F15 | Zero-Cheat Forensic Audit Verification | Verify 100% authentic logic, zero hardcoding, zero dummy facades, and strict fee/risk compliance | M4 | Final Gate |
+| # | Feature / Vector | Detailed Finding / Deliverable | Milestone | Source |
+|---|------------------|--------------------------------|-----------|--------|
+| F1 | Vector 1: Forced Taker & Spread Crossing | Analysis of `strategies.json` (`force_market_orders: true`, `market_slippage_pct: 0.01` from commit `2cb446b`) and IOC auto-escalation in `live_executor.py:1386-1405`. | M1 | Explorer 1 Survey |
+| F2 | Vector 1: Empirical Trade & Fill Metrics | Statistics across 991 live trades (Maker: 75.2% WR, +$145.95 Net; Taker: 22.7% WR, -$59.30 Net) and 1,058 clearinghouse fills (Maker: +$6.50; Taker: -$45.34). | M1 | Explorer 1 Survey |
+| F3 | Vector 1: Fee Drag & Friction Quantification | Quantify 3.18 bps minimum round-trip taker friction (1.38 bps spread + 1.80 bps fee on SKHX) vs 0.60 bps maker, destroying 50-80% of micro-scalping edge. | M1 | Explorer 1 Survey |
+| F4 | Vector 2: Instantaneous Touch Fill in Backtest | Analysis of `EdgeEvaluator` in `engine/backtester.py:747-809` assuming 0 queue depth, 0 volume exhaustion, and immediate +0.5 to +1.5 bps mid-price credit. | M1 | Explorer 2 Survey |
+| F5 | Vector 2: Queue Tail Reality & Churn | Analysis of FIFO queue in `live_executor.py:2116-2166`: 12.03 units ($12k) queue ahead on SKHX, 94.63% cancellation rate without filling during favorable rallies. | M1 | Explorer 2 Survey |
+| F6 | Vector 2: Adverse Selection Quantification | Quantitative measurement of post-fill price drift across real clearinghouse fills (-0.82 bps 1s, -1.36 bps 30s) and 1.82 bps net entry distortion vs backtest. | M1 | Explorer 2 Survey |
+| F7 | Vector 2: Taker Escalation Trap & Reconciled Proof | Analysis of `DEFENSIVE_HEDGE_ESCALATE` (0% WR) and direct proof in session 4156: Paper +$14.02 vs Live -$15.87 (-$29.89 discrepancy from 23 taker stops). | M1 | Explorer 2 Survey |
+| F8 | Vector 3: L2 Book Update Lag (~1,000 ms) | WebSocket `l2Book` subscription in `main.py:354,441` and `data_collector.py:173` omitting `"fast": true`, causing 1,000 ms stale quote inputs. | M1 | Explorer 1 Survey |
+| F9 | Vector 3: Wire & Processing Latency | Measured latency stats across 14,529 events: 608.5 ms mean wire time for RESTING, single-threaded executor serialization, total 1,608 ms pipeline delay. | M1 | Explorer 1 Survey |
+| F10 | Vector 3: Order Rejection & State Decoupling | 5-second polling in `sync_state()` causing 1,321 "Reduce only would increase position" and 677 "Insufficient margin" rejections. 53.8% ALO rejection rate. | M1 | Explorer 1 Survey |
+| F11 | Vector 4: Trailing Stop Simulation Inversion | Analysis of `engine/backtester.py:391-400` filling trailing stops at `max(best_ask, target_limit)` as Maker in declining markets. | M1 | Explorer 3 Survey |
+| F12 | Vector 4: Emergency IOC Rejection Cascades | Analysis of `live_executor.py:1683,1868` placing IOC stops at exact `best_bid` with 0 slippage buffer, causing 11-second rejection cascade and -23.81 bps loss. | M1 | Explorer 3 Survey |
+| F13 | Vector 4: Orphaned Native On-Chain TPSL | Analysis of `place_bracket_order` (lines 1471-1558) configured in `strategies.json` but orphaned in `on_signal_update`, leaving live positions unhedged. | M1 | Explorer 3 Survey |
+| F14 | Comprehensive Historical Session Synthesis | Systematic audit table and deep dive across 47 live sessions and key case studies (`session_20261104_171133`, `session_20261030_102317`, `session_20261104_164427`, etc.). | M1 | All Explorers |
+| F15 | Actionable Prioritized Remediation Architecture | Concrete specifications for updating `engine/backtester.py` (queue modeling, volume exhaustion, dynamic slippage, taker SL) and `engine/live_executor.py` (native TPSL, slippage buffer, WebSocket fills). | M1 | All Explorers |
+| F16 | Independent Review & Adversarial Stress Testing | Rigorous examination by 2 Reviewers and empirical stress testing by 2 Challengers. | M2 | Gate Review |
+| F17 | Forensic Integrity Audit Verification | Binary veto forensic audit verifying 100% authentic evidence, zero fabricated claims, zero simulation shortcuts, and strict alignment with code and data. | M2 | Gate Audit |
+
+---
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M1 | Signal Module Implementation (`QueueReplenishmentSignal`) | Implement F1, F2, F3, F4, F5 in `signals/queue_replenishment.py` and `signals/composite_alpha.py` | Survey Complete | PLANNED |
-| M2 | System Integration & Configuration Registration | Implement F6, F7, F8, F9, F10 in `strategies.json`, `config.py`, `engine/backtester.py`, `main.py`, and `scripts/test_all_strategies_all_data.py` | M1 | PLANNED |
-| M3 | 505 HYPE Dataset Parallel Backtesting & Portfolio Synergy | Execute F11, F12, F13 across all 505 HYPE datasets via `scripts/test_all_strategies_all_data.py` | M1, M2 | PLANNED |
-| M4 | Final Gate Review & Adversarial Hardening | Execute F14, F15 with Reviewers, Challengers, and Forensic Auditor | M1, M2, M3 | PLANNED |
+| M1 | Master Diagnostic Report Generation | Synthesize F1 through F15 into authoritative diagnostic report at `audits/root_cause_investigation_report.md` | Survey Complete | IN_PROGRESS |
+| M2 | Review, Challenge & Forensic Integrity Audit | Multi-agent gate verification (F16, F17) with 2 Reviewers, 2 Challengers, and Forensic Auditor | M1 | PLANNED |
 
-## Interface Contracts
-### `signals/queue_replenishment.py` ↔ `engine/backtester.py`
-- Inherits: `signals.base.BaseSignal(ABC)`
-- Method: `compute(self, book: OrderBook, trades: TradeManager, timestamp_ms: Optional[int] = None) -> SignalResult`
-- Output Schema:
-  - `name: str = "QueueReplenishment"`
-  - `score: float` strictly in $[-1.0, 1.0]$
-  - `raw_value: float` (unbounded core composite replenishment value)
-  - `confidence: float` strictly in $[0.0, 1.0]$
-  - `timestamp_ms: int`
-  - `metadata: Dict[str, Any]` including `l1_rep_bid`, `l1_rep_ask`, `l3_rep_bid`, `l3_rep_ask`, `latency_bid`, `latency_ask`, `s_canc`, `cvd_fast`, `trend_bps`
+---
 
-### `strategies.json` & `config.py` ↔ `engine/backtester.py`
-- Configuration Dictionary:
-  ```json
-  "Queue_Replenishment": {
-      "enabled": true,
-      "execution_type": "HEDGED_MAKER",
-      "entry_threshold": 0.82,
-      "order_size_btc": 0.1,
-      "take_profit_bps": 20.0,
-      "stop_loss_bps": 8.0,
-      "trailing_stop_activation_bps": 5.0,
-      "trailing_stop_distance_bps": 2.0,
-      "hedge_trigger_loss_bps": -3.5,
-      "hedge_reversal_threshold": 0.15,
-      "min_volatility_bps": 4.5,
-      "loss_cooldown_secs": 120
-  }
-  ```
-
-### `scripts/test_all_strategies_all_data.py`
-- Registration in `active_sig_callers`:
-  ```python
-  if hasattr(runner.alpha_model, "signal_queue_replenishment") and runner.alpha_model.signal_queue_replenishment:
-      active_sig_callers["QueueReplenishment"] = runner.alpha_model.signal_queue_replenishment.compute
-  ```
-- Registration in `sub_sigs`:
-  ```python
-  sub_sigs["QueueReplenishment"] = 0.0
-  ```
-
-## Code Layout
-- `signals/queue_replenishment.py`: Owned exclusively by M1 Worker
-- `signals/composite_alpha.py`: Owned exclusively by M1 Worker
-- `strategies.json`: Owned exclusively by M2 Worker
-- `config.py`: Owned exclusively by M2 Worker
-- `engine/backtester.py`: Owned exclusively by M2 Worker
-- `main.py`: Owned exclusively by M2 Worker
-- `scripts/test_all_strategies_all_data.py`: Owned exclusively by M2 Worker
-- `audits/`: Owned exclusively by M3 Worker
+## Code Layout & Ownership
+- `audits/root_cause_investigation_report.md`: Owned exclusively by M1 Worker
+- `.agents/teamwork/orchestrator_3/`: Orchestrator state and metadata
+- `engine/backtester.py`, `engine/live_executor.py`, `strategies.json`, `config.py`: Target codebases for diagnostic review (Read-Only)
+- `audits/`, `logs/`, `data/`: Evidence sources (Read-Only)

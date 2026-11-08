@@ -215,6 +215,23 @@ class MarketConfig:
         """Filesystem-safe coin identifier (replaces ':' with '_', e.g. 'xyz_SKHY')."""
         return self.coin.replace(":", "_")
 
+    def __setattr__(self, name, value):
+        super().__setattr__(name, value)
+        if name == "coin" and hasattr(self, "taker_fee_bps") and value:
+            canon = canonicalize_coin_symbol(str(value))
+            if canon != value:
+                super().__setattr__("coin", canon)
+            if is_xyz_stock_symbol(canon):
+                self.is_xyz_stock = True
+                self.taker_fee_bps = XYZ_STOCK_TAKER_FEE_BPS
+                self.maker_fee_bps = XYZ_STOCK_MAKER_FEE_BPS
+                self.maker_rebate_bps = XYZ_STOCK_MAKER_REBATE_BPS
+            elif hasattr(self, "is_xyz_stock") and not canon.startswith("xyz:"):
+                self.is_xyz_stock = False
+                self.taker_fee_bps = CRYPTO_TAKER_FEE_BPS
+                self.maker_fee_bps = CRYPTO_MAKER_FEE_BPS
+                self.maker_rebate_bps = CRYPTO_MAKER_FEE_BPS
+
     def __post_init__(self):
         if self.coin:
             self.coin = canonicalize_coin_symbol(self.coin)
@@ -339,7 +356,8 @@ class BacktestConfig:
     priority_fee_bps: float = 0.0  # Hyperliquid write priority fee (Optimization 5) in basis points
     priority_fee_on_exit: bool = False  # Whether priority fee is also bid on exit orders
     force_market_orders: bool = False  # Forces all strategy entries and exits to use aggressive IOC market orders
-    market_slippage_pct: float = 0.01  # Slippage percentage for market orders (0.01 = 1.0% = 100 bps)
+    market_slippage_pct: float = 0.0005  # Slippage percentage for market orders (0.0005 = 0.05% = 5 bps)
+    dynamic_slippage: bool = True  # Volatility-calibrated dynamic slippage modeling
     
     # -------------------------------------------------------------------------
     # 1. Passive Maker Execution (Avellaneda-Stoikov Micro-Scalp)
@@ -385,6 +403,7 @@ LEGACY_SCALPING_STRATEGIES: Tuple[str, ...] = (
     "AdaptiveML_Taker",
     "Composite_Taker",
     "Instant_FastFill",
+    "Dynamic_Spread_Scalper",
 )
 
 
@@ -402,7 +421,7 @@ DEFAULT_STRATEGIES_JSON = {
         "use_native_tpsl": True,
         "priority_fee_bps": 0.0,
         "force_market_orders": False,
-        "market_slippage_pct": 0.01,
+        "market_slippage_pct": 0.0005,
     },
     "execution_strategies": {
         "Hedged_Convexity": {
@@ -463,7 +482,7 @@ DEFAULT_STRATEGIES_JSON = {
             "coentry_group": "triad",
         },
         "Queue_Replenishment": {
-            "enabled": False,
+            "enabled": True,
             "description": "Orthogonal queue replenishment dynamics with multi-tier cancellation asymmetry, depletion persistence, and defensive maker hedging",
             "signal_key": "QueueReplenishment",
             "execution_type": "HEDGED_MAKER",
@@ -532,12 +551,30 @@ DEFAULT_STRATEGIES_JSON = {
             "execution_type": "MAKER",
             "entry_threshold": 0.75,
             "order_size_btc": 0.1,
-            "take_profit_bps": 18.0,
-            "stop_loss_bps": 12.0,
+            "take_profit_bps": 5.0,
+            "stop_loss_bps": 8.0,
             "trailing_stop_activation_bps": 2.5,
             "trailing_stop_distance_bps": 1.0,
             "max_holding_time_secs": 180,
+            "exit_reversal_threshold": 0.75,
             "min_volatility_bps": 3.8,
+            "dynamic_tp_enabled": True,
+            "dynamic_tp_spread_mult": 2.0,
+            "dynamic_tp_vol_mult": 0.8,
+            "dynamic_tp_min_bps": 2.5,
+            "dynamic_tp_max_bps": 6.0,
+            "exhaustion_exit_enabled": True,
+            "exhaustion_min_gain_bps": 2.0,
+            "exhaustion_score_threshold": 0.15,
+            "require_cvd_alignment": True,
+            "fast_fill_enabled": True,
+            "exit_escalate_secs": 1.5,
+            "emergency_slippage_pct": 0.0020,
+            "trend_filter_enabled": True,
+            "trend_window_secs": 60.0,
+            "max_counter_trend_bps": 1.0,
+            "tiered_trailing_ratchet": True,
+            "loss_cooldown_secs": 30,
         },
         "MicroPrice_Maker": {
             "enabled": False,
@@ -646,6 +683,38 @@ DEFAULT_STRATEGIES_JSON = {
             "loss_cooldown_secs": 30,
             "fast_fill_enabled": True,
         },
+        "Dynamic_Spread_Scalper": {
+            "enabled": False,
+            "description": "Adaptive variable take-profit maker scalping scaled off real-time spread, volatility, and order flow exhaustion",
+            "signal_key": "DynamicSpread",
+            "execution_type": "MAKER",
+            "entry_threshold": 0.70,
+            "order_size_btc": 0.1,
+            "take_profit_bps": 6.5,
+            "stop_loss_bps": 10.0,
+            "trailing_stop_activation_bps": 3.0,
+            "trailing_stop_distance_bps": 1.0,
+            "max_holding_time_secs": 120,
+            "min_volatility_bps": 2.5,
+            "hedge_trigger_loss_bps": -4.0,
+            "hedge_reversal_threshold": 0.0,
+            "loss_cooldown_secs": 30,
+            "dynamic_tp_enabled": True,
+            "dynamic_tp_spread_mult": 2.0,
+            "dynamic_tp_vol_mult": 0.8,
+            "dynamic_tp_min_bps": 4.0,
+            "dynamic_tp_max_bps": 12.0,
+            "tiered_trailing_ratchet": True,
+            "exhaustion_exit_enabled": True,
+            "exhaustion_min_gain_bps": 3.0,
+            "exhaustion_score_threshold": 0.15,
+            "fast_fill_enabled": True,
+            "exit_escalate_secs": 1.5,
+            "emergency_slippage_pct": 0.0020,
+            "trend_filter_enabled": True,
+            "trend_window_secs": 60.0,
+            "max_counter_trend_bps": 1.0,
+        },
     },
     "alpha_signals": {
         "QDAP": {
@@ -707,6 +776,11 @@ DEFAULT_STRATEGIES_JSON = {
             "weight": 0.20,
             "description": "Flow Depletion, Queue Exhaustion, and Immediate Sweep alpha detector",
         },
+        "DynamicSpread": {
+            "enabled": True,
+            "weight": 0.20,
+            "description": "Dynamic spread capture, microprice flow impulse, and multi-tier queue exhaustion",
+        },
     },
 }
 
@@ -742,6 +816,16 @@ class ExecutionStrategyConfig:
     trend_window_secs: Optional[float] = None
     max_counter_trend_bps: Optional[float] = None
     require_cvd_alignment: Optional[bool] = None
+    dynamic_tp_enabled: Optional[bool] = None
+    dynamic_tp_spread_mult: Optional[float] = None
+    dynamic_tp_vol_mult: Optional[float] = None
+    dynamic_tp_min_bps: Optional[float] = None
+    dynamic_tp_max_bps: Optional[float] = None
+    tiered_trailing_ratchet: Optional[bool] = None
+    exhaustion_exit_enabled: Optional[bool] = None
+    exhaustion_min_gain_bps: Optional[float] = None
+    exhaustion_score_threshold: Optional[float] = None
+    emergency_slippage_pct: Optional[float] = None
     is_scalping: bool = False
 
 
@@ -808,7 +892,7 @@ class LiveExecutionConfig:
     use_native_tpsl: bool = True
     priority_fee_bps: float = 0.0
     force_market_orders: bool = False
-    market_slippage_pct: float = 0.01
+    market_slippage_pct: float = 0.0005
 
 
 @dataclass
@@ -888,6 +972,16 @@ class StrategiesConfig:
                 trend_window_secs=float(s_info["trend_window_secs"]) if "trend_window_secs" in s_info else fallback.get("trend_window_secs"),
                 max_counter_trend_bps=float(s_info["max_counter_trend_bps"]) if "max_counter_trend_bps" in s_info else fallback.get("max_counter_trend_bps"),
                 require_cvd_alignment=bool(s_info["require_cvd_alignment"]) if "require_cvd_alignment" in s_info else fallback.get("require_cvd_alignment"),
+                dynamic_tp_enabled=bool(s_info["dynamic_tp_enabled"]) if "dynamic_tp_enabled" in s_info else fallback.get("dynamic_tp_enabled"),
+                dynamic_tp_spread_mult=float(s_info["dynamic_tp_spread_mult"]) if "dynamic_tp_spread_mult" in s_info else fallback.get("dynamic_tp_spread_mult"),
+                dynamic_tp_vol_mult=float(s_info["dynamic_tp_vol_mult"]) if "dynamic_tp_vol_mult" in s_info else fallback.get("dynamic_tp_vol_mult"),
+                dynamic_tp_min_bps=float(s_info["dynamic_tp_min_bps"]) if "dynamic_tp_min_bps" in s_info else fallback.get("dynamic_tp_min_bps"),
+                dynamic_tp_max_bps=float(s_info["dynamic_tp_max_bps"]) if "dynamic_tp_max_bps" in s_info else fallback.get("dynamic_tp_max_bps"),
+                tiered_trailing_ratchet=bool(s_info["tiered_trailing_ratchet"]) if "tiered_trailing_ratchet" in s_info else fallback.get("tiered_trailing_ratchet"),
+                exhaustion_exit_enabled=bool(s_info["exhaustion_exit_enabled"]) if "exhaustion_exit_enabled" in s_info else fallback.get("exhaustion_exit_enabled"),
+                exhaustion_min_gain_bps=float(s_info["exhaustion_min_gain_bps"]) if "exhaustion_min_gain_bps" in s_info else fallback.get("exhaustion_min_gain_bps"),
+                exhaustion_score_threshold=float(s_info["exhaustion_score_threshold"]) if "exhaustion_score_threshold" in s_info else fallback.get("exhaustion_score_threshold"),
+                emergency_slippage_pct=float(s_info["emergency_slippage_pct"]) if "emergency_slippage_pct" in s_info else fallback.get("emergency_slippage_pct"),
                 is_scalping=is_scalp,
             )
 
@@ -997,9 +1091,9 @@ class StrategiesConfig:
             if self.is_execution_strategy(self.live_execution.active_strategy):
                 self.live_execution.active_strategy = "Composite_Maker"
         else:
-            # Enable core execution strategies (Triad active, Queue Replenishment off)
-            for name, s in self.execution_strategies.items():
-                s.enabled = (name != "Queue_Replenishment")
+            # Enable core execution strategies (all 4 primary execution strategies enabled)
+            for s in self.execution_strategies.values():
+                s.enabled = True
             # Disable all legacy scalping strategies
             for s in self.scalping_strategies.values():
                 s.enabled = False
@@ -1135,6 +1229,34 @@ class StrategiesConfig:
                 p["defensive_hedge_market"] = s.defensive_hedge_market
             if getattr(s, "min_confidence", None) is not None:
                 p["min_confidence"] = s.min_confidence
+            if getattr(s, "dynamic_tp_enabled", None) is not None:
+                p["dynamic_tp_enabled"] = s.dynamic_tp_enabled
+            if getattr(s, "dynamic_tp_spread_mult", None) is not None:
+                p["dynamic_tp_spread_mult"] = s.dynamic_tp_spread_mult
+            if getattr(s, "dynamic_tp_vol_mult", None) is not None:
+                p["dynamic_tp_vol_mult"] = s.dynamic_tp_vol_mult
+            if getattr(s, "dynamic_tp_min_bps", None) is not None:
+                p["dynamic_tp_min_bps"] = s.dynamic_tp_min_bps
+            if getattr(s, "dynamic_tp_max_bps", None) is not None:
+                p["dynamic_tp_max_bps"] = s.dynamic_tp_max_bps
+            if getattr(s, "tiered_trailing_ratchet", None) is not None:
+                p["tiered_trailing_ratchet"] = s.tiered_trailing_ratchet
+            if getattr(s, "exhaustion_exit_enabled", None) is not None:
+                p["exhaustion_exit_enabled"] = s.exhaustion_exit_enabled
+            if getattr(s, "exhaustion_min_gain_bps", None) is not None:
+                p["exhaustion_min_gain_bps"] = s.exhaustion_min_gain_bps
+            if getattr(s, "exhaustion_score_threshold", None) is not None:
+                p["exhaustion_score_threshold"] = s.exhaustion_score_threshold
+            if getattr(s, "trend_filter_enabled", None) is not None:
+                p["trend_filter_enabled"] = s.trend_filter_enabled
+            if getattr(s, "trend_window_secs", None) is not None:
+                p["trend_window_secs"] = s.trend_window_secs
+            if getattr(s, "max_counter_trend_bps", None) is not None:
+                p["max_counter_trend_bps"] = s.max_counter_trend_bps
+            if getattr(s, "require_cvd_alignment", None) is not None:
+                p["require_cvd_alignment"] = s.require_cvd_alignment
+            if getattr(s, "emergency_slippage_pct", None) is not None:
+                p["emergency_slippage_pct"] = s.emergency_slippage_pct
             if hasattr(s, "coentry_group") and s.coentry_group is not None:
                 p["coentry_group"] = s.coentry_group
             res[s.name] = p
@@ -1185,6 +1307,34 @@ class StrategiesConfig:
                 exec_dict[k]["coentry_group"] = v.coentry_group
             if getattr(v, "min_confidence", None) is not None:
                 exec_dict[k]["min_confidence"] = v.min_confidence
+            if getattr(v, "dynamic_tp_enabled", None) is not None:
+                exec_dict[k]["dynamic_tp_enabled"] = v.dynamic_tp_enabled
+            if getattr(v, "dynamic_tp_spread_mult", None) is not None:
+                exec_dict[k]["dynamic_tp_spread_mult"] = v.dynamic_tp_spread_mult
+            if getattr(v, "dynamic_tp_vol_mult", None) is not None:
+                exec_dict[k]["dynamic_tp_vol_mult"] = v.dynamic_tp_vol_mult
+            if getattr(v, "dynamic_tp_min_bps", None) is not None:
+                exec_dict[k]["dynamic_tp_min_bps"] = v.dynamic_tp_min_bps
+            if getattr(v, "dynamic_tp_max_bps", None) is not None:
+                exec_dict[k]["dynamic_tp_max_bps"] = v.dynamic_tp_max_bps
+            if getattr(v, "tiered_trailing_ratchet", None) is not None:
+                exec_dict[k]["tiered_trailing_ratchet"] = v.tiered_trailing_ratchet
+            if getattr(v, "exhaustion_exit_enabled", None) is not None:
+                exec_dict[k]["exhaustion_exit_enabled"] = v.exhaustion_exit_enabled
+            if getattr(v, "exhaustion_min_gain_bps", None) is not None:
+                exec_dict[k]["exhaustion_min_gain_bps"] = v.exhaustion_min_gain_bps
+            if getattr(v, "exhaustion_score_threshold", None) is not None:
+                exec_dict[k]["exhaustion_score_threshold"] = v.exhaustion_score_threshold
+            if getattr(v, "trend_filter_enabled", None) is not None:
+                exec_dict[k]["trend_filter_enabled"] = v.trend_filter_enabled
+            if getattr(v, "trend_window_secs", None) is not None:
+                exec_dict[k]["trend_window_secs"] = v.trend_window_secs
+            if getattr(v, "max_counter_trend_bps", None) is not None:
+                exec_dict[k]["max_counter_trend_bps"] = v.max_counter_trend_bps
+            if getattr(v, "require_cvd_alignment", None) is not None:
+                exec_dict[k]["require_cvd_alignment"] = v.require_cvd_alignment
+            if getattr(v, "emergency_slippage_pct", None) is not None:
+                exec_dict[k]["emergency_slippage_pct"] = v.emergency_slippage_pct
 
         scalp_dict = {}
         for k, v in self.scalping_strategies.items():
@@ -1230,6 +1380,34 @@ class StrategiesConfig:
                 scalp_dict[k]["defensive_hedge_market"] = v.defensive_hedge_market
             if getattr(v, "min_confidence", None) is not None:
                 scalp_dict[k]["min_confidence"] = v.min_confidence
+            if getattr(v, "dynamic_tp_enabled", None) is not None:
+                scalp_dict[k]["dynamic_tp_enabled"] = v.dynamic_tp_enabled
+            if getattr(v, "dynamic_tp_spread_mult", None) is not None:
+                scalp_dict[k]["dynamic_tp_spread_mult"] = v.dynamic_tp_spread_mult
+            if getattr(v, "dynamic_tp_vol_mult", None) is not None:
+                scalp_dict[k]["dynamic_tp_vol_mult"] = v.dynamic_tp_vol_mult
+            if getattr(v, "dynamic_tp_min_bps", None) is not None:
+                scalp_dict[k]["dynamic_tp_min_bps"] = v.dynamic_tp_min_bps
+            if getattr(v, "dynamic_tp_max_bps", None) is not None:
+                scalp_dict[k]["dynamic_tp_max_bps"] = v.dynamic_tp_max_bps
+            if getattr(v, "tiered_trailing_ratchet", None) is not None:
+                scalp_dict[k]["tiered_trailing_ratchet"] = v.tiered_trailing_ratchet
+            if getattr(v, "exhaustion_exit_enabled", None) is not None:
+                scalp_dict[k]["exhaustion_exit_enabled"] = v.exhaustion_exit_enabled
+            if getattr(v, "exhaustion_min_gain_bps", None) is not None:
+                scalp_dict[k]["exhaustion_min_gain_bps"] = v.exhaustion_min_gain_bps
+            if getattr(v, "exhaustion_score_threshold", None) is not None:
+                scalp_dict[k]["exhaustion_score_threshold"] = v.exhaustion_score_threshold
+            if getattr(v, "trend_filter_enabled", None) is not None:
+                scalp_dict[k]["trend_filter_enabled"] = v.trend_filter_enabled
+            if getattr(v, "trend_window_secs", None) is not None:
+                scalp_dict[k]["trend_window_secs"] = v.trend_window_secs
+            if getattr(v, "max_counter_trend_bps", None) is not None:
+                scalp_dict[k]["max_counter_trend_bps"] = v.max_counter_trend_bps
+            if getattr(v, "require_cvd_alignment", None) is not None:
+                scalp_dict[k]["require_cvd_alignment"] = v.require_cvd_alignment
+            if getattr(v, "emergency_slippage_pct", None) is not None:
+                scalp_dict[k]["emergency_slippage_pct"] = v.emergency_slippage_pct
 
         alpha_dict = {
             k: {

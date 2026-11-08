@@ -54,7 +54,7 @@ class HedgedConvexitySignal(BaseSignal):
         self.absorption_hurdle = absorption_hurdle
 
         self.vpin_signal = VPINSignal()
-        self.depth_history: Deque[Tuple[int, float, float]] = deque(maxlen=60)
+        self.depth_history: Deque[Tuple[int, float, float]] = deque(maxlen=2000)
         self.price_history: List[Tuple[int, float]] = []
         self._head_idx: int = 0
 
@@ -135,8 +135,8 @@ class HedgedConvexitySignal(BaseSignal):
         # ---------------------------------------------------------------------
         # 7. Dual-Horizon Trade Flow Impulse (CVD)
         # ---------------------------------------------------------------------
-        cvd_fast, _, _ = trades.get_cvd_in_window(self.cvd_window_secs)
-        cvd_slow, _, _ = trades.get_cvd_in_window(60.0)
+        cvd_fast, _, _ = trades.get_cvd_in_window(self.cvd_window_secs, now_ms=now_ms)
+        cvd_slow, _, _ = trades.get_cvd_in_window(60.0, now_ms=now_ms)
         s_cvd_fast = math.tanh(cvd_fast / max(self.cvd_scale_btc * scale, 0.1 * scale))
         s_cvd_slow = math.tanh(cvd_slow / max(4.0 * scale, 0.5 * scale))
         s_cvd = 0.65 * s_cvd_fast + 0.35 * s_cvd_slow
@@ -152,9 +152,23 @@ class HedgedConvexitySignal(BaseSignal):
         # 9. Depth Fragility Tracking (Phantom Wall / Spoof Detection)
         # ---------------------------------------------------------------------
         self.depth_history.append((now_ms, d5_b, d5_a))
+        cutoff_depth_ms = now_ms - 60_000
+        while len(self.depth_history) > 1 and self.depth_history[0][0] < cutoff_depth_ms:
+            self.depth_history.popleft()
+
         wall_drop_b = False
         wall_drop_a = False
-        if len(self.depth_history) >= 10:
+        target_wall_ms = now_ms - 15_000
+        if len(self.depth_history) >= 2 and (now_ms - self.depth_history[0][0]) >= 3000:
+            idx = bisect.bisect_left(self.depth_history, (target_wall_ms, -1.0, -1.0))
+            past_entry = self.depth_history[idx] if idx < len(self.depth_history) else self.depth_history[0]
+            past_b = past_entry[1]
+            past_a = past_entry[2]
+            if past_b > 2.0 * scale and d5_b < past_b * 0.45:
+                wall_drop_b = True
+            if past_a > 2.0 * scale and d5_a < past_a * 0.45:
+                wall_drop_a = True
+        elif len(self.depth_history) >= 10:
             past_b = self.depth_history[0][1]
             past_a = self.depth_history[0][2]
             if past_b > 2.0 * scale and d5_b < past_b * 0.45:

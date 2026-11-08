@@ -124,6 +124,7 @@ class EdgeEvaluator:
                 "Composite_Taker": ("CompositeAlpha", "SMART_TAKER"),
                 "Instant_FastFill": ("InstantFill", "SMART_TAKER"),
                 "Absorption_Fade": ("Absorption", "MAKER"),
+                "Dynamic_Spread_Scalper": ("DynamicSpread", "MAKER"),
             }
 
         self.strategy_names = list(self.strategy_defs.keys())
@@ -258,8 +259,15 @@ class EdgeEvaluator:
         priority_fee_on_exit = getattr(self.bt_cfg, "priority_fee_on_exit", False)
         fee_hurdle_bps = getattr(self.market_cfg, "taker_fee_bps", 4.5) + getattr(self.bt_cfg, "priority_fee_bps", 0.0)
         force_market = getattr(self.bt_cfg, "force_market_orders", False)
-        slippage_pct = getattr(self.bt_cfg, "market_slippage_pct", 0.01) if force_market else (self.bt_cfg.slippage_bps / 10_000.0)
         spread_bps = ((best_ask - best_bid) / mid_price) * 10_000.0 if mid_price > 0 else 1.0
+        cur_vol = self.current_volatility_bps if (0.0 < self.current_volatility_bps < 50.0) else 3.5
+        dynamic_slip_bps = max(0.5, 0.25 * spread_bps + 0.15 * cur_vol)
+        if force_market:
+            slippage_pct = getattr(self.bt_cfg, "market_slippage_pct", 0.0005)
+        elif getattr(self.bt_cfg, "dynamic_slippage", True):
+            slippage_pct = dynamic_slip_bps * 1e-4
+        else:
+            slippage_pct = self.bt_cfg.slippage_bps / 10_000.0
 
         tp_bps = self.bt_cfg.take_profit_bps
         sl_bps = self.bt_cfg.stop_loss_bps
@@ -319,27 +327,63 @@ class EdgeEvaluator:
                     state.peak_unrealized_bps = max(state.peak_unrealized_bps, gain_bps)
                     state.trough_unrealized_bps = min(state.trough_unrealized_bps, gain_bps)
 
+                    # Dynamic variable take profit calculation
+                    is_dynamic_tp = bool(params.get("dynamic_tp_enabled", False) or (s_name == "Dynamic_Spread_Scalper"))
+                    if is_dynamic_tp:
+                        spread_mult = float(params.get("dynamic_tp_spread_mult", 2.0) or 2.0)
+                        vol_mult = float(params.get("dynamic_tp_vol_mult", 0.8) or 0.8)
+                        min_tp = float(params.get("dynamic_tp_min_bps", 4.0) or 4.0)
+                        max_tp = float(params.get("dynamic_tp_max_bps", 12.0) or 12.0)
+                        cur_vol = self.current_volatility_bps if (0.0 < self.current_volatility_bps < 50.0) else 3.5
+                        cur_tp_bps = max(min_tp, min(max_tp, spread_mult * spread_bps + vol_mult * cur_vol))
+                        cur_trail_act_bps = float(params.get("trailing_stop_activation_bps") or max(2.5, cur_tp_bps * 0.5))
+                        cur_trail_dist_bps = float(params.get("trailing_stop_distance_bps") or max(1.0, cur_tp_bps * 0.25))
+                    else:
+                        cur_tp_bps = tp_bps
+                        cur_trail_act_bps = trail_act_bps
+                        cur_trail_dist_bps = trail_dist_bps
+
+                    is_hedged_maker = (state.execution_type == "HEDGED_MAKER") or bool(params.get("maker_trailing_stop", False))
+
+                    if is_maker and not is_hedged_maker:
+                        min_profitable_act_bps = (maker_fee_pct + taker_fee_pct + slippage_pct + (0.5 * spread_bps * 1e-4) + 0.0001) * 10_000.0 + cur_trail_dist_bps
+                        cur_trail_act_bps = max(cur_trail_act_bps, min_profitable_act_bps)
+
                     # 1. Trailing Stop Activation & Ratchet
-                    if gain_bps >= trail_act_bps:
+                    if gain_bps >= cur_trail_act_bps:
                         state.trailing_stop_active = True
-                        trailing_floor = state.peak_price * (1.0 - (trail_dist_bps / 10_000.0))
+                        trailing_floor = state.peak_price * (1.0 - (cur_trail_dist_bps / 10_000.0))
                         if not is_maker:
                             fee_pct = taker_fee_pct + (maker_rebate_pct if self.bt_cfg.taker_exit_as_maker_on_tp else taker_fee_pct)
                             fee_floor = state.entry_price * (1.0 + fee_pct)
                             if state.peak_price > fee_floor:
                                 trailing_floor = max(trailing_floor, fee_floor)
-                        else:
-                            # Break-even fee ratchet for Maker: guarantees trailing floor clears 3 bps round-trip fee
+                        elif is_hedged_maker:
+                            # Break-even fee ratchet for Maker: clears round-trip maker fee
                             round_trip_fee_pct = 2.0 * maker_fee_pct
                             fee_floor = state.entry_price * (1.0 + round_trip_fee_pct + 0.00005)
                             if state.peak_price > fee_floor:
                                 trailing_floor = max(trailing_floor, fee_floor)
+                        else:
+                            # Break-even fee ratchet for Maker: when exiting as Taker on trailing stop,
+                            # must clear entry maker fee + exit taker fee + slippage + half spread to ensure net positive PnL.
+                            taker_exit_friction_pct = maker_fee_pct + taker_fee_pct + slippage_pct + (0.5 * spread_bps * 1e-4) + 0.0001
+                            fee_floor = state.entry_price * (1.0 + taker_exit_friction_pct)
+                            if state.peak_price > fee_floor:
+                                trailing_floor = max(trailing_floor, fee_floor)
+                        # Tier 2 ratchet: if gain achieved 75% of dynamic TP, lock in 50% of peak gain
+                        if is_dynamic_tp and params.get("tiered_trailing_ratchet", True) and state.peak_unrealized_bps >= cur_tp_bps * 0.75:
+                            tier2_floor = state.entry_price * (1.0 + (state.peak_unrealized_bps * 0.5) / 10_000.0)
+                            trailing_floor = max(trailing_floor, tier2_floor)
                         state.stop_price = max(state.stop_price, trailing_floor)
 
                     # 2. Check Exit Conditions
                     exit_reason = None
-                    if gain_bps >= tp_bps:
+                    if gain_bps >= cur_tp_bps:
                         exit_reason = "TAKE_PROFIT"
+                    elif is_dynamic_tp and params.get("exhaustion_exit_enabled", True) and gain_bps >= params.get("exhaustion_min_gain_bps", 3.0) and score <= params.get("exhaustion_score_threshold", 0.15):
+                        # Order flow momentum exhaustion exit with locked positive profit
+                        exit_reason = "EXHAUSTION_EXIT"
                     elif (state.execution_type == "HEDGED_MAKER" or params.get("hedge_trigger_loss_bps") is not None) and score <= hedge_reversal_threshold and gain_bps <= hedge_trigger_loss_bps:
                         exit_reason = "DEFENSIVE_MAKER_HEDGE"
                     elif mid_price <= state.stop_price:
@@ -355,7 +399,15 @@ class EdgeEvaluator:
 
                     if exit_reason:
                         # Determine exit execution price and fees
-                        if is_maker and exit_reason != "STOP_LOSS":
+                        if exit_reason == "STOP_LOSS":
+                            exit_price = best_bid * (1.0 - slippage_pct)
+                            fee = exit_price * state.position_btc * taker_fee_pct
+                            exec_label = "TAKER"
+                        elif exit_reason == "TRAILING_STOP" and not is_hedged_maker:
+                            exit_price = best_bid * (1.0 - slippage_pct)
+                            fee = exit_price * state.position_btc * taker_fee_pct
+                            exec_label = "TAKER (TRAI)"
+                        elif is_maker:
                             if exit_reason == "DEFENSIVE_MAKER_HEDGE" and params.get("defensive_hedge_market", False):
                                 exit_price = best_bid * (1.0 - slippage_pct)
                                 fee = exit_price * state.position_btc * taker_fee_pct
@@ -366,15 +418,15 @@ class EdgeEvaluator:
                                 exec_label = "TAKER (REV)"
                             elif exit_reason in ("TRAILING_STOP", "TAKE_PROFIT"):
                                 # Passive resting maker limit fill: fills at or better than limit order price
-                                target_limit = state.stop_price if exit_reason == "TRAILING_STOP" else state.entry_price * (1.0 + tp_bps / 10_000.0)
+                                target_limit = state.stop_price if exit_reason == "TRAILING_STOP" else state.entry_price * (1.0 + cur_tp_bps / 10_000.0)
                                 exit_price = max(best_ask, target_limit)
                                 fee = exit_price * state.position_btc * maker_fee_pct
                                 exec_label = "MAKER"
                             else:
                                 exit_price = best_ask
                                 fee = exit_price * state.position_btc * maker_fee_pct
-                                exec_label = "MAKER"
-                        elif not is_maker and not force_market and exit_reason != "STOP_LOSS" and self.bt_cfg.taker_exit_as_maker_on_tp:
+                                exec_label = "MAKER (EXHAUST)" if exit_reason == "EXHAUSTION_EXIT" else "MAKER"
+                        elif not is_maker and not force_market and self.bt_cfg.taker_exit_as_maker_on_tp:
                             # Smart Taker exits all orderly conditions passively as Maker
                             exit_price = best_ask
                             fee = exit_price * state.position_btc * maker_fee_pct
@@ -468,27 +520,63 @@ class EdgeEvaluator:
                     state.peak_unrealized_bps = max(state.peak_unrealized_bps, gain_bps)
                     state.trough_unrealized_bps = min(state.trough_unrealized_bps, gain_bps)
 
+                    # Dynamic variable take profit calculation
+                    is_dynamic_tp = bool(params.get("dynamic_tp_enabled", False) or (s_name == "Dynamic_Spread_Scalper"))
+                    if is_dynamic_tp:
+                        spread_mult = float(params.get("dynamic_tp_spread_mult", 2.0) or 2.0)
+                        vol_mult = float(params.get("dynamic_tp_vol_mult", 0.8) or 0.8)
+                        min_tp = float(params.get("dynamic_tp_min_bps", 4.0) or 4.0)
+                        max_tp = float(params.get("dynamic_tp_max_bps", 12.0) or 12.0)
+                        cur_vol = self.current_volatility_bps if (0.0 < self.current_volatility_bps < 50.0) else 3.5
+                        cur_tp_bps = max(min_tp, min(max_tp, spread_mult * spread_bps + vol_mult * cur_vol))
+                        cur_trail_act_bps = float(params.get("trailing_stop_activation_bps") or max(2.5, cur_tp_bps * 0.5))
+                        cur_trail_dist_bps = float(params.get("trailing_stop_distance_bps") or max(1.0, cur_tp_bps * 0.25))
+                    else:
+                        cur_tp_bps = tp_bps
+                        cur_trail_act_bps = trail_act_bps
+                        cur_trail_dist_bps = trail_dist_bps
+
+                    is_hedged_maker = (state.execution_type == "HEDGED_MAKER") or bool(params.get("maker_trailing_stop", False))
+
+                    if is_maker and not is_hedged_maker:
+                        min_profitable_act_bps = (maker_fee_pct + taker_fee_pct + slippage_pct + (0.5 * spread_bps * 1e-4) + 0.0001) * 10_000.0 + cur_trail_dist_bps
+                        cur_trail_act_bps = max(cur_trail_act_bps, min_profitable_act_bps)
+
                     # 1. Trailing Stop Activation & Ratchet
-                    if gain_bps >= trail_act_bps:
+                    if gain_bps >= cur_trail_act_bps:
                         state.trailing_stop_active = True
-                        trailing_ceiling = state.trough_price * (1.0 + (trail_dist_bps / 10_000.0))
+                        trailing_ceiling = state.trough_price * (1.0 + (cur_trail_dist_bps / 10_000.0))
                         if not is_maker:
                             fee_pct = taker_fee_pct + (maker_rebate_pct if self.bt_cfg.taker_exit_as_maker_on_tp else taker_fee_pct)
                             fee_ceiling = state.entry_price * (1.0 - fee_pct)
                             if state.trough_price < fee_ceiling:
                                 trailing_ceiling = min(trailing_ceiling, fee_ceiling)
-                        else:
-                            # Break-even fee ratchet for Maker Short: guarantees trailing ceiling clears 3 bps round-trip fee
+                        elif is_hedged_maker:
+                            # Break-even fee ratchet for Maker Short: clears round-trip maker fee
                             round_trip_fee_pct = 2.0 * maker_fee_pct
                             fee_ceiling = state.entry_price * (1.0 - round_trip_fee_pct - 0.00005)
                             if state.trough_price < fee_ceiling:
                                 trailing_ceiling = min(trailing_ceiling, fee_ceiling)
+                        else:
+                            # Break-even fee ratchet for Maker Short: when exiting as Taker on trailing stop,
+                            # must clear entry maker fee + exit taker fee + slippage + half spread to ensure net positive PnL.
+                            taker_exit_friction_pct = maker_fee_pct + taker_fee_pct + slippage_pct + (0.5 * spread_bps * 1e-4) + 0.0001
+                            fee_ceiling = state.entry_price * (1.0 - taker_exit_friction_pct)
+                            if state.trough_price < fee_ceiling:
+                                trailing_ceiling = min(trailing_ceiling, fee_ceiling)
+                        # Tier 2 ratchet: if gain achieved 75% of dynamic TP, lock in 50% of peak gain
+                        if is_dynamic_tp and params.get("tiered_trailing_ratchet", True) and state.peak_unrealized_bps >= cur_tp_bps * 0.75:
+                            tier2_ceiling = state.entry_price * (1.0 - (state.peak_unrealized_bps * 0.5) / 10_000.0)
+                            trailing_ceiling = min(trailing_ceiling, tier2_ceiling)
                         state.stop_price = min(state.stop_price, trailing_ceiling)
 
                     # 2. Check Exit Conditions
                     exit_reason = None
-                    if gain_bps >= tp_bps:
+                    if gain_bps >= cur_tp_bps:
                         exit_reason = "TAKE_PROFIT"
+                    elif is_dynamic_tp and params.get("exhaustion_exit_enabled", True) and gain_bps >= params.get("exhaustion_min_gain_bps", 3.0) and score >= -params.get("exhaustion_score_threshold", 0.15):
+                        # Order flow momentum exhaustion exit with locked positive profit
+                        exit_reason = "EXHAUSTION_EXIT"
                     elif (state.execution_type == "HEDGED_MAKER" or params.get("hedge_trigger_loss_bps") is not None) and score >= -hedge_reversal_threshold and gain_bps <= hedge_trigger_loss_bps:
                         exit_reason = "DEFENSIVE_MAKER_HEDGE"
                     elif mid_price >= state.stop_price:
@@ -503,7 +591,15 @@ class EdgeEvaluator:
                         exit_reason = "TIME_LIMIT"
 
                     if exit_reason:
-                        if is_maker and exit_reason != "STOP_LOSS":
+                        if exit_reason == "STOP_LOSS":
+                            exit_price = best_ask * (1.0 + slippage_pct)
+                            fee = exit_price * abs(state.position_btc) * taker_fee_pct
+                            exec_label = "TAKER"
+                        elif exit_reason == "TRAILING_STOP" and not is_hedged_maker:
+                            exit_price = best_ask * (1.0 + slippage_pct)
+                            fee = exit_price * abs(state.position_btc) * taker_fee_pct
+                            exec_label = "TAKER (TRAI)"
+                        elif is_maker:
                             if exit_reason == "DEFENSIVE_MAKER_HEDGE" and params.get("defensive_hedge_market", False):
                                 exit_price = best_ask * (1.0 + slippage_pct)
                                 fee = exit_price * abs(state.position_btc) * taker_fee_pct
@@ -514,15 +610,15 @@ class EdgeEvaluator:
                                 exec_label = "TAKER (REV)"
                             elif exit_reason in ("TRAILING_STOP", "TAKE_PROFIT"):
                                 # Passive resting maker limit fill: fills at or better than limit order price
-                                target_limit = state.stop_price if exit_reason == "TRAILING_STOP" else state.entry_price * (1.0 - tp_bps / 10_000.0)
+                                target_limit = state.stop_price if exit_reason == "TRAILING_STOP" else state.entry_price * (1.0 - cur_tp_bps / 10_000.0)
                                 exit_price = min(best_bid, target_limit)
                                 fee = exit_price * abs(state.position_btc) * maker_fee_pct
                                 exec_label = "MAKER"
                             else:
                                 exit_price = best_bid
                                 fee = exit_price * abs(state.position_btc) * maker_fee_pct
-                                exec_label = "MAKER"
-                        elif not is_maker and not force_market and exit_reason != "STOP_LOSS" and self.bt_cfg.taker_exit_as_maker_on_tp:
+                                exec_label = "MAKER (EXHAUST)" if exit_reason == "EXHAUSTION_EXIT" else "MAKER"
+                        elif not is_maker and not force_market and self.bt_cfg.taker_exit_as_maker_on_tp:
                             # Smart Taker exits all orderly conditions passively as Maker
                             exit_price = best_bid
                             fee = exit_price * abs(state.position_btc) * maker_fee_pct
@@ -783,7 +879,15 @@ class EdgeEvaluator:
         """Closes any active resting positions at market price upon session completion."""
         closed_count = 0
         taker_fee_pct = self.market_cfg.taker_fee_bps / 10_000.0
-        slippage_pct = self.bt_cfg.slippage_bps / 10_000.0
+        cur_vol = self.current_volatility_bps if (0.0 < self.current_volatility_bps < 50.0) else 3.5
+        dynamic_slip_bps = max(0.5, 0.25 * 1.5 + 0.15 * cur_vol)
+        force_market = getattr(self.bt_cfg, "force_market_orders", False)
+        if force_market:
+            slippage_pct = getattr(self.bt_cfg, "market_slippage_pct", 0.0005)
+        elif getattr(self.bt_cfg, "dynamic_slippage", True):
+            slippage_pct = dynamic_slip_bps * 1e-4
+        else:
+            slippage_pct = self.bt_cfg.slippage_bps / 10_000.0
 
         for s_name in self.strategy_names:
             state = self.strategies[s_name]

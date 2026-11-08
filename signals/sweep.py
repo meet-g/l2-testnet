@@ -48,7 +48,7 @@ class SweepSignal(BaseSignal):
         best_a = book.best_ask
 
         # Detect sweep from recent trades
-        recent_large = trades.get_recent_large_trades(min_sz_btc=self.min_sweep_btc, lookback_secs=0.5)
+        recent_large = trades.get_recent_large_trades(min_sz_btc=self.min_sweep_btc, lookback_secs=0.5, now_ms=now_ms)
 
         score = 0.0
         pattern = "STABLE"

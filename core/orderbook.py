@@ -244,6 +244,14 @@ class OrderBook:
         ask_vol = sum(level.sz for level in self.asks[:k_levels])
         return bid_vol, ask_vol
 
+    def avg_level_depth(self, k_levels: int = 10) -> float:
+        """Returns the average volume per level across both bid and ask sides up to k_levels."""
+        n = min(k_levels, len(self.bids), len(self.asks))
+        if n <= 0:
+            return 0.0
+        bid_vol, ask_vol = self.get_depth_volume(n)
+        return (bid_vol + ask_vol) / (2.0 * n)
+
     def get_depth_order_counts(self, k_levels: int = 5) -> Tuple[int, int]:
         """Returns total order count 'n' on bid and ask sides for top k levels."""
         bid_n = sum(level.n for level in self.bids[:k_levels])

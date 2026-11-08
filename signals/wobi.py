@@ -1,6 +1,7 @@
 """Multi-Level Weighted Order Book Imbalance (WOBI) Signal with Order Count Filtering."""
 
 import math
+import time
 from typing import Optional
 
 from core.orderbook import OrderBook
@@ -26,12 +27,16 @@ class WOBISignal(BaseSignal):
         name: str = "WOBI",
         decay_lambda: float = 0.35,
         max_levels: int = 10,
-        whale_min_sz: float = 5.0,
+        whale_min_sz: float = 10.0,
+        cvd_window_secs: float = 30.0,
+        require_cvd_alignment: bool = True,
     ):
         super().__init__(name)
         self.decay_lambda = decay_lambda
         self.max_levels = max_levels
         self.whale_min_sz = whale_min_sz
+        self.cvd_window_secs = cvd_window_secs
+        self.require_cvd_alignment = require_cvd_alignment
 
     def compute(
         self,
@@ -49,7 +54,11 @@ class WOBISignal(BaseSignal):
         bids_spoof_penalty = 0.0
         asks_spoof_penalty = 0.0
 
-        whale_sz = self.whale_min_sz * getattr(book, "notional_scale", 1.0)
+        # Calibrate whale_sz dynamically relative to average level depth
+        avg_level_depth = book.avg_level_depth(n_levels) if hasattr(book, "avg_level_depth") else (
+            (sum(b.sz for b in book.bids[:n_levels]) + sum(a.sz for a in book.asks[:n_levels])) / (2.0 * n_levels) if n_levels > 0 else 0.0
+        )
+        whale_sz = max(self.whale_min_sz, avg_level_depth * 3.0)
         for i in range(n_levels):
             w = math.exp(-self.decay_lambda * i)
             b_lvl = book.bids[i]
@@ -89,12 +98,39 @@ class WOBISignal(BaseSignal):
         # Normalized score
         score = max(-1.0, min(1.0, raw_imbalance))
 
+        # Top-of-book touch conflict filter: prevent entering against immediate touch pressure
+        if score > 0 and tob_imbalance < -0.25:
+            score *= 0.4
+        elif score < 0 and tob_imbalance > 0.25:
+            score *= 0.4
+
+        # Gate entries against negative rolling trade flow (CVD)
+        now_ms = timestamp_ms or book.last_update_time_ms or None
+        cvd_val = 0.0
+        buy_vol = 0.0
+        sell_vol = 0.0
+        cvd_suppressed = False
+        suppression_reason = ""
+
+        if self.require_cvd_alignment and trades is not None and hasattr(trades, "get_cvd_in_window"):
+            cvd_val, buy_vol, sell_vol = trades.get_cvd_in_window(self.cvd_window_secs, now_ms=now_ms)
+            if score > 0:  # Bullish signal attempt
+                if cvd_val < -0.05 and sell_vol > buy_vol:
+                    cvd_suppressed = True
+                    suppression_reason = f"Negative CVD trade flow ({cvd_val:+.2f}, sell={sell_vol:.2f} > buy={buy_vol:.2f})"
+                    score = min(score, 0.20)
+            elif score < 0:  # Bearish signal attempt
+                if cvd_val > 0.05 and buy_vol > sell_vol:
+                    cvd_suppressed = True
+                    suppression_reason = f"Positive CVD trade flow ({cvd_val:+.2f}, buy={buy_vol:.2f} > sell={sell_vol:.2f})"
+                    score = max(score, -0.20)
+
         return SignalResult(
             name=self.name,
             score=score,
             raw_value=raw_imbalance,
             confidence=confidence,
-            timestamp_ms=timestamp_ms or book.last_update_time_ms,
+            timestamp_ms=now_ms or getattr(trades, "last_trade_time_ms", None) or int(time.time() * 1000),
             metadata={
                 "wobi_5": book.depth_imbalance(5),
                 "wobi_20": book.depth_imbalance(20),
@@ -103,5 +139,10 @@ class WOBISignal(BaseSignal):
                 "asks_spoof_penalty": asks_spoof_penalty,
                 "bid_order_count_5": sum(l.n for l in book.bids[:5]),
                 "ask_order_count_5": sum(l.n for l in book.asks[:5]),
+                "whale_sz": whale_sz,
+                "avg_level_depth": avg_level_depth,
+                "cvd_val": cvd_val,
+                "cvd_suppressed": cvd_suppressed,
+                "suppression_reason": suppression_reason,
             },
         )

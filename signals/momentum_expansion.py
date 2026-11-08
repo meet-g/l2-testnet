@@ -59,7 +59,7 @@ class MomentumExpansionSignal(BaseSignal):
         self.absorption = AbsorptionSignal(window_secs=20.0)
         self.price_history: List[Tuple[int, float]] = []
         self._head_idx: int = 0
-        self.depth_history: Deque[Tuple[int, float, float]] = deque(maxlen=60)
+        self.depth_history: Deque[Tuple[int, float, float]] = deque(maxlen=2000)
 
     def compute(
         self,
@@ -129,9 +129,23 @@ class MomentumExpansionSignal(BaseSignal):
         d5_a = sum(a.sz for a in asks[:min(5, n_asks)])
 
         self.depth_history.append((now_ms, d5_b, d5_a))
+        cutoff_depth_ms = now_ms - 60_000
+        while len(self.depth_history) > 1 and self.depth_history[0][0] < cutoff_depth_ms:
+            self.depth_history.popleft()
+
         wall_drop_b = False
         wall_drop_a = False
-        if len(self.depth_history) >= 10:
+        target_wall_ms = now_ms - 15_000
+        if len(self.depth_history) >= 2 and (now_ms - self.depth_history[0][0]) >= 3000:
+            idx = bisect.bisect_left(self.depth_history, (target_wall_ms, -1.0, -1.0))
+            past_entry = self.depth_history[idx] if idx < len(self.depth_history) else self.depth_history[0]
+            past_b = past_entry[1]
+            past_a = past_entry[2]
+            if past_b > 2.0 * eff_scale and d5_b < past_b * 0.45:
+                wall_drop_b = True
+            if past_a > 2.0 * eff_scale and d5_a < past_a * 0.45:
+                wall_drop_a = True
+        elif len(self.depth_history) >= 10:
             past_b = self.depth_history[0][1]
             past_a = self.depth_history[0][2]
             if past_b > 2.0 * eff_scale and d5_b < past_b * 0.45:
@@ -173,8 +187,8 @@ class MomentumExpansionSignal(BaseSignal):
         # ---------------------------------------------------------------------
         # 2. Dual-Horizon Taker Order Flow Momentum & Acceleration (CVD Delta)
         # ---------------------------------------------------------------------
-        cvd_fast, buy_fast, sell_fast = trades.get_cvd_in_window(self.cvd_fast_secs)
-        cvd_slow, buy_slow, sell_slow = trades.get_cvd_in_window(self.cvd_slow_secs)
+        cvd_fast, buy_fast, sell_fast = trades.get_cvd_in_window(self.cvd_fast_secs, now_ms=now_ms)
+        cvd_slow, buy_slow, sell_slow = trades.get_cvd_in_window(self.cvd_slow_secs, now_ms=now_ms)
         tot_vol_slow = buy_slow + sell_slow
 
         flow_fast = math.tanh(cvd_fast / max(self.cvd_fast_scale_btc * eff_scale, 0.1 * eff_scale))
@@ -205,10 +219,12 @@ class MomentumExpansionSignal(BaseSignal):
         abs_score = abs_res.score
 
         # True Institutional Limit Absorption Divergences (CVD vs Price delta)
-        # Bull Trap: Aggressive buyers hitting iceberg ask wall (abs_score <= -0.20) or book negative
-        is_bull_trap = (flow_score > 0 and abs_score <= -0.20) or (flow_score > 0.12 and book_score < -self.absorption_hurdle)
-        # Bear Trap: Aggressive sellers hitting iceberg bid wall (abs_score >= 0.20) or book positive
-        is_bear_trap = (flow_score < 0 and abs_score >= 0.20) or (flow_score < -0.12 and book_score > self.absorption_hurdle)
+        # Evaluates against time-stabilized absorption scores (500ms downsampled) to prevent sub-second 20ms false triggers
+        abs_pattern = abs_res.metadata.get("pattern", "NEUTRAL") if getattr(abs_res, "metadata", None) else "NEUTRAL"
+        # Bull Trap: Aggressive buyers hitting iceberg ask wall (abs_score <= -0.20 with BEARISH_ABSORPTION) or book negative
+        is_bull_trap = (flow_score > 0 and abs_score <= -0.20 and abs_pattern == "BEARISH_ABSORPTION") or (flow_score > 0.12 and book_score < -self.absorption_hurdle)
+        # Bear Trap: Aggressive sellers hitting iceberg bid wall (abs_score >= 0.20 with BULLISH_ABSORPTION) or book positive
+        is_bear_trap = (flow_score < 0 and abs_score >= 0.20 and abs_pattern == "BULLISH_ABSORPTION") or (flow_score < -0.12 and book_score > self.absorption_hurdle)
 
         # Climax Exhaustion Check:
         is_exhaustion_climax = (trend_score > 0.85 and flow_score > 0.70) or (trend_score < -0.85 and flow_score < -0.70)

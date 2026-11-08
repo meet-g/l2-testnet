@@ -3,19 +3,19 @@
   "_instructions": "Set 'enabled': true or false to select/deselect any execution strategy, scalping strategy, or alpha signal.",
   "version": "1.1",
   "live_execution": {
-    "active_strategy": "QDAP_Maker",
+    "active_strategy": "Hedged_Convexity",
     "order_size_btc": 0.0005,
     "max_position_btc": 0.05,
     "penny_jumping": true,
     "use_ioc_on_marketable": true,
     "use_native_tpsl": true,
     "priority_fee_bps": 0.0,
-    "force_market_orders": true,
-    "market_slippage_pct": 0.01
+    "force_market_orders": false,
+    "market_slippage_pct": 0.0005
   },
   "execution_strategies": {
     "Hedged_Convexity": {
-      "enabled": false,
+      "enabled": true,
       "description": "Multi-tier order book convexity with automated defensive maker hedging on adverse toxic flow and liquidity wall decay",
       "signal_key": "HedgedConvexity",
       "execution_type": "HEDGED_MAKER",
@@ -28,13 +28,13 @@
       "max_holding_time_secs": 180,
       "exit_reversal_threshold": 0.85,
       "hedge_trigger_loss_bps": -3.5,
-      "hedge_reversal_threshold": 0.2,
+      "hedge_reversal_threshold": -0.2,
       "min_volatility_bps": 4.5,
       "loss_cooldown_secs": 60,
       "coentry_group": "triad"
     },
     "Convexity_Cascade": {
-      "enabled": false,
+      "enabled": true,
       "description": "Multi-tier order book convexity and liquidity hole cascade with order count dispersion and trade flow impulse",
       "signal_key": "ConvexityCascade",
       "execution_type": "HEDGED_MAKER",
@@ -47,13 +47,13 @@
       "max_holding_time_secs": 180,
       "exit_reversal_threshold": 0.8,
       "hedge_trigger_loss_bps": -4.0,
-      "hedge_reversal_threshold": 0.15,
+      "hedge_reversal_threshold": -0.15,
       "min_volatility_bps": 4.5,
       "loss_cooldown_secs": 60,
       "coentry_group": "triad"
     },
     "Momentum_Expansion": {
-      "enabled": false,
+      "enabled": true,
       "description": "Multi-minute structural trend expansion entering on order book queue exhaustion, 25-level depth support, and CVD acceleration with absorption trap shielding",
       "signal_key": "MomentumExpansion",
       "execution_type": "HEDGED_MAKER",
@@ -66,13 +66,13 @@
       "max_holding_time_secs": 180,
       "exit_reversal_threshold": 0.65,
       "hedge_trigger_loss_bps": -4.5,
-      "hedge_reversal_threshold": 0.0,
+      "hedge_reversal_threshold": -0.15,
       "min_volatility_bps": 4.5,
       "loss_cooldown_secs": 60,
       "coentry_group": "triad"
     },
     "Queue_Replenishment": {
-      "enabled": false,
+      "enabled": true,
       "description": "Orthogonal queue replenishment dynamics with multi-tier cancellation asymmetry, depletion persistence, and defensive maker hedging",
       "signal_key": "QueueReplenishment",
       "execution_type": "HEDGED_MAKER",
@@ -85,7 +85,7 @@
       "max_holding_time_secs": 180,
       "exit_reversal_threshold": 0.8,
       "hedge_trigger_loss_bps": -3.5,
-      "hedge_reversal_threshold": -0.1,
+      "hedge_reversal_threshold": -0.15,
       "min_volatility_bps": 4.5,
       "loss_cooldown_secs": 120,
       "coentry_group": "queue_replenishment"
@@ -93,7 +93,7 @@
   },
   "scalping_strategies": {
     "QDAP_Maker": {
-      "enabled": true,
+      "enabled": false,
       "description": "Passive quoting targeting depleted queue imbalances with order count anti-spoofing",
       "signal_key": "QDAP",
       "execution_type": "MAKER",
@@ -107,7 +107,7 @@
       "min_volatility_bps": 3.8
     },
     "Composite_Maker": {
-      "enabled": true,
+      "enabled": false,
       "description": "Passive Avellaneda-Stoikov spread capture and maker rebate quoting off Composite Alpha ensemble",
       "signal_key": "CompositeAlpha",
       "execution_type": "MAKER",
@@ -121,7 +121,7 @@
       "min_volatility_bps": 3.8
     },
     "AdaptiveML_Maker": {
-      "enabled": true,
+      "enabled": false,
       "description": "Passive maker execution driven by machine-learning online feature drift prediction",
       "signal_key": "AdaptiveML",
       "execution_type": "MAKER",
@@ -135,18 +135,36 @@
       "min_volatility_bps": 3.8
     },
     "WOBI_Maker": {
-      "enabled": true,
+      "enabled": false,
       "description": "Passive quoting biased by anti-spoofed Weighted Order Book Imbalance",
       "signal_key": "WOBI",
       "execution_type": "MAKER",
       "entry_threshold": 0.75,
       "order_size_btc": 0.1,
-      "take_profit_bps": 18.0,
-      "stop_loss_bps": 12.0,
+      "take_profit_bps": 5.0,
+      "stop_loss_bps": 8.0,
       "trailing_stop_activation_bps": 2.5,
       "trailing_stop_distance_bps": 1.0,
       "max_holding_time_secs": 180,
-      "min_volatility_bps": 3.8
+      "exit_reversal_threshold": 0.75,
+      "min_volatility_bps": 3.8,
+      "loss_cooldown_secs": 30,
+      "fast_fill_enabled": true,
+      "exit_escalate_secs": 1.5,
+      "dynamic_tp_enabled": true,
+      "dynamic_tp_spread_mult": 2.0,
+      "dynamic_tp_vol_mult": 0.8,
+      "dynamic_tp_min_bps": 2.5,
+      "dynamic_tp_max_bps": 6.0,
+      "tiered_trailing_ratchet": true,
+      "exhaustion_exit_enabled": true,
+      "exhaustion_min_gain_bps": 2.0,
+      "exhaustion_score_threshold": 0.15,
+      "trend_filter_enabled": true,
+      "trend_window_secs": 60.0,
+      "max_counter_trend_bps": 1.0,
+      "require_cvd_alignment": true,
+      "emergency_slippage_pct": 0.002
     },
     "MicroPrice_Maker": {
       "enabled": false,
@@ -167,7 +185,7 @@
       "require_cvd_alignment": true
     },
     "MicroPrice_FastFill": {
-      "enabled": true,
+      "enabled": false,
       "description": "High-confidence fast-filling Stoikov MicroPrice with multi-factor gating and defensive hedge",
       "signal_key": "MicroPrice",
       "execution_type": "MAKER",
@@ -208,7 +226,7 @@
       "min_volatility_bps": 3.8
     },
     "AdaptiveML_Taker": {
-      "enabled": true,
+      "enabled": false,
       "description": "Aggressive market entry on strong ML model conviction with trailing stop",
       "signal_key": "AdaptiveML",
       "execution_type": "SMART_TAKER",
@@ -222,7 +240,7 @@
       "min_volatility_bps": 4.5
     },
     "Composite_Taker": {
-      "enabled": true,
+      "enabled": false,
       "description": "Aggressive market entry on extreme multi-factor composite dislocation",
       "signal_key": "CompositeAlpha",
       "execution_type": "SMART_TAKER",
@@ -257,6 +275,38 @@
       "exit_escalate_secs": 3.0,
       "defensive_hedge_market": false,
       "min_confidence": 0.65
+    },
+    "Dynamic_Spread_Scalper": {
+      "enabled": false,
+      "description": "Adaptive variable take-profit maker scalping scaled off real-time spread, volatility, and order flow exhaustion",
+      "signal_key": "DynamicSpread",
+      "execution_type": "MAKER",
+      "entry_threshold": 0.7,
+      "order_size_btc": 0.1,
+      "take_profit_bps": 6.5,
+      "stop_loss_bps": 10.0,
+      "trailing_stop_activation_bps": 3.0,
+      "trailing_stop_distance_bps": 1.0,
+      "max_holding_time_secs": 120,
+      "min_volatility_bps": 2.5,
+      "hedge_trigger_loss_bps": -4.0,
+      "hedge_reversal_threshold": 0.0,
+      "loss_cooldown_secs": 30,
+      "fast_fill_enabled": true,
+      "exit_escalate_secs": 1.5,
+      "dynamic_tp_enabled": true,
+      "dynamic_tp_spread_mult": 2.0,
+      "dynamic_tp_vol_mult": 0.8,
+      "dynamic_tp_min_bps": 4.0,
+      "dynamic_tp_max_bps": 12.0,
+      "tiered_trailing_ratchet": true,
+      "exhaustion_exit_enabled": true,
+      "exhaustion_min_gain_bps": 3.0,
+      "exhaustion_score_threshold": 0.15,
+      "trend_filter_enabled": true,
+      "trend_window_secs": 60.0,
+      "max_counter_trend_bps": 1.0,
+      "emergency_slippage_pct": 0.002
     }
   },
   "alpha_signals": {
@@ -324,6 +374,11 @@
       "enabled": true,
       "weight": 0.2,
       "description": "Flow Depletion, Queue Exhaustion, and Immediate Sweep alpha detector"
+    },
+    "DynamicSpread": {
+      "enabled": true,
+      "weight": 0.2,
+      "description": "Dynamic spread capture, microprice flow impulse, and multi-tier queue exhaustion"
     }
   }
 }

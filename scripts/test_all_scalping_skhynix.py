@@ -450,6 +450,7 @@ def main():
     table_exits.add_column("Scalping Strategy", justify="left", style="bold cyan")
     table_exits.add_column("Total Exits", justify="right")
     table_exits.add_column("Take Profit", justify="right", style="green")
+    table_exits.add_column("Flow Exhaust", justify="right", style="bold green")
     table_exits.add_column("Defensive Hedge", justify="right", style="yellow")
     table_exits.add_column("Trailing Stop", justify="right", style="blue")
     table_exits.add_column("Signal Reversal", justify="right")
@@ -461,6 +462,7 @@ def main():
         ex = m["exit_reasons"]
         tot = m["trades"]
         tp = ex.get("TAKE_PROFIT", 0)
+        exh = ex.get("EXHAUSTION_EXIT", 0)
         dmh = ex.get("DEFENSIVE_MAKER_HEDGE", 0)
         ts = ex.get("TRAILING_STOP", 0)
         sr = ex.get("SIGNAL_REVERSAL", 0)
@@ -475,6 +477,7 @@ def main():
             s_name,
             f"{tot:,}",
             pct(tp),
+            pct(exh),
             pct(dmh),
             pct(ts),
             pct(sr),

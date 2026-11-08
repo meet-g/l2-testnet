@@ -171,7 +171,7 @@ class TestLiveOrderExecutor(unittest.TestCase):
 
         self.executor.on_signal_update(0.50, 79900.0, 79901.0, 1.0)
         self.assertEqual(len(actions), 1)
-        self.assertEqual(actions[0], ("EXIT", False, 79900.0, False))  # Taker emergency exit
+        self.assertEqual(actions[0], ("EXIT", False, 79860.0, False))  # Taker emergency exit with dynamic slippage buffer
 
     def test_position_exit_defensive_maker_hedge(self):
         actions = []

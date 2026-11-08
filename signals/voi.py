@@ -45,6 +45,7 @@ class VOISignal(BaseSignal):
 
         self.voi_history: Deque[float] = deque(maxlen=history_window)
         self.recent_30: Deque[float] = deque(maxlen=30)
+        self.voi_time_history: Deque[Tuple[int, float]] = deque(maxlen=5000)
         self.rolling_voi_sum: float = 0.0
 
     def compute(
@@ -95,22 +96,39 @@ class VOISignal(BaseSignal):
         self.prev_ask_px = curr_ask_px
         self.prev_ask_sz = curr_ask_sz
 
-        # Store in rolling window
+        # Store in rolling windows (both count-based and time-based)
         self.voi_history.append(instant_voi)
         self.recent_30.append(instant_voi)
 
-        # Calculate rolling VOI over recent snapshots (e.g. last 30 snapshots)
-        cum_voi = sum(self.recent_30)
-        n_recent = len(self.recent_30)
-        n_all = len(self.voi_history)
+        use_time_window = False
+        if now_ms and now_ms > 1000:
+            self.voi_time_history.append((now_ms, instant_voi))
+            cutoff_ms = now_ms - 120_000
+            while self.voi_time_history and self.voi_time_history[0][0] < cutoff_ms:
+                self.voi_time_history.popleft()
+            if self.voi_time_history and (now_ms - self.voi_time_history[0][0]) >= 3000:
+                use_time_window = True
+
+        if use_time_window:
+            recent_cutoff = now_ms - 30_000
+            recent_vals = [v for t, v in self.voi_time_history if t >= recent_cutoff]
+            cum_voi = sum(recent_vals)
+            n_recent = max(1, len(recent_vals))
+            all_vals = [v for _, v in self.voi_time_history]
+            n_all = len(all_vals)
+        else:
+            cum_voi = sum(self.recent_30)
+            n_recent = len(self.recent_30)
+            all_vals = list(self.voi_history)
+            n_all = len(self.voi_history)
 
         scale = getattr(book, "notional_scale", 1.0)
         spread_factor = max(0.2, 1.0 - (book.spread_bps / 5.0))
 
         # Standardize via rolling mean and standard deviation
         if n_all >= 15:
-            mean_v = sum(self.voi_history) / n_all
-            variance = sum((x - mean_v) ** 2 for x in self.voi_history) / n_all
+            mean_v = sum(all_vals) / n_all
+            variance = sum((x - mean_v) ** 2 for x in all_vals) / n_all
             std_v = math.sqrt(variance) if variance > 1e-6 else 1.0
 
             z_score = (cum_voi - n_recent * mean_v) / (std_v * math.sqrt(n_recent))

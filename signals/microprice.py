@@ -133,7 +133,7 @@ class MicroPriceSignal(BaseSignal):
         buy_vol = 0.0
         sell_vol = 0.0
         if trades is not None and hasattr(trades, "get_cvd_in_window"):
-            cvd_val, buy_vol, sell_vol = trades.get_cvd_in_window(self.cvd_window_secs)
+            cvd_val, buy_vol, sell_vol = trades.get_cvd_in_window(self.cvd_window_secs, now_ms=now_ms)
 
         # Counter-trend suppression logic
         counter_trend_suppressed = False

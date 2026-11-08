@@ -113,7 +113,7 @@ class InstantFillSignal(BaseSignal):
         s_thin = math.tanh(self.gamma_thin * delta_r)
 
         # 2. Trade Flow Acceleration (Short-term CVD)
-        cvd_short, buy_vol, sell_vol = trades.get_cvd_in_window(self.flow_window_secs)
+        cvd_short, buy_vol, sell_vol = trades.get_cvd_in_window(self.flow_window_secs, now_ms=now_ms)
         total_vol = buy_vol + sell_vol
         s_flow = (cvd_short / total_vol) if total_vol > 1e-6 else 0.0
         s_flow = max(-1.0, min(1.0, s_flow))

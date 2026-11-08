@@ -142,7 +142,7 @@ class TestInstantFill(unittest.TestCase):
         st = evaluator.strategies["Instant_FastFill"]
         self.assertTrue(st.is_in_position)
         self.assertEqual(st.position_btc, 1.0)
-        self.assertAlmostEqual(st.entry_price, 1000.05, places=1)
+        self.assertAlmostEqual(st.entry_price, 1000.05, delta=0.15)
         self.assertEqual(evaluator.position_events[0]["exec"], "TAKER")
 
         # Step 2: Price advances by +15 bps -> Exits on Take Profit as MAKER

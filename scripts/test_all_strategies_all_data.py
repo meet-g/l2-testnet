@@ -185,11 +185,17 @@ def _install_worker_accelerators() -> None:
             self._cvd_history = deque(maxlen=self.max_trades)
         self._cvd_history.append((trade.timestamp_ms, trade.side == "B", trade.size))
 
-    def _fast_get_cvd_in_window(self, window_secs: float):
-        if window_secs in self._cvd_cache:
-            return self._cvd_cache[window_secs]
-        now_ms = self.last_trade_time_ms or int(time.time() * 1000)
-        cutoff_ms = now_ms - int(window_secs * 1000)
+    def _fast_get_cvd_in_window(self, window_secs: float, now_ms: Optional[int] = None):
+        if hasattr(self, "_resolve_effective_now"):
+            effective_now = self._resolve_effective_now(now_ms)
+        else:
+            effective_now = now_ms if now_ms is not None else (self.last_trade_time_ms or int(time.time() * 1000))
+        w_key = round(window_secs, 3)
+        bucket_idx = effective_now // 250
+        cached = self._cvd_cache.get(w_key)
+        if cached is not None and isinstance(cached, tuple) and len(cached) == 2 and cached[0] == bucket_idx:
+            return cached[1]
+        cutoff_ms = effective_now - int(window_secs * 1000)
         cvd = 0.0
         buy_vol = 0.0
         sell_vol = 0.0
@@ -203,7 +209,7 @@ def _install_worker_accelerators() -> None:
                 sell_vol += sz
                 cvd -= sz
         res = (cvd, buy_vol, sell_vol)
-        self._cvd_cache[window_secs] = res
+        self._cvd_cache[w_key] = (bucket_idx, res)
         return res
 
     def _fast_process_raw_trades(self, raw_trades: List[Dict[str, Any]]) -> List[Trade]:

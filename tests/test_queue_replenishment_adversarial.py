@@ -435,9 +435,9 @@ class TestAdversarialQueueReplenishment(unittest.TestCase):
         trade_b = state_b.trades[0]
         self.assertEqual(trade_b.exit_reason, "STOP_LOSS")
         self.assertEqual(trade_b.execution_type, "TAKER")
-        # Exit price is best_bid with 0.2 bps slippage
-        expected_sl_price = sl_bid * (1.0 - 0.00002)
-        self.assertAlmostEqual(trade_b.exit_price, expected_sl_price, delta=0.001)
+        # Exit price is best_bid with dynamic volatility-calibrated slippage
+        self.assertLess(trade_b.exit_price, sl_bid)
+        self.assertAlmostEqual(trade_b.exit_price, sl_bid, delta=0.05)
 
         # Empirical Comparison
         net_loss_a = trade_a.net_pnl_usd

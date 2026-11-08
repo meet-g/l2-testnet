@@ -79,7 +79,7 @@ class TradeManager:
         self.total_volume: float = 0.0
         self.last_trade_time_ms: int = 0
         self.last_price: float = 0.0
-        self._cvd_cache: Dict[float, Tuple[float, float, float]] = {}
+        self._cvd_cache: Dict[Any, Tuple[float, float, float]] = {}
 
         # VPIN Volume bucket tracking
         self.completed_buckets: Deque[VolumeBucket] = deque(maxlen=max_vpin_buckets)
@@ -185,13 +185,35 @@ class TradeManager:
             return 1.0
         return 85000.0 / max(self.last_price, 1e-4)
 
-    def get_cvd_in_window(self, window_secs: float) -> Tuple[float, float, float]:
-        """Calculates (CVD, BuyVol, SellVol) over the last N seconds."""
-        if window_secs in self._cvd_cache:
-            return self._cvd_cache[window_secs]
+    def _resolve_effective_now(self, now_ms: Optional[int]) -> int:
+        """Resolves the current timestamp for window lookbacks.
+        
+        If now_ms is provided, uses it. In live trading (recent timestamps),
+        advances with wall time to ensure CVD decay even during quiet periods without trades.
+        In offline tests with synthetic timestamps, preserves last_trade_time_ms.
+        """
+        if now_ms is not None:
+            return now_ms
+        wall_ms = int(time.time() * 1000)
+        if self.last_trade_time_ms is not None and self.last_trade_time_ms > 0:
+            if abs(wall_ms - self.last_trade_time_ms) < 30 * 86400 * 1000:
+                return wall_ms
+            return self.last_trade_time_ms
+        return wall_ms
 
-        now_ms = self.last_trade_time_ms or int(time.time() * 1000)
-        cutoff_ms = now_ms - int(window_secs * 1000)
+    def get_cvd_in_window(self, window_secs: float, now_ms: Optional[int] = None) -> Tuple[float, float, float]:
+        """Calculates (CVD, BuyVol, SellVol) over the last N seconds.
+        
+        Properly decays to 0.0 when time advances past window_secs without trades.
+        """
+        effective_now = self._resolve_effective_now(now_ms)
+        w_key = round(window_secs, 3)
+        bucket_idx = effective_now // 250
+        cached = self._cvd_cache.get(w_key)
+        if cached is not None and cached[0] == bucket_idx:
+            return cached[1]
+
+        cutoff_ms = effective_now - int(window_secs * 1000)
 
         cvd = 0.0
         buy_vol = 0.0
@@ -208,15 +230,15 @@ class TradeManager:
                 cvd -= t.size
 
         res = (cvd, buy_vol, sell_vol)
-        self._cvd_cache[window_secs] = res
+        self._cvd_cache[w_key] = (bucket_idx, res)
         return res
 
     def get_recent_large_trades(
-        self, min_sz_btc: float = 1.0, lookback_secs: float = 10.0
+        self, min_sz_btc: float = 1.0, lookback_secs: float = 10.0, now_ms: Optional[int] = None
     ) -> List[Trade]:
-        """Finds recent aggressive orders exceeding size threshold."""
-        now_ms = self.last_trade_time_ms or int(time.time() * 1000)
-        cutoff_ms = now_ms - int(lookback_secs * 1000)
+        """Finds recent aggressive orders exceeding size threshold within lookback_secs of effective_now."""
+        effective_now = self._resolve_effective_now(now_ms)
+        cutoff_ms = effective_now - int(lookback_secs * 1000)
 
         min_sz = min_sz_btc * self.notional_scale
         large = []

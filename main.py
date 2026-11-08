@@ -213,17 +213,19 @@ class L2EngineRunner:
                     sig_score = 0.0
                 threshold = active_strat.entry_threshold if active_strat else 0.85
 
-                for s_name, s_def in self.config.strategies.all_strategies.items():
-                    if s_def.enabled and s_name != active_name:
-                        s_score = scores.get(s_def.signal_key, 0.0)
-                        s_conf = confidences.get(s_def.signal_key, 0.0)
-                        if s_def.min_confidence is not None and s_conf < s_def.min_confidence:
-                            continue
-                        if abs(s_score) >= s_def.entry_threshold and (abs(sig_score) < threshold or abs(s_score) > abs(sig_score)):
-                            sig_score = s_score
-                            sig_conf = s_conf
-                            strat_to_use = s_name
-                            threshold = s_def.entry_threshold
+                # Only dispatch alternative enabled strategy if active_strategy is disabled or not configured
+                if not (active_strat and active_strat.enabled):
+                    for s_name, s_def in self.config.strategies.all_strategies.items():
+                        if s_def.enabled and s_name != active_name:
+                            s_score = scores.get(s_def.signal_key, 0.0)
+                            s_conf = confidences.get(s_def.signal_key, 0.0)
+                            if s_def.min_confidence is not None and s_conf < s_def.min_confidence:
+                                continue
+                            if abs(s_score) >= s_def.entry_threshold and (abs(sig_score) < threshold or abs(s_score) > abs(sig_score)):
+                                sig_score = s_score
+                                sig_conf = s_conf
+                                strat_to_use = s_name
+                                threshold = s_def.entry_threshold
 
             self.live_executor.strategy_name = strat_to_use
             self.live_executor.on_signal_update(
@@ -235,6 +237,43 @@ class L2EngineRunner:
                 confidence=sig_conf,
                 confidences=confidences,
             )
+
+    def _get_eval_throttle_secs(self) -> float:
+        """Determines the signal evaluation throttle interval based on active strategy category.
+
+        - Scalping strategies (e.g. Dynamic_Spread_Scalper, WOBI_Maker, Instant_FastFill, QDAP_Maker,
+          MicroPrice_FastFill, MicroPrice_Maker): minimal 50ms debounce to preserve ultra-fast queue reactivity.
+        - Core execution strategies (e.g. Hedged_Convexity, Convexity_Cascade, Momentum_Expansion,
+          Queue_Replenishment): 250ms throttle to match structural trend horizon and eliminate 20ms micro-burst noise.
+        """
+        strat_name = None
+        if self.live_executor:
+            if abs(getattr(self.live_executor, "cached_position", 0.0)) > 1e-6 and getattr(self.live_executor, "position_strategy", None):
+                strat_name = self.live_executor.position_strategy
+            elif self.live_executor.active_order and self.live_executor.active_order.get("strategy_name"):
+                strat_name = self.live_executor.active_order.get("strategy_name")
+        if not strat_name:
+            strat_name = self.config.strategies.get_effective_live_strategy()
+
+        is_scalping = self.config.strategies.is_scalping_strategy(strat_name) or self.config.strategies.is_scalping_mode_active
+        return 0.050 if is_scalping else 0.250
+
+    def _should_evaluate_signals(self) -> bool:
+        """Checks if enough time has elapsed since the last signal evaluation based on active strategy category."""
+        strat_name = None
+        if self.live_executor:
+            if abs(getattr(self.live_executor, "cached_position", 0.0)) > 1e-6 and getattr(self.live_executor, "position_strategy", None):
+                strat_name = self.live_executor.position_strategy
+            elif self.live_executor.active_order and self.live_executor.active_order.get("strategy_name"):
+                strat_name = self.live_executor.active_order.get("strategy_name")
+        if not strat_name:
+            strat_name = self.config.strategies.get_effective_live_strategy()
+
+        is_scalping = self.config.strategies.is_scalping_strategy(strat_name) or self.config.strategies.is_scalping_mode_active
+        if not is_scalping:
+            # Core strategies operate on standard ~1 Hz snapshot stream without throttling debounce
+            return True
+        return (time.time() - self._last_eval_time) >= 0.050
 
     async def _handle_message(self, raw_msg: str) -> None:
         """Processes an incoming WebSocket message from Hyperliquid."""
@@ -257,17 +296,23 @@ class L2EngineRunner:
 
         if channel == "l2Book":
             self.book.update_from_raw(data)
-            # FAST-PATH: Real-time event-driven signal evaluation and order execution (<0.1ms local latency)
-            self._evaluate_signals()
+            # FAST-PATH: Strategy-adaptive event-driven signal evaluation (<0.1ms local latency)
+            if self._should_evaluate_signals():
+                self._evaluate_signals()
 
         elif channel == "trades":
             if isinstance(data, list):
                 self.trades.process_raw_trades(data)
-                # FAST-PATH: Real-time event-driven signal evaluation on incoming trade ticks
-                self._evaluate_signals()
+                # FAST-PATH: Strategy-adaptive event-driven signal evaluation on incoming trade ticks
+                if self._should_evaluate_signals():
+                    self._evaluate_signals()
 
         elif channel == "activeAssetCtx":
             self.book.update_asset_ctx(data)
+
+        elif channel in ("userFills", "orderUpdates"):
+            if self.live_executor:
+                self.live_executor.handle_user_fill_event(data)
 
     async def _evaluation_loop(self) -> None:
         """Runs periodic fallback/heartbeat loop to guarantee continuous alpha and resting order maintenance."""
@@ -275,11 +320,15 @@ class L2EngineRunner:
         while self.is_running:
             start_t = time.perf_counter()
             now = time.time()
-            if (now - self._last_eval_time) >= (dt * 0.9):
+            throttle = self._get_eval_throttle_secs()
+            is_scalping = (throttle <= 0.050)
+            interval = throttle if is_scalping else (dt * 0.9)
+            if (now - self._last_eval_time) >= interval:
                 self._evaluate_signals()
 
             elapsed = time.perf_counter() - start_t
-            await asyncio.sleep(max(0.001, dt - elapsed))
+            sleep_time = min(dt, throttle) if is_scalping else dt
+            await asyncio.sleep(max(0.001, sleep_time - elapsed))
 
     async def run_live(self, duration_secs: Optional[int] = None, show_ui: bool = True) -> None:
         """Connects to Hyperliquid WS and runs live microstructure engine with automated reconnection and keepalive."""
@@ -348,10 +397,17 @@ class L2EngineRunner:
                                 max_size=20_000_000,
                             ) as ws:
                                 reconnect_delay = 1.0
-                                # Subscriptions: Granular 1-tick book, trades, and deep macro book
+                                # Subscriptions: Granular 1-tick book, trades, deep macro book, and real-time user fills
+                                is_scalping = (
+                                    self.config.strategies.is_scalping_mode_active
+                                    or any(s.enabled for s in self.config.strategies.scalping_strategies.values())
+                                )
+                                l2_sub_params = {"type": "l2Book", "coin": self.config.market.coin}
+                                if is_scalping:
+                                    l2_sub_params["fast"] = True
                                 sub_l2 = {
                                     "method": "subscribe",
-                                    "subscription": {"type": "l2Book", "coin": self.config.market.coin},
+                                    "subscription": l2_sub_params,
                                 }
                                 sub_trades = {
                                     "method": "subscribe",
@@ -364,6 +420,18 @@ class L2EngineRunner:
                                 await ws.send(json.dumps(sub_l2))
                                 await ws.send(json.dumps(sub_trades))
                                 await ws.send(json.dumps(sub_ctx))
+
+                                if self.live_executor and getattr(self.live_executor, "account_address", None):
+                                    sub_fills = {
+                                        "method": "subscribe",
+                                        "subscription": {"type": "userFills", "user": self.live_executor.account_address},
+                                    }
+                                    sub_orders = {
+                                        "method": "subscribe",
+                                        "subscription": {"type": "orderUpdates", "user": self.live_executor.account_address},
+                                    }
+                                    await ws.send(json.dumps(sub_fills))
+                                    await ws.send(json.dumps(sub_orders))
 
                                 if getattr(self.config.market, "subscribe_macro_book", False):
                                     sub_macro = {
@@ -436,9 +504,16 @@ class L2EngineRunner:
                             max_size=20_000_000,
                         ) as ws:
                             reconnect_delay = 1.0
+                            is_scalping = (
+                                self.config.strategies.is_scalping_mode_active
+                                or any(s.enabled for s in self.config.strategies.scalping_strategies.values())
+                            )
+                            l2_sub_params = {"type": "l2Book", "coin": self.config.market.coin}
+                            if is_scalping:
+                                l2_sub_params["fast"] = True
                             sub_l2 = {
                                 "method": "subscribe",
-                                "subscription": {"type": "l2Book", "coin": self.config.market.coin},
+                                "subscription": l2_sub_params,
                             }
                             sub_trades = {
                                 "method": "subscribe",
@@ -451,6 +526,13 @@ class L2EngineRunner:
                             await ws.send(json.dumps(sub_l2))
                             await ws.send(json.dumps(sub_trades))
                             await ws.send(json.dumps(sub_ctx))
+
+                            if self.live_executor and getattr(self.live_executor, "account_address", None):
+                                sub_fills = {
+                                    "method": "subscribe",
+                                    "subscription": {"type": "userFills", "user": self.live_executor.account_address},
+                                }
+                                await ws.send(json.dumps(sub_fills))
 
                             if getattr(self.config.market, "subscribe_macro_book", False):
                                 sub_macro = {
