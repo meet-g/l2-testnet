@@ -358,6 +358,7 @@ class BacktestConfig:
     force_market_orders: bool = False  # Forces all strategy entries and exits to use aggressive IOC market orders
     market_slippage_pct: float = 0.0005  # Slippage percentage for market orders (0.0005 = 0.05% = 5 bps)
     dynamic_slippage: bool = True  # Volatility-calibrated dynamic slippage modeling
+    warmup_secs: float = 0.0  # Warmup wait time in seconds (0.0 for immediate backtests, >0 for live runner)
     
     # -------------------------------------------------------------------------
     # 1. Passive Maker Execution (Avellaneda-Stoikov Micro-Scalp)
@@ -390,6 +391,7 @@ NEW_EXECUTION_STRATEGIES: Tuple[str, ...] = (
     "Convexity_Cascade",
     "Momentum_Expansion",
     "Queue_Replenishment",
+    "Stock_Microstructure_Alpha",
 )
 
 LEGACY_SCALPING_STRATEGIES: Tuple[str, ...] = (
@@ -426,6 +428,7 @@ DEFAULT_STRATEGIES_JSON = {
         "priority_fee_bps": 0.0,
         "force_market_orders": False,
         "market_slippage_pct": 0.0005,
+        "warmup_secs": 10.0,
     },
     "execution_strategies": {
         "Hedged_Convexity": {
@@ -503,6 +506,29 @@ DEFAULT_STRATEGIES_JSON = {
             "min_volatility_bps": 4.5,
             "loss_cooldown_secs": 120,
             "coentry_group": "queue_replenishment",
+        },
+        "Stock_Microstructure_Alpha": {
+            "enabled": True,
+            "description": "High-frequency microstructure alpha engineered specifically for Hyperliquid lower-fee stock pairs (XYZ equities), harvesting MicroPrice fair-value drift, 5-level depth imbalance, VOI delta queues, and tight fee-hurdle trailing ratchets",
+            "signal_key": "StockMicrostructure",
+            "execution_type": "HEDGED_MAKER",
+            "price_offset": 0.01,
+            "entry_threshold": 0.55,
+            "order_size_btc": 10.0,
+            "take_profit_bps": 7.0,
+            "stop_loss_bps": 5.5,
+            "trailing_stop_activation_bps": 1.8,
+            "trailing_stop_distance_bps": 0.8,
+            "max_holding_time_secs": 35,
+            "exit_reversal_threshold": 0.20,
+            "hedge_trigger_loss_bps": -3.5,
+            "hedge_reversal_threshold": -0.15,
+            "min_volatility_bps": 0.0,
+            "loss_cooldown_secs": 30,
+            "coentry_group": "stock_alpha",
+            "trend_filter_enabled": True,
+            "trend_window_secs": 60.0,
+            "max_counter_trend_bps": 1.5,
         },
     },
     "scalping_strategies": {
@@ -785,6 +811,11 @@ DEFAULT_STRATEGIES_JSON = {
             "weight": 0.20,
             "description": "Dynamic spread capture, microprice flow impulse, and multi-tier queue exhaustion",
         },
+        "StockMicrostructure": {
+            "enabled": True,
+            "weight": 0.0,
+            "description": "Stock Microstructure Alpha (MicroPrice fair-value drift + D5 order book imbalance + VOI queue deltas + 10s CVD flow)",
+        },
     },
 }
 
@@ -803,6 +834,7 @@ DEFAULT_CORE_STRATEGIES_JSON = {
         "priority_fee_bps": DEFAULT_STRATEGIES_JSON["live_execution"]["priority_fee_bps"],
         "force_market_orders": DEFAULT_STRATEGIES_JSON["live_execution"]["force_market_orders"],
         "market_slippage_pct": DEFAULT_STRATEGIES_JSON["live_execution"]["market_slippage_pct"],
+        "warmup_secs": DEFAULT_STRATEGIES_JSON["live_execution"].get("warmup_secs", 10.0),
     },
     "execution_strategies": {
         k: dict(v) for k, v in DEFAULT_STRATEGIES_JSON["execution_strategies"].items()
@@ -810,7 +842,7 @@ DEFAULT_CORE_STRATEGIES_JSON = {
     },
     "alpha_signals": {
         k: dict(v) for k, v in DEFAULT_STRATEGIES_JSON["alpha_signals"].items()
-        if k in ("HedgedConvexity", "ConvexityCascade", "MomentumExpansion", "QueueReplenishment", "VPIN", "VOI", "Absorption")
+        if k in ("HedgedConvexity", "ConvexityCascade", "MomentumExpansion", "QueueReplenishment", "StockMicrostructure", "VPIN", "VOI", "Absorption")
     },
 }
 
@@ -829,6 +861,7 @@ DEFAULT_SCALPER_STRATEGIES_JSON = {
         "priority_fee_bps": DEFAULT_STRATEGIES_JSON["live_execution"]["priority_fee_bps"],
         "force_market_orders": DEFAULT_STRATEGIES_JSON["live_execution"]["force_market_orders"],
         "market_slippage_pct": DEFAULT_STRATEGIES_JSON["live_execution"]["market_slippage_pct"],
+        "warmup_secs": DEFAULT_STRATEGIES_JSON["live_execution"].get("warmup_secs", 10.0),
     },
     "scalping_strategies": {
         k: dict(v) for k, v in DEFAULT_STRATEGIES_JSON.get("scalping_strategies", {}).items()
@@ -860,6 +893,9 @@ class ExecutionStrategyConfig:
     hedge_reversal_threshold: Optional[float] = None
     min_volatility_bps: Optional[float] = None
     loss_cooldown_secs: Optional[int] = None
+    price_offset: Optional[float] = None
+    price_concession: Optional[float] = None
+    exit_concession: Optional[float] = None
     price_concession_ratio: Optional[float] = None
     exit_concession_ratio: Optional[float] = None
     fast_fill_enabled: Optional[bool] = None
@@ -949,6 +985,7 @@ class LiveExecutionConfig:
     priority_fee_bps: float = 0.0
     force_market_orders: bool = False
     market_slippage_pct: float = 0.0005
+    warmup_secs: float = 10.0
 
 
 @dataclass
@@ -1010,6 +1047,7 @@ class StrategiesConfig:
             priority_fee_bps=float(live_raw.get("priority_fee_bps", 0.0)),
             force_market_orders=bool(live_raw.get("force_market_orders", False)),
             market_slippage_pct=float(live_raw.get("market_slippage_pct", 0.01)),
+            warmup_secs=float(live_raw.get("warmup_secs", 10.0)),
         )
 
         def _parse_strat_item(s_name: str, s_info: dict, fallback: dict, is_scalp: bool = False) -> ExecutionStrategyConfig:
@@ -1032,6 +1070,9 @@ class StrategiesConfig:
                 hedge_reversal_threshold=float(s_info["hedge_reversal_threshold"]) if "hedge_reversal_threshold" in s_info else fallback.get("hedge_reversal_threshold"),
                 min_volatility_bps=float(s_info["min_volatility_bps"]) if "min_volatility_bps" in s_info else fallback.get("min_volatility_bps"),
                 loss_cooldown_secs=int(s_info["loss_cooldown_secs"]) if "loss_cooldown_secs" in s_info else fallback.get("loss_cooldown_secs"),
+                price_offset=float(s_info["price_offset"]) if "price_offset" in s_info else fallback.get("price_offset"),
+                price_concession=float(s_info["price_concession"]) if "price_concession" in s_info else fallback.get("price_concession"),
+                exit_concession=float(s_info["exit_concession"]) if "exit_concession" in s_info else fallback.get("exit_concession"),
                 price_concession_ratio=float(s_info["price_concession_ratio"]) if "price_concession_ratio" in s_info else fallback.get("price_concession_ratio"),
                 exit_concession_ratio=float(s_info["exit_concession_ratio"]) if "exit_concession_ratio" in s_info else fallback.get("exit_concession_ratio"),
                 fast_fill_enabled=bool(s_info["fast_fill_enabled"]) if "fast_fill_enabled" in s_info else fallback.get("fast_fill_enabled"),
@@ -1291,6 +1332,12 @@ class StrategiesConfig:
                 p["min_volatility_bps"] = s.min_volatility_bps
             if s.loss_cooldown_secs is not None:
                 p["loss_cooldown_secs"] = s.loss_cooldown_secs
+            if getattr(s, "price_offset", None) is not None:
+                p["price_offset"] = s.price_offset
+            if getattr(s, "price_concession", None) is not None:
+                p["price_concession"] = s.price_concession
+            if getattr(s, "exit_concession", None) is not None:
+                p["exit_concession"] = s.exit_concession
             if getattr(s, "price_concession_ratio", None) is not None:
                 p["price_concession_ratio"] = s.price_concession_ratio
             if getattr(s, "exit_concession_ratio", None) is not None:
@@ -1442,6 +1489,12 @@ class StrategiesConfig:
                 scalp_dict[k]["hedge_reversal_threshold"] = v.hedge_reversal_threshold
             if getattr(v, "loss_cooldown_secs", None) is not None:
                 scalp_dict[k]["loss_cooldown_secs"] = v.loss_cooldown_secs
+            if getattr(v, "price_offset", None) is not None:
+                scalp_dict[k]["price_offset"] = v.price_offset
+            if getattr(v, "price_concession", None) is not None:
+                scalp_dict[k]["price_concession"] = v.price_concession
+            if getattr(v, "exit_concession", None) is not None:
+                scalp_dict[k]["exit_concession"] = v.exit_concession
             if getattr(v, "price_concession_ratio", None) is not None:
                 scalp_dict[k]["price_concession_ratio"] = v.price_concession_ratio
             if getattr(v, "exit_concession_ratio", None) is not None:
@@ -1508,6 +1561,7 @@ class StrategiesConfig:
                 "priority_fee_bps": self.live_execution.priority_fee_bps,
                 "force_market_orders": getattr(self.live_execution, "force_market_orders", False),
                 "market_slippage_pct": getattr(self.live_execution, "market_slippage_pct", 0.01),
+                "warmup_secs": getattr(self.live_execution, "warmup_secs", 10.0),
             },
             "execution_strategies": exec_dict,
             "scalping_strategies": scalp_dict,
@@ -1571,6 +1625,7 @@ class CoreStrategiesConfig(StrategiesConfig):
             priority_fee_bps=float(live_raw.get("priority_fee_bps", 0.0)),
             force_market_orders=bool(live_raw.get("force_market_orders", False)),
             market_slippage_pct=float(live_raw.get("market_slippage_pct", 0.0005)),
+            warmup_secs=float(live_raw.get("warmup_secs", 10.0)),
         )
 
         def _parse_strat_item(s_name: str, s_info: dict, fallback: dict) -> ExecutionStrategyConfig:
@@ -1592,6 +1647,9 @@ class CoreStrategiesConfig(StrategiesConfig):
                 hedge_reversal_threshold=float(s_info["hedge_reversal_threshold"]) if "hedge_reversal_threshold" in s_info else fallback.get("hedge_reversal_threshold"),
                 min_volatility_bps=float(s_info["min_volatility_bps"]) if "min_volatility_bps" in s_info else fallback.get("min_volatility_bps"),
                 loss_cooldown_secs=int(s_info["loss_cooldown_secs"]) if "loss_cooldown_secs" in s_info else fallback.get("loss_cooldown_secs"),
+                price_offset=float(s_info["price_offset"]) if "price_offset" in s_info else fallback.get("price_offset"),
+                price_concession=float(s_info["price_concession"]) if "price_concession" in s_info else fallback.get("price_concession"),
+                exit_concession=float(s_info["exit_concession"]) if "exit_concession" in s_info else fallback.get("exit_concession"),
                 price_concession_ratio=float(s_info["price_concession_ratio"]) if "price_concession_ratio" in s_info else fallback.get("price_concession_ratio"),
                 exit_concession_ratio=float(s_info["exit_concession_ratio"]) if "exit_concession_ratio" in s_info else fallback.get("exit_concession_ratio"),
                 fast_fill_enabled=bool(s_info["fast_fill_enabled"]) if "fast_fill_enabled" in s_info else fallback.get("fast_fill_enabled"),
@@ -1752,6 +1810,7 @@ class CoreStrategiesConfig(StrategiesConfig):
                 "priority_fee_bps": self.live_execution.priority_fee_bps,
                 "force_market_orders": getattr(self.live_execution, "force_market_orders", False),
                 "market_slippage_pct": getattr(self.live_execution, "market_slippage_pct", 0.0005),
+                "warmup_secs": getattr(self.live_execution, "warmup_secs", 10.0),
             },
             "execution_strategies": exec_dict,
             "alpha_signals": alpha_dict,
@@ -1795,6 +1854,7 @@ class ScalperStrategiesConfig(StrategiesConfig):
             priority_fee_bps=float(live_raw.get("priority_fee_bps", 0.0)),
             force_market_orders=bool(live_raw.get("force_market_orders", False)),
             market_slippage_pct=float(live_raw.get("market_slippage_pct", 0.0005)),
+            warmup_secs=float(live_raw.get("warmup_secs", 10.0)),
         )
 
         def _parse_strat_item(s_name: str, s_info: dict, fallback: dict) -> ScalpingStrategyConfig:
@@ -1816,6 +1876,9 @@ class ScalperStrategiesConfig(StrategiesConfig):
                 hedge_reversal_threshold=float(s_info["hedge_reversal_threshold"]) if "hedge_reversal_threshold" in s_info else fallback.get("hedge_reversal_threshold"),
                 min_volatility_bps=float(s_info["min_volatility_bps"]) if "min_volatility_bps" in s_info else fallback.get("min_volatility_bps"),
                 loss_cooldown_secs=int(s_info["loss_cooldown_secs"]) if "loss_cooldown_secs" in s_info else fallback.get("loss_cooldown_secs"),
+                price_offset=float(s_info["price_offset"]) if "price_offset" in s_info else fallback.get("price_offset"),
+                price_concession=float(s_info["price_concession"]) if "price_concession" in s_info else fallback.get("price_concession"),
+                exit_concession=float(s_info["exit_concession"]) if "exit_concession" in s_info else fallback.get("exit_concession"),
                 price_concession_ratio=float(s_info["price_concession_ratio"]) if "price_concession_ratio" in s_info else fallback.get("price_concession_ratio"),
                 exit_concession_ratio=float(s_info["exit_concession_ratio"]) if "exit_concession_ratio" in s_info else fallback.get("exit_concession_ratio"),
                 fast_fill_enabled=bool(s_info["fast_fill_enabled"]) if "fast_fill_enabled" in s_info else fallback.get("fast_fill_enabled"),
@@ -1937,7 +2000,7 @@ class ScalperStrategiesConfig(StrategiesConfig):
             for attr in (
                 "take_profit_bps", "stop_loss_bps", "trailing_stop_activation_bps",
                 "trailing_stop_distance_bps", "max_holding_time_secs", "exit_reversal_threshold",
-                "min_volatility_bps", "loss_cooldown_secs", "price_concession_ratio", "exit_concession_ratio",
+                "min_volatility_bps", "loss_cooldown_secs", "price_offset", "price_concession", "exit_concession", "price_concession_ratio", "exit_concession_ratio",
                 "fast_fill_enabled", "entry_escalate_secs", "exit_escalate_secs", "defensive_hedge_market",
                 "min_confidence", "trend_filter_enabled", "trend_window_secs", "max_counter_trend_bps",
                 "require_cvd_alignment", "dynamic_tp_enabled", "dynamic_tp_spread_mult", "dynamic_tp_vol_mult",
@@ -1972,6 +2035,7 @@ class ScalperStrategiesConfig(StrategiesConfig):
                 "priority_fee_bps": self.live_execution.priority_fee_bps,
                 "force_market_orders": getattr(self.live_execution, "force_market_orders", False),
                 "market_slippage_pct": getattr(self.live_execution, "market_slippage_pct", 0.0005),
+                "warmup_secs": getattr(self.live_execution, "warmup_secs", 10.0),
             },
             "scalping_strategies": scalp_dict,
             "alpha_signals": alpha_dict,

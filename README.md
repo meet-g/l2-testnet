@@ -35,6 +35,7 @@ The codebase is cleanly separated into **two dedicated, standalone programs** sh
   2. `Convexity_Cascade` (Liquidity hole vacuum cascades + depth curvature)
   3. `Momentum_Expansion` (High-conviction taker momentum capture)
   4. `Queue_Replenishment` (L1/L3 queue replenishment delta & cancellation asymmetry)
+  5. `Stock_Microstructure_Alpha` (High-frequency alpha engineered for lower-fee stock pairs like SKHYNIX)
 
 ### Program 2: High-Frequency Scalping Engine (`main_scalper.py` / `scalper.py`)
 - **Focus**: Sub-second spread capture, microprice queue jumping, machine learning feature-drift prediction, and dynamic volatility take-profit scalping.
@@ -73,6 +74,7 @@ D:\Hyperliquid\L2 - Testnet\
 │   ├── convexity_cascade.py  # Convexity Cascade (Liquidity Hole & Depth Curvature)
 │   ├── momentum_expansion.py # Momentum Expansion (QDAP + CVD Impulse + Trend Alignment)
 │   ├── queue_replenishment.py# Queue Replenishment Delta & Cancellation Asymmetry
+│   ├── stock_microstructure.py# Stock Microstructure Alpha for lower-fee stock pairs
 │   ├── dynamic_spread.py     # Dynamic Spread Scalper Factor
 │   ├── qdap.py               # Queue Depletion & Asymmetric Pressure (Touch Exhaustion & Anti-Spoofing)
 │   ├── wobi.py               # Multi-level WOBI with order concentration anti-spoofing

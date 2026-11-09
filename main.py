@@ -54,6 +54,7 @@ class L2EngineRunner:
         web_mode: bool = False,
         web_port: int = 8000,
         open_browser: bool = False,
+        warmup_secs: Optional[float] = None,
     ):
         self.config = config or AppConfig()
         self.record_data = record_data
@@ -63,6 +64,15 @@ class L2EngineRunner:
         self.web_port = web_port
         self.open_browser = open_browser
         self.console = Console()
+
+        if warmup_secs is not None:
+            self.warmup_secs: float = float(warmup_secs)
+        else:
+            live_cfg = getattr(getattr(self.config, "strategies", None), "live_execution", None)
+            self.warmup_secs = float(getattr(live_cfg, "warmup_secs", 10.0) if live_cfg else 10.0)
+        self._first_valid_book_time: Optional[float] = None
+        self._warmup_logged: bool = False
+        self._warmup_completed_logged: bool = False
 
         self.book = OrderBook(coin=self.config.market.coin)
         self.trades = TradeManager(
@@ -104,6 +114,7 @@ class L2EngineRunner:
             strategy_defs=enabled_strategy_defs,
             strategy_params=strategy_params,
             auditor=None if self.live_orders else self.auditor,
+            warmup_secs=self.warmup_secs,
         )
 
         self.recorder: Optional[L2DataRecorder] = (
@@ -128,6 +139,7 @@ class L2EngineRunner:
                 priority_fee_bps=self.config.strategies.live_execution.priority_fee_bps,
                 force_market_orders=getattr(self.config.strategies.live_execution, "force_market_orders", False),
                 market_slippage_pct=getattr(self.config.strategies.live_execution, "market_slippage_pct", 0.01),
+                warmup_secs=self.warmup_secs,
             )
 
         self.dashboard = TerminalDashboard(console=self.console)
@@ -138,6 +150,23 @@ class L2EngineRunner:
         self.latest_display_signals: Dict[str, Any] = {}
         self._last_eval_time: float = 0.0
         self.is_running = False
+
+    @property
+    def is_warming_up(self) -> bool:
+        """Returns True if engine runner is in initial warmup wait period."""
+        if self.warmup_secs <= 0:
+            return False
+        if self._first_valid_book_time is None:
+            return True
+        return (time.time() - self._first_valid_book_time) < self.warmup_secs
+
+    @property
+    def warmup_remaining_secs(self) -> float:
+        """Returns remaining seconds in engine warmup wait period."""
+        if self.warmup_secs <= 0 or self._first_valid_book_time is None:
+            return 0.0
+        remaining = self.warmup_secs - (time.time() - self._first_valid_book_time)
+        return max(0.0, remaining)
 
     def __enter__(self):
         return self
@@ -296,6 +325,8 @@ class L2EngineRunner:
 
         if channel == "l2Book":
             self.book.update_from_raw(data)
+            if self.book.is_valid and self._first_valid_book_time is None:
+                self._first_valid_book_time = time.time()
             # FAST-PATH: Strategy-adaptive event-driven signal evaluation (<0.1ms local latency)
             if self._should_evaluate_signals():
                 self._evaluate_signals()
@@ -320,6 +351,13 @@ class L2EngineRunner:
         while self.is_running:
             start_t = time.perf_counter()
             now = time.time()
+            if self.is_warming_up:
+                if not self._warmup_logged:
+                    self._warmup_logged = True
+                    self.console.print(f"[bold yellow]Microstructure Buffers Warming Up: {self.warmup_secs:.1f}s wait time before order entries...[/bold yellow]")
+            elif self._first_valid_book_time is not None and not self._warmup_completed_logged:
+                self._warmup_completed_logged = True
+                self.console.print(f"[bold green]✓ Warmup complete ({self.warmup_secs:.1f}s elapsed). Order book, trades, CVD, and VPIN stabilized. Quoting active.[/bold green]")
             throttle = self._get_eval_throttle_secs()
             is_scalping = (throttle <= 0.050)
             interval = throttle if is_scalping else (dt * 0.9)
@@ -471,6 +509,7 @@ class L2EngineRunner:
                                                     display_signals,
                                                     self.evaluator,
                                                     network=network_name,
+                                                    warmup_remaining_secs=self.warmup_remaining_secs,
                                                 )
                                             )
                                         if self.web_server and self.book.is_valid and self.web_server.broadcaster.should_broadcast(now_t):
@@ -1817,6 +1856,12 @@ def main():
         default=None,
         help="Market order slippage tolerance percentage (e.g. 1.0 for 1.0%% = 100 bps, 0.5 for 0.5%% = 50 bps, 0.05 for 0.05%% = 5 bps).",
     )
+    parser.add_argument(
+        "--warmup",
+        type=float,
+        default=None,
+        help="Initial warmup buffer wait time in seconds before strategies can enter trades (default: 10.0s, set 0 to disable)",
+    )
     args = parser.parse_args()
 
     cfg = AppConfig()
@@ -1897,6 +1942,10 @@ def main():
     if market_slippage is not None:
         cfg.strategies.live_execution.market_slippage_pct = market_slippage
         cfg.backtest.market_slippage_pct = market_slippage
+
+    if args.warmup is not None:
+        cfg.strategies.live_execution.warmup_secs = float(args.warmup)
+        cfg.backtest.warmup_secs = float(args.warmup)
 
     if should_save and (force_market is not None or market_slippage is not None):
         cfg.strategies.save()
@@ -2077,6 +2126,12 @@ def main():
             else:
                 strats_desc = active_live
             console.print(f"\n[bold red blink]⚠ LIVE {net} ORDER EXECUTION ENABLED! Active Strategies: {strats_desc}[/bold red blink]\n")
+        warmup_val = args.warmup if args.warmup is not None else getattr(cfg.strategies.live_execution, "warmup_secs", 10.0)
+        if warmup_val > 0:
+            console.print(f"[bold cyan]Warmup Wait Time:[/bold cyan] [bold yellow]{warmup_val:.1f}s[/bold yellow] (Buffers L2 book, trades, CVD, and VPIN before trading)")
+        else:
+            console.print(f"[bold cyan]Warmup Wait Time:[/bold cyan] [dim]Disabled (0.0s - Instant execution)[/dim]")
+
         runner = L2EngineRunner(
             config=cfg,
             record_data=True,
@@ -2086,6 +2141,7 @@ def main():
             web_mode=enable_web,
             web_port=args.port,
             open_browser=args.open_browser,
+            warmup_secs=warmup_val,
         )
         try:
             asyncio.run(runner.run_live(duration_secs=args.duration if args.duration > 0 else None, show_ui=show_cli_ui))

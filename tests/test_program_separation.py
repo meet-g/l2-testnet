@@ -32,9 +32,9 @@ class TestProgramSeparation(unittest.TestCase):
 
         self.assertIsInstance(cfg, CoreStrategiesConfig)
         self.assertIsInstance(cfg, StrategiesConfig)
-        self.assertEqual(len(cfg.execution_strategies), 4)
+        self.assertEqual(len(cfg.execution_strategies), len(CORE_EXECUTION_STRATEGIES))
         self.assertEqual(len(cfg.scalping_strategies), 0)
-        self.assertEqual(len(cfg.all_strategies), 4)
+        self.assertEqual(len(cfg.all_strategies), len(CORE_EXECUTION_STRATEGIES))
         self.assertFalse(cfg.is_scalping_mode_active)
 
         for name in CORE_EXECUTION_STRATEGIES:
@@ -57,7 +57,7 @@ class TestProgramSeparation(unittest.TestCase):
 
         # Check parameters extraction
         params = cfg.get_strategy_params()
-        self.assertEqual(len(params), 4)
+        self.assertEqual(len(params), len(CORE_EXECUTION_STRATEGIES))
         defs = cfg.get_enabled_strategy_defs()
         self.assertGreaterEqual(len(defs), 1)
 
@@ -100,7 +100,7 @@ class TestProgramSeparation(unittest.TestCase):
         """Verifies StrategiesConfig.load auto-dispatches to Core or Scalper based on filepath or metadata."""
         core_loaded = StrategiesConfig.load("strategies_core.json")
         self.assertIsInstance(core_loaded, CoreStrategiesConfig)
-        self.assertEqual(len(core_loaded.execution_strategies), 4)
+        self.assertEqual(len(core_loaded.execution_strategies), len(CORE_EXECUTION_STRATEGIES))
         self.assertEqual(len(core_loaded.scalping_strategies), 0)
 
         scalp_loaded = StrategiesConfig.load("strategies_scalper.json")
@@ -112,7 +112,7 @@ class TestProgramSeparation(unittest.TestCase):
         """Verifies AppConfig.for_core() and AppConfig.for_scalper()."""
         app_core = AppConfig.for_core()
         self.assertIsInstance(app_core.strategies, CoreStrategiesConfig)
-        self.assertEqual(len(app_core.strategies.execution_strategies), 4)
+        self.assertEqual(len(app_core.strategies.execution_strategies), len(CORE_EXECUTION_STRATEGIES))
 
         app_scalp = AppConfig.for_scalper()
         self.assertIsInstance(app_scalp.strategies, ScalperStrategiesConfig)
@@ -300,7 +300,7 @@ class TestProgramSeparation(unittest.TestCase):
         _init_prop_worker("strategies_core.json")
         cfg = breakout_prop_trader._GLOBAL_STRATEGIES_CFG
         self.assertIsNotNone(cfg)
-        self.assertEqual(len(cfg.execution_strategies), 4)
+        self.assertEqual(len(cfg.execution_strategies), len(CORE_EXECUTION_STRATEGIES))
         for name in CORE_EXECUTION_STRATEGIES:
             self.assertIn(name, cfg.execution_strategies)
             self.assertTrue(cfg.execution_strategies[name].enabled)

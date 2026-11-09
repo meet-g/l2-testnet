@@ -517,6 +517,8 @@ class DashboardWebServer:
             "is_xyz_stock": bool(getattr(getattr(self.runner, "config", None), "market", None) and getattr(self.runner.config.market, "is_xyz_stock", False)),
             "taker_fee_bps": float(getattr(getattr(self.runner, "config", None), "market", None) and getattr(self.runner.config.market, "taker_fee_bps", 4.5) or 4.5),
             "maker_fee_bps": float(getattr(getattr(self.runner, "config", None), "market", None) and getattr(self.runner.config.market, "maker_fee_bps", 1.5) or 1.5),
+            "is_warming_up": bool(getattr(self.runner, "is_warming_up", False)),
+            "warmup_remaining_secs": round(float(getattr(self.runner, "warmup_remaining_secs", 0.0)), 1),
         }
 
         # 2. Signals

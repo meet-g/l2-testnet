@@ -12,7 +12,8 @@
     "use_native_tpsl": true,
     "priority_fee_bps": 0.0,
     "force_market_orders": false,
-    "market_slippage_pct": 0.0005
+    "market_slippage_pct": 0.0005,
+    "warmup_secs": 10.0
   },
   "scalping_strategies": {
     "QDAP_Maker": {

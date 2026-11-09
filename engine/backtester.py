@@ -99,6 +99,7 @@ class EdgeEvaluator:
         strategy_defs: Optional[Dict[str, Tuple[str, str]]] = None,
         strategy_params: Optional[Dict[str, Dict[str, Any]]] = None,
         auditor: Optional[Any] = None,
+        warmup_secs: Optional[float] = None,
     ):
         self.market_cfg = market_cfg or MarketConfig()
         self.bt_cfg = bt_cfg or BacktestConfig()
@@ -114,6 +115,7 @@ class EdgeEvaluator:
                 "Convexity_Cascade": ("ConvexityCascade", "MAKER"),
                 "Momentum_Expansion": ("MomentumExpansion", "MAKER"),
                 "Queue_Replenishment": ("QueueReplenishment", "HEDGED_MAKER"),
+                "Stock_Microstructure_Alpha": ("StockMicrostructure", "HEDGED_MAKER"),
                 "QDAP_Maker": ("QDAP", "MAKER"),
                 "AdaptiveML_Maker": ("AdaptiveML", "MAKER"),
                 "Composite_Maker": ("CompositeAlpha", "MAKER"),
@@ -149,7 +151,7 @@ class EdgeEvaluator:
         unique_signals.update([
             "WOBI", "VOI", "MicroPrice", "VPIN", "Absorption", "Sweep",
             "CompositeAlpha", "AdaptiveML", "QDAP", "MomentumExpansion",
-            "ConvexityCascade", "HedgedConvexity", "QueueReplenishment", "InstantFill"
+            "ConvexityCascade", "HedgedConvexity", "QueueReplenishment", "InstantFill", "StockMicrostructure"
         ])
 
         self.eval_data: Dict[str, Dict[int, Deque[Tuple[float, float]]]] = {
@@ -165,6 +167,26 @@ class EdgeEvaluator:
         self._min_price_deque: Deque[Tuple[int, float]] = deque()
         self._max_price_deque: Deque[Tuple[int, float]] = deque()
         self.current_volatility_bps: float = 99.0
+        self.warmup_secs: float = float(warmup_secs if warmup_secs is not None else getattr(self.bt_cfg, "warmup_secs", 0.0))
+        self.first_step_ms: Optional[int] = None
+
+    def is_warming_up(self, timestamp_ms: Optional[int] = None) -> bool:
+        """Returns True if the evaluator is within its initial warmup wait period."""
+        if self.warmup_secs <= 0:
+            return False
+        if self.first_step_ms is None:
+            return True
+        t_ms = timestamp_ms if timestamp_ms is not None else int(time.time() * 1000)
+        return (t_ms - self.first_step_ms) < int(self.warmup_secs * 1000)
+
+    @property
+    def warmup_remaining_secs(self) -> float:
+        """Returns remaining seconds in warmup period."""
+        if self.warmup_secs <= 0 or self.first_step_ms is None:
+            return 0.0
+        now_ms = int(time.time() * 1000)
+        remaining_ms = int(self.warmup_secs * 1000) - (now_ms - self.first_step_ms)
+        return max(0.0, remaining_ms / 1000.0)
 
     def record_step(
         self,
@@ -178,6 +200,9 @@ class EdgeEvaluator:
         """Called on every sample step (e.g. 5-10 Hz). Updates forward returns and paper trading."""
         if mid_price <= 0:
             return
+
+        if self.first_step_ms is None:
+            self.first_step_ms = timestamp_ms
 
         # 1. Buffer observation and update forward returns (bypassed if horizons_seconds is empty)
         if self.bt_cfg.horizons_seconds:
@@ -279,13 +304,17 @@ class EdgeEvaluator:
             state = self.strategies[s_name]
             sig_k = state.signal_key
             score = signals.get(sig_k, 0.0)
+            # Strategy-specific execution parameters (with per-strategy overrides)
+            params = self.strategy_params.get(s_name, {})
+            exec_type_param = params.get("execution_type")
+            if exec_type_param:
+                state.execution_type = exec_type_param
+
             if force_market:
                 is_maker = False
             else:
                 is_maker = (state.execution_type in ("MAKER", "HEDGED_MAKER"))
 
-            # Strategy-specific execution parameters (with per-strategy overrides)
-            params = self.strategy_params.get(s_name, {})
             hedge_trigger_loss_bps = params.get("hedge_trigger_loss_bps") if params.get("hedge_trigger_loss_bps") is not None else -3.0
             hedge_reversal_threshold = params.get("hedge_reversal_threshold") if params.get("hedge_reversal_threshold") is not None else -0.15
             if is_maker:
@@ -398,15 +427,24 @@ class EdgeEvaluator:
                         exit_reason = "TIME_LIMIT"
 
                     if exit_reason:
+                        exit_concession = float(params.get("exit_concession", 0.0) or 0.0)
+                        if exit_concession <= 0.0 and params.get("exit_concession_ratio") is not None:
+                            exit_concession = mid_price * float(params["exit_concession_ratio"])
+
                         # Determine exit execution price and fees
                         if exit_reason == "STOP_LOSS":
-                            exit_price = best_bid * (1.0 - slippage_pct)
+                            exit_price = (best_bid - exit_concession) if exit_concession > 0 else (best_bid * (1.0 - slippage_pct))
                             fee = exit_price * state.position_btc * taker_fee_pct
                             exec_label = "TAKER"
                         elif exit_reason == "TRAILING_STOP" and not is_hedged_maker:
-                            exit_price = best_bid * (1.0 - slippage_pct)
+                            exit_price = (best_bid - exit_concession) if exit_concession > 0 else (best_bid * (1.0 - slippage_pct))
                             fee = exit_price * state.position_btc * taker_fee_pct
                             exec_label = "TAKER (TRAI)"
+                        elif exit_concession > 0:
+                            # Concession execution: cross spread slightly unfavourable for immediate fill
+                            exit_price = max(0.01, best_bid - exit_concession)
+                            fee = exit_price * state.position_btc * taker_fee_pct
+                            exec_label = f"TAKER ({exit_reason[:4]})"
                         elif is_maker:
                             if exit_reason == "DEFENSIVE_MAKER_HEDGE" and params.get("defensive_hedge_market", False):
                                 exit_price = best_bid * (1.0 - slippage_pct)
@@ -591,14 +629,23 @@ class EdgeEvaluator:
                         exit_reason = "TIME_LIMIT"
 
                     if exit_reason:
+                        exit_concession = float(params.get("exit_concession", 0.0) or 0.0)
+                        if exit_concession <= 0.0 and params.get("exit_concession_ratio") is not None:
+                            exit_concession = mid_price * float(params["exit_concession_ratio"])
+
                         if exit_reason == "STOP_LOSS":
-                            exit_price = best_ask * (1.0 + slippage_pct)
+                            exit_price = (best_ask + exit_concession) if exit_concession > 0 else (best_ask * (1.0 + slippage_pct))
                             fee = exit_price * abs(state.position_btc) * taker_fee_pct
                             exec_label = "TAKER"
                         elif exit_reason == "TRAILING_STOP" and not is_hedged_maker:
-                            exit_price = best_ask * (1.0 + slippage_pct)
+                            exit_price = (best_ask + exit_concession) if exit_concession > 0 else (best_ask * (1.0 + slippage_pct))
                             fee = exit_price * abs(state.position_btc) * taker_fee_pct
                             exec_label = "TAKER (TRAI)"
+                        elif exit_concession > 0:
+                            # Concession execution: cross spread slightly unfavourable for immediate fill
+                            exit_price = best_ask + exit_concession
+                            fee = exit_price * abs(state.position_btc) * taker_fee_pct
+                            exec_label = f"TAKER ({exit_reason[:4]})"
                         elif is_maker:
                             if exit_reason == "DEFENSIVE_MAKER_HEDGE" and params.get("defensive_hedge_market", False):
                                 exit_price = best_ask * (1.0 + slippage_pct)
@@ -706,6 +753,10 @@ class EdgeEvaluator:
             # B. SMART ENTRY GATING
             # =========================================================================
             else:
+                # Warmup Gate: Suppress new trade entries while microstructure buffers stabilize
+                if self.is_warming_up(timestamp_ms):
+                    continue
+
                 # Spread Filter: Never enter if spread is abnormally wide
                 if spread_bps > self.bt_cfg.max_spread_bps:
                     continue
@@ -794,14 +845,37 @@ class EdgeEvaluator:
 
                 # Bullish Entry Trigger
                 if score >= entry_thresh:
+                    entry_offset = float(params.get("price_offset", 0.0) or params.get("entry_price_offset", 0.0) or 0.0)
+                    concession = float(params.get("price_concession", 0.0) or 0.0)
+                    if concession <= 0.0 and params.get("price_concession_ratio") is not None:
+                        concession = mid_price * float(params["price_concession_ratio"])
                     if is_maker:
-                        # Passive Maker Buy at best bid
-                        entry_price = best_bid
-                        fee = entry_price * sz * (maker_fee_pct + priority_fee_pct)
-                        entry_exec_label = "MAKER"
+                        base_px = best_bid
+                        if entry_offset > 0:
+                            entry_price = base_px + entry_offset
+                            if entry_price >= best_ask:
+                                fee = entry_price * sz * (taker_fee_pct + priority_fee_pct)
+                                entry_exec_label = "TAKER"
+                            else:
+                                fee = entry_price * sz * (maker_fee_pct + priority_fee_pct)
+                                entry_exec_label = "MAKER"
+                        elif concession > 0:
+                            entry_price = best_ask + concession
+                            fee = entry_price * sz * (taker_fee_pct + priority_fee_pct)
+                            entry_exec_label = "TAKER"
+                        else:
+                            # Passive Maker Buy at best bid
+                            entry_price = best_bid
+                            fee = entry_price * sz * (maker_fee_pct + priority_fee_pct)
+                            entry_exec_label = "MAKER"
                     else:
-                        # Smart Taker Buy
-                        entry_price = best_ask * (1.0 + slippage_pct)
+                        # Marketable Taker Buy with price concession
+                        if entry_offset > 0:
+                            entry_price = best_ask + entry_offset
+                        elif concession > 0:
+                            entry_price = best_ask + concession
+                        else:
+                            entry_price = best_ask * (1.0 + slippage_pct)
                         fee = entry_price * sz * (taker_fee_pct + priority_fee_pct)
                         entry_exec_label = "TAKER"
 
@@ -833,14 +907,37 @@ class EdgeEvaluator:
 
                 # Bearish Entry Trigger
                 elif score <= -entry_thresh:
+                    entry_offset = float(params.get("price_offset", 0.0) or params.get("entry_price_offset", 0.0) or 0.0)
+                    concession = float(params.get("price_concession", 0.0) or 0.0)
+                    if concession <= 0.0 and params.get("price_concession_ratio") is not None:
+                        concession = mid_price * float(params["price_concession_ratio"])
                     if is_maker:
-                        # Passive Maker Sell at best ask
-                        entry_price = best_ask
-                        fee = entry_price * sz * (maker_fee_pct + priority_fee_pct)
-                        entry_exec_label = "MAKER"
+                        base_px = best_ask
+                        if entry_offset > 0:
+                            entry_price = max(0.01, base_px - entry_offset)
+                            if entry_price <= best_bid:
+                                fee = entry_price * sz * (taker_fee_pct + priority_fee_pct)
+                                entry_exec_label = "TAKER"
+                            else:
+                                fee = entry_price * sz * (maker_fee_pct + priority_fee_pct)
+                                entry_exec_label = "MAKER"
+                        elif concession > 0:
+                            entry_price = max(0.01, best_bid - concession)
+                            fee = entry_price * sz * (taker_fee_pct + priority_fee_pct)
+                            entry_exec_label = "TAKER"
+                        else:
+                            # Passive Maker Sell at best ask
+                            entry_price = best_ask
+                            fee = entry_price * sz * (maker_fee_pct + priority_fee_pct)
+                            entry_exec_label = "MAKER"
                     else:
-                        # Smart Taker Sell
-                        entry_price = best_bid * (1.0 - slippage_pct)
+                        # Marketable Taker Sell with price concession
+                        if entry_offset > 0:
+                            entry_price = max(0.01, best_bid - entry_offset)
+                        elif concession > 0:
+                            entry_price = max(0.01, best_bid - concession)
+                        else:
+                            entry_price = best_bid * (1.0 - slippage_pct)
                         fee = entry_price * sz * (taker_fee_pct + priority_fee_pct)
                         entry_exec_label = "TAKER"
 

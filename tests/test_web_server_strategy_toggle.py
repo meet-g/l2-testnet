@@ -74,9 +74,9 @@ class TestWebServerStrategyToggle(unittest.TestCase):
         self.assertIn("execution_strategies", res)
         self.assertIn("scalping_strategies", res)
 
-        self.assertEqual(len(res["execution_strategies"]), 4)
+        self.assertEqual(len(res["execution_strategies"]), 5)
         self.assertEqual(len(res["scalping_strategies"]), 11)
-        self.assertEqual(len(res["strategies"]), 15)
+        self.assertEqual(len(res["strategies"]), 16)
 
         # Check category annotations
         for name in res["execution_strategies"]:
@@ -170,7 +170,7 @@ class TestWebServerStrategyToggle(unittest.TestCase):
         self.assertIn("strategies", snap)
 
         strats = snap["strategies"]
-        self.assertEqual(len(strats), 15, "Telemetry must contain all 15 strategies so none disappear")
+        self.assertEqual(len(strats), 16, "Telemetry must contain all 16 strategies so none disappear")
 
         # Momentum_Expansion was disabled -> must be present with enabled=False
         self.assertIn("Momentum_Expansion", strats)
@@ -196,7 +196,7 @@ class TestWebServerStrategyToggle(unittest.TestCase):
         self.assertTrue(res["scalping_mode"])
         self.assertTrue(res["is_scalping_mode"])
         self.assertEqual(res["enabled_count"], 11)
-        self.assertEqual(res["disabled_count"], 4)
+        self.assertEqual(res["disabled_count"], 5)
 
         # Verify in memory
         self.assertTrue(self.strat_cfg.is_scalping_mode_active)
@@ -222,7 +222,7 @@ class TestWebServerStrategyToggle(unittest.TestCase):
         self.assertEqual(res_core["status"], "ok")
         self.assertFalse(res_core["scalping_mode"])
         self.assertFalse(res_core["is_scalping_mode"])
-        self.assertEqual(res_core["enabled_count"], 3)  # Triad enabled, Queue_Replenishment off by default
+        self.assertEqual(res_core["enabled_count"], 4)  # Triad + Stock_Microstructure_Alpha enabled, Queue_Replenishment off by default
         self.assertEqual(res_core["disabled_count"], 12)
 
         # Verify on disk

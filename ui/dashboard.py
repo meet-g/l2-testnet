@@ -27,7 +27,7 @@ class TerminalDashboard:
     def __init__(self, console: Optional[Console] = None):
         self.console = console or Console()
 
-    def make_header(self, book: OrderBook, trades: TradeManager, network: str = "Testnet") -> Panel:
+    def make_header(self, book: OrderBook, trades: TradeManager, network: str = "Testnet", warmup_remaining_secs: float = 0.0) -> Panel:
         mid = book.mid_price
         spread = book.spread
         spread_bps = book.spread_bps
@@ -42,8 +42,12 @@ class TerminalDashboard:
 
         coin = (getattr(book, "coin", None) or getattr(trades, "coin", None) or "BTC").upper()
         net_badge = f"[bold magenta][{network.upper()}][/bold magenta]"
+        if warmup_remaining_secs > 0:
+            status_badge = f"[bold yellow on black] WARMUP ({warmup_remaining_secs:.1f}s) [/bold yellow on black]"
+        else:
+            status_badge = f"[bold green on black] ACTIVE [/bold green on black]"
         left_text = Text.from_markup(
-            f"[bold cyan]HYPERLIQUID L2 ENGINE[/bold cyan] {net_badge} | Coin: [bold yellow]{coin}[/bold yellow] | "
+            f"[bold cyan]HYPERLIQUID L2 ENGINE[/bold cyan] {net_badge} {status_badge} | Coin: [bold yellow]{coin}[/bold yellow] | "
             f"Updates: [green]{book.update_count}[/green]"
         )
 
@@ -229,7 +233,7 @@ class TerminalDashboard:
 
         return Panel(table, title="[bold]Recent Taker Trades[/bold]", border_style="yellow")
 
-    def make_strategy_activity_panel(self, evaluator: EdgeEvaluator, current_price: float, count: int = 4) -> Panel:
+    def make_strategy_activity_panel(self, evaluator: EdgeEvaluator, current_price: float, count: int = 4, warmup_remaining_secs: float = 0.0) -> Panel:
         """Renders currently open positions and real-time position open/close activity log."""
         active = evaluator.get_active_positions(current_price)
         events = evaluator.get_recent_position_events(limit=count)
@@ -305,9 +309,14 @@ class TerminalDashboard:
                 )
             elements.append(ev_table)
         else:
-            elements.append(
-                Text.from_markup("[dim]Awaiting signal conviction triggers to execute initial positions...[/dim]")
-            )
+            if warmup_remaining_secs > 0:
+                elements.append(
+                    Text.from_markup(f"[bold yellow]Warming up microstructure buffers ({warmup_remaining_secs:.1f}s remaining)... Holding trades.[/bold yellow]")
+                )
+            else:
+                elements.append(
+                    Text.from_markup("[dim]Awaiting signal conviction triggers to execute initial positions...[/dim]")
+                )
 
         return Panel(
             Group(*elements),
@@ -322,6 +331,7 @@ class TerminalDashboard:
         signals_dict: Dict[str, Any],
         evaluator: EdgeEvaluator,
         network: str = "Testnet",
+        warmup_remaining_secs: float = 0.0,
     ) -> Layout:
         """Constructs full dashboard grid layout."""
         layout = Layout()
@@ -342,13 +352,13 @@ class TerminalDashboard:
             Layout(name="strategy_activity", ratio=6),
         )
 
-        layout["header"].update(self.make_header(book, trades, network=network))
+        layout["header"].update(self.make_header(book, trades, network=network, warmup_remaining_secs=warmup_remaining_secs))
         layout["book"].update(self.make_orderbook_panel(book))
         layout["signals"].update(self.make_signals_panel(signals_dict))
         layout["perf"].update(self.make_performance_panel(evaluator, book.mid_price))
         layout["market_trades"].update(self.make_trades_panel(trades, count=5))
         layout["strategy_activity"].update(
-            self.make_strategy_activity_panel(evaluator, book.mid_price, count=4)
+            self.make_strategy_activity_panel(evaluator, book.mid_price, count=4, warmup_remaining_secs=warmup_remaining_secs)
         )
 
         return layout

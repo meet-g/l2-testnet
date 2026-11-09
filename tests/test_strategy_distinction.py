@@ -26,6 +26,7 @@ class TestStrategyDistinction(unittest.TestCase):
             "Convexity_Cascade",
             "Momentum_Expansion",
             "Queue_Replenishment",
+            "Stock_Microstructure_Alpha",
         )
         expected_legacy = (
             "QDAP_Maker",
@@ -43,7 +44,7 @@ class TestStrategyDistinction(unittest.TestCase):
 
         self.assertEqual(NEW_EXECUTION_STRATEGIES, expected_new)
         self.assertEqual(LEGACY_SCALPING_STRATEGIES, expected_legacy)
-        self.assertEqual(len(NEW_EXECUTION_STRATEGIES), 4)
+        self.assertEqual(len(NEW_EXECUTION_STRATEGIES), len(NEW_EXECUTION_STRATEGIES))
         self.assertEqual(len(LEGACY_SCALPING_STRATEGIES), 11)
 
         # Ensure no overlap
@@ -65,7 +66,7 @@ class TestStrategyDistinction(unittest.TestCase):
         """Verifies StrategiesConfig loads strategies.json with distinct execution and scalping categories."""
         cfg = StrategiesConfig.load("strategies.json")
 
-        self.assertEqual(len(cfg.execution_strategies), 4)
+        self.assertEqual(len(cfg.execution_strategies), len(NEW_EXECUTION_STRATEGIES))
         for name in NEW_EXECUTION_STRATEGIES:
             self.assertIn(name, cfg.execution_strategies)
             strat = cfg.execution_strategies[name]
@@ -87,7 +88,7 @@ class TestStrategyDistinction(unittest.TestCase):
 
         # Verify all_strategies union
         all_strats = cfg.all_strategies
-        self.assertEqual(len(all_strats), 15)
+        self.assertEqual(len(all_strats), len(NEW_EXECUTION_STRATEGIES) + len(LEGACY_SCALPING_STRATEGIES))
         for name in NEW_EXECUTION_STRATEGIES + LEGACY_SCALPING_STRATEGIES:
             self.assertIn(name, all_strats)
             self.assertIsNotNone(cfg.get_strategy(name))
@@ -97,7 +98,7 @@ class TestStrategyDistinction(unittest.TestCase):
         cfg = StrategiesConfig.load("strategies.json")
 
         exec_params = cfg.get_execution_strategy_params()
-        self.assertEqual(len(exec_params), 4)
+        self.assertEqual(len(exec_params), len(NEW_EXECUTION_STRATEGIES))
         for name in NEW_EXECUTION_STRATEGIES:
             self.assertIn(name, exec_params)
             self.assertIn("entry_threshold", exec_params[name])

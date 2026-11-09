@@ -12,7 +12,8 @@
     "use_native_tpsl": true,
     "priority_fee_bps": 0.0,
     "force_market_orders": false,
-    "market_slippage_pct": 0.0005
+    "market_slippage_pct": 0.0005,
+    "warmup_secs": 10.0
   },
   "execution_strategies": {
     "Hedged_Convexity": {
@@ -90,6 +91,29 @@
       "min_volatility_bps": 4.5,
       "loss_cooldown_secs": 120,
       "coentry_group": "queue_replenishment"
+    },
+    "Stock_Microstructure_Alpha": {
+      "enabled": true,
+      "description": "High-frequency microstructure alpha engineered specifically for Hyperliquid lower-fee stock pairs (XYZ equities), harvesting MicroPrice fair-value drift, 5-level depth imbalance, VOI delta queues, and tight fee-hurdle trailing ratchets",
+      "signal_key": "StockMicrostructure",
+      "execution_type": "HEDGED_MAKER",
+      "price_offset": 0.01,
+      "entry_threshold": 0.55,
+      "order_size_btc": 10.0,
+      "take_profit_bps": 7.0,
+      "stop_loss_bps": 5.5,
+      "trailing_stop_activation_bps": 1.8,
+      "trailing_stop_distance_bps": 0.8,
+      "max_holding_time_secs": 35,
+      "exit_reversal_threshold": 0.2,
+      "hedge_trigger_loss_bps": -3.5,
+      "hedge_reversal_threshold": -0.15,
+      "min_volatility_bps": 0.0,
+      "loss_cooldown_secs": 30,
+      "coentry_group": "stock_alpha",
+      "trend_filter_enabled": true,
+      "trend_window_secs": 60.0,
+      "max_counter_trend_bps": 1.5
     }
   },
   "alpha_signals": {
@@ -127,6 +151,11 @@
       "enabled": true,
       "weight": 0.15,
       "description": "CVD vs Price Divergence (Passive Limit Wall Absorption)"
+    },
+    "StockMicrostructure": {
+      "enabled": true,
+      "weight": 0.0,
+      "description": "Stock Microstructure Alpha (MicroPrice fair-value drift + D5 order book imbalance + VOI queue deltas + 10s CVD flow)"
     }
   }
 }

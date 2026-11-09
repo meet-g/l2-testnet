@@ -66,6 +66,7 @@ class LiveOrderExecutor:
         priority_fee_bps: Optional[float] = None,
         force_market_orders: Optional[bool] = None,
         market_slippage_pct: Optional[float] = None,
+        warmup_secs: Optional[float] = None,
     ):
         self.config = config or AppConfig()
         self.console = console or Console()
@@ -150,8 +151,30 @@ class LiveOrderExecutor:
         self.priority_fee_bps: float = priority_fee_bps if priority_fee_bps is not None else getattr(live_cfg, "priority_fee_bps", 0.0)
         self.force_market_orders: bool = force_market_orders if force_market_orders is not None else getattr(live_cfg, "force_market_orders", False)
         self.market_slippage_pct: float = market_slippage_pct if market_slippage_pct is not None else getattr(live_cfg, "market_slippage_pct", 0.0005)
+        self.warmup_secs: float = float(
+            warmup_secs if warmup_secs is not None else 0.0
+        )
+        self.startup_time: float = time.time()
+        self._first_signal_time: Optional[float] = None
 
         self._initialize()
+
+    @property
+    def is_warming_up(self) -> bool:
+        """Returns True if the executor is within its initial warmup wait period."""
+        if self.warmup_secs <= 0:
+            return False
+        if self._first_signal_time is None:
+            return True
+        return (time.time() - self._first_signal_time) < self.warmup_secs
+
+    @property
+    def warmup_remaining_secs(self) -> float:
+        """Returns remaining seconds in executor warmup period."""
+        if self.warmup_secs <= 0 or self._first_signal_time is None:
+            return 0.0
+        remaining = self.warmup_secs - (time.time() - self._first_signal_time)
+        return max(0.0, remaining)
 
     def _initialize(self) -> None:
         """Initializes Hyperliquid SDK client with configured wallet, account address, and coin metadata."""
@@ -2277,6 +2300,9 @@ class LiveOrderExecutor:
             return
 
         now = time.time()
+        if self._first_signal_time is None:
+            self._first_signal_time = now
+
         # Periodic background sync (throttled to 5s)
         self.sync_state(force=False)
         pos = self.cached_position
@@ -2561,6 +2587,19 @@ class LiveOrderExecutor:
                     target_exit_px = self.format_price(best_ask)
 
                 if exit_triggered:
+                    exit_concession = float(getattr(strat_cfg, "exit_concession", 0.0) or 0.0)
+                    if exit_concession <= 0.0 and getattr(strat_cfg, "exit_concession_ratio", None) is not None:
+                        exit_concession = mid_price * float(strat_cfg.exit_concession_ratio)
+                    if exit_concession > 0:
+                        self.console.print(f"[bold magenta][LiveExecutor] [{active_strat_name}] Unfavourable Concession Exit ({exit_reason_label}): selling position at ${best_bid - exit_concession:,.2f} (-${exit_concession:.2f})...[/bold magenta]")
+                        if self.active_order and self.active_order.get("is_exit") and self.active_order.get("pending", False):
+                            return
+                        if self.active_order:
+                            self.cancel_order(self.active_order["oid"])
+                        exit_px = self.format_price(max(0.01, best_bid - exit_concession))
+                        self.place_limit_order(is_buy=False, size_btc=abs(pos), price=exit_px, post_only=False, tif="Ioc", signal_score=signal_score, is_exit=True, strategy_name=active_strat_name, exit_reason=exit_reason_label)
+                        return
+
                     if self.force_market_orders:
                         self.console.print(f"[bold magenta][LiveExecutor] [{active_strat_name}] Forced Market Exit: selling position at market with {self.market_slippage_pct*100:.2f}% slippage...[/bold magenta]")
                         if self.active_order and self.active_order.get("is_exit") and self.active_order.get("pending", False):
@@ -2833,6 +2872,19 @@ class LiveOrderExecutor:
                     target_exit_px = self.format_price(best_bid)
 
                 if exit_triggered:
+                    exit_concession = float(getattr(strat_cfg, "exit_concession", 0.0) or 0.0)
+                    if exit_concession <= 0.0 and getattr(strat_cfg, "exit_concession_ratio", None) is not None:
+                        exit_concession = mid_price * float(strat_cfg.exit_concession_ratio)
+                    if exit_concession > 0:
+                        self.console.print(f"[bold magenta][LiveExecutor] [{active_strat_name}] Unfavourable Concession Exit ({exit_reason_label}): buying to cover position at ${best_ask + exit_concession:,.2f} (+${exit_concession:.2f})...[/bold magenta]")
+                        if self.active_order and self.active_order.get("is_exit") and self.active_order.get("pending", False):
+                            return
+                        if self.active_order:
+                            self.cancel_order(self.active_order["oid"])
+                        exit_px = self.format_price(best_ask + exit_concession)
+                        self.place_limit_order(is_buy=True, size_btc=abs(pos), price=exit_px, post_only=False, tif="Ioc", signal_score=signal_score, is_exit=True, strategy_name=active_strat_name, exit_reason=exit_reason_label)
+                        return
+
                     if self.force_market_orders:
                         self.console.print(f"[bold magenta][LiveExecutor] [{active_strat_name}] Forced Market Exit: buying to cover position at market with {self.market_slippage_pct*100:.2f}% slippage...[/bold magenta]")
                         if self.active_order and self.active_order.get("is_exit") and self.active_order.get("pending", False):
@@ -2908,6 +2960,12 @@ class LiveOrderExecutor:
         # Hysteresis parameters
         cancel_decay_floor = maker_threshold * 0.40
 
+        # Warmup Guard: Suppress new order entries while microstructure buffers stabilize
+        if self.is_warming_up:
+            if self.active_order and not self.active_order.get("is_exit"):
+                self.cancel_order(self.active_order["oid"])
+            return
+
         # Position safety guard: Do not place new entries if already holding a position at or above max_position_btc
         if abs(self.cached_position) >= (self.max_position_btc - 1e-6):
             return
@@ -2981,7 +3039,7 @@ class LiveOrderExecutor:
                 return
 
             if is_smart_taker:
-                # Immediate Marketable Taker Fill: Cross spread immediately at best_ask
+                # Immediate Marketable Taker Fill: Cross spread immediately with price concession to guarantee execution
                 spread_bps = ((best_ask - best_bid) / mid_price) * 10_000.0 if mid_price > 0 else 0.0
                 if spread_bps > max_entry_spread_bps:
                     self.console.print(f"[dim yellow][LiveExecutor] [{active_strat_name}] Skipping aggressive taker buy: spread ({spread_bps:.1f} bps) exceeds limit ({max_entry_spread_bps:.1f} bps).[/dim yellow]")
@@ -2992,14 +3050,19 @@ class LiveOrderExecutor:
                 if self.active_order and not self.active_order.get("is_exit"):
                     self.cancel_order(self.active_order["oid"])
 
+                concession = float(getattr(strat_cfg, "price_concession", 0.0) or 0.0)
+                if concession <= 0.0 and getattr(strat_cfg, "price_concession_ratio", None) is not None:
+                    concession = mid_price * float(strat_cfg.price_concession_ratio)
+                entry_target_px = self.format_price(best_ask + concession)
+
                 if self.use_native_tpsl:
                     emergency_tp_bps = float(getattr(strat_cfg, "emergency_tp_bps", 25.0) or 25.0)
-                    tp_px = self.format_price(best_ask * (1.0 + (emergency_tp_bps / 10000.0)))
-                    sl_px = self.format_price(best_ask * (1.0 - (sl_bps / 10000.0)))
+                    tp_px = self.format_price(entry_target_px * (1.0 + (emergency_tp_bps / 10000.0)))
+                    sl_px = self.format_price(entry_target_px * (1.0 - (sl_bps / 10000.0)))
                     self.place_bracket_order(
                         is_buy=True,
                         size_btc=order_size,
-                        price=best_ask,
+                        price=entry_target_px,
                         tp_price=tp_px,
                         sl_price=sl_px,
                         post_only=False,
@@ -3010,7 +3073,7 @@ class LiveOrderExecutor:
                     self.place_limit_order(
                         is_buy=True,
                         size_btc=order_size,
-                        price=best_ask,
+                        price=entry_target_px,
                         post_only=False,
                         signal_score=signal_score,
                         is_exit=False,
@@ -3019,11 +3082,19 @@ class LiveOrderExecutor:
                 return
 
             if spread > tick_size * 1.5 and (best_bid + tick_size < best_ask):
-                target_px = self.format_price(best_bid + tick_size)
-                if target_px >= best_ask:
-                    target_px = self.format_price(best_bid)
+                base_px = self.format_price(best_bid + tick_size)
+                if base_px >= best_ask:
+                    base_px = self.format_price(best_bid)
             else:
-                target_px = self.format_price(best_bid)
+                base_px = self.format_price(best_bid)
+
+            entry_offset = float(
+                getattr(strat_cfg, "price_offset", 0.0)
+                or getattr(strat_cfg, "entry_price_offset", 0.0)
+                or 0.0
+            )
+            target_px = self.format_price(base_px + entry_offset) if entry_offset > 0 else base_px
+            entry_post_only = (target_px < best_ask)
 
             # Check existing resting order persistence with fast-fill escalation
             if self.active_order and self.active_order.get("is_buy"):
@@ -3048,7 +3119,7 @@ class LiveOrderExecutor:
                             is_buy=True,
                             size_btc=order_size,
                             price=target_px,
-                            post_only=True,
+                            post_only=entry_post_only,
                             signal_score=signal_score,
                             is_exit=False,
                             strategy_name=active_strat_name,
@@ -3063,7 +3134,7 @@ class LiveOrderExecutor:
                     is_buy=True,
                     size_btc=order_size,
                     price=target_px,
-                    post_only=True,
+                    post_only=entry_post_only,
                     signal_score=signal_score,
                     is_exit=False,
                     strategy_name=active_strat_name,
@@ -3085,7 +3156,7 @@ class LiveOrderExecutor:
                     price=target_px,
                     tp_price=tp_px,
                     sl_price=sl_px,
-                    post_only=True,
+                    post_only=entry_post_only,
                     signal_score=signal_score,
                     strategy_name=active_strat_name,
                 )
@@ -3094,7 +3165,7 @@ class LiveOrderExecutor:
                     is_buy=True,
                     size_btc=order_size,
                     price=target_px,
-                    post_only=True,
+                    post_only=entry_post_only,
                     signal_score=signal_score,
                     is_exit=False,
                     strategy_name=active_strat_name,
@@ -3157,7 +3228,7 @@ class LiveOrderExecutor:
                 return
 
             if is_smart_taker:
-                # Immediate Marketable Taker Fill: Cross spread immediately at best_bid
+                # Immediate Marketable Taker Fill: Cross spread immediately with price concession to guarantee execution
                 spread_bps = ((best_ask - best_bid) / mid_price) * 10_000.0 if mid_price > 0 else 0.0
                 if spread_bps > max_entry_spread_bps:
                     self.console.print(f"[dim yellow][LiveExecutor] [{active_strat_name}] Skipping aggressive taker sell: spread ({spread_bps:.1f} bps) exceeds limit ({max_entry_spread_bps:.1f} bps).[/dim yellow]")
@@ -3168,14 +3239,19 @@ class LiveOrderExecutor:
                 if self.active_order and not self.active_order.get("is_exit"):
                     self.cancel_order(self.active_order["oid"])
 
+                concession = float(getattr(strat_cfg, "price_concession", 0.0) or 0.0)
+                if concession <= 0.0 and getattr(strat_cfg, "price_concession_ratio", None) is not None:
+                    concession = mid_price * float(strat_cfg.price_concession_ratio)
+                entry_target_px = self.format_price(max(0.01, best_bid - concession))
+
                 if self.use_native_tpsl:
                     emergency_tp_bps = float(getattr(strat_cfg, "emergency_tp_bps", 25.0) or 25.0)
-                    tp_px = self.format_price(best_bid * (1.0 - (emergency_tp_bps / 10000.0)))
-                    sl_px = self.format_price(best_bid * (1.0 + (sl_bps / 10000.0)))
+                    tp_px = self.format_price(entry_target_px * (1.0 - (emergency_tp_bps / 10000.0)))
+                    sl_px = self.format_price(entry_target_px * (1.0 + (sl_bps / 10000.0)))
                     self.place_bracket_order(
                         is_buy=False,
                         size_btc=order_size,
-                        price=best_bid,
+                        price=entry_target_px,
                         tp_price=tp_px,
                         sl_price=sl_px,
                         post_only=False,
@@ -3186,7 +3262,7 @@ class LiveOrderExecutor:
                     self.place_limit_order(
                         is_buy=False,
                         size_btc=order_size,
-                        price=best_bid,
+                        price=entry_target_px,
                         post_only=False,
                         signal_score=signal_score,
                         is_exit=False,
@@ -3195,11 +3271,19 @@ class LiveOrderExecutor:
                 return
 
             if spread > tick_size * 1.5 and (best_ask - tick_size > best_bid):
-                target_px = self.format_price(best_ask - tick_size)
-                if target_px <= best_bid:
-                    target_px = self.format_price(best_ask)
+                base_px = self.format_price(best_ask - tick_size)
+                if base_px <= best_bid:
+                    base_px = self.format_price(best_ask)
             else:
-                target_px = self.format_price(best_ask)
+                base_px = self.format_price(best_ask)
+
+            entry_offset = float(
+                getattr(strat_cfg, "price_offset", 0.0)
+                or getattr(strat_cfg, "entry_price_offset", 0.0)
+                or 0.0
+            )
+            target_px = self.format_price(max(0.01, base_px - entry_offset)) if entry_offset > 0 else base_px
+            entry_post_only = (target_px > best_bid)
 
             # Check existing resting order persistence with fast-fill escalation
             if self.active_order and not self.active_order.get("is_buy"):
@@ -3224,7 +3308,7 @@ class LiveOrderExecutor:
                             is_buy=False,
                             size_btc=order_size,
                             price=target_px,
-                            post_only=True,
+                            post_only=entry_post_only,
                             signal_score=signal_score,
                             is_exit=False,
                             strategy_name=active_strat_name,
@@ -3239,7 +3323,7 @@ class LiveOrderExecutor:
                     is_buy=False,
                     size_btc=order_size,
                     price=target_px,
-                    post_only=True,
+                    post_only=entry_post_only,
                     signal_score=signal_score,
                     is_exit=False,
                     strategy_name=active_strat_name,
@@ -3261,7 +3345,7 @@ class LiveOrderExecutor:
                     price=target_px,
                     tp_price=tp_px,
                     sl_price=sl_px,
-                    post_only=True,
+                    post_only=entry_post_only,
                     signal_score=signal_score,
                     strategy_name=active_strat_name,
                 )
@@ -3270,7 +3354,7 @@ class LiveOrderExecutor:
                     is_buy=False,
                     size_btc=order_size,
                     price=target_px,
-                    post_only=True,
+                    post_only=entry_post_only,
                     signal_score=signal_score,
                     is_exit=False,
                     strategy_name=active_strat_name,

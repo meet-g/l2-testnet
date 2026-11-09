@@ -14,6 +14,7 @@ from signals.momentum_expansion import MomentumExpansionSignal
 from signals.convexity_cascade import ConvexityCascadeSignal
 from signals.hedged_convexity import HedgedConvexitySignal
 from signals.queue_replenishment import QueueReplenishmentSignal
+from signals.stock_microstructure import StockMicrostructureSignal
 from signals.qdap import QDAPSignal
 from signals.sweep import SweepSignal
 from signals.voi import VOISignal
@@ -55,7 +56,7 @@ class CompositeAlphaSignal(BaseSignal):
             for sig in [
                 "WOBI", "VOI", "MicroPrice", "VPIN", "Absorption", "Sweep",
                 "AdaptiveML", "QDAP", "MomentumExpansion", "ConvexityCascade",
-                "HedgedConvexity", "QueueReplenishment", "InstantFill", "DynamicSpread"
+                "HedgedConvexity", "QueueReplenishment", "InstantFill", "DynamicSpread", "StockMicrostructure"
             ]
         }
 
@@ -75,6 +76,7 @@ class CompositeAlphaSignal(BaseSignal):
         self.signal_queue_rep = self.signal_queue_replenishment
         self.signal_instant_fill = InstantFillSignal()
         self.signal_dynamic_spread = DynamicSpreadSignal()
+        self.signal_stock_micro = StockMicrostructureSignal()
 
     def is_enabled(self, sig_name: str) -> bool:
         """Returns True if the signal is enabled in configuration."""
@@ -106,6 +108,7 @@ class CompositeAlphaSignal(BaseSignal):
         en_qr = self.is_enabled("QueueReplenishment")
         en_instant_fill = self.is_enabled("InstantFill")
         en_dynamic_spread = self.is_enabled("DynamicSpread")
+        en_stock_micro = self.is_enabled("StockMicrostructure")
 
         res_wobi = self.signal_wobi.compute(book, trades, now_ms) if en_wobi else SignalResult("WOBI", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
         res_voi = self.signal_voi.compute(book, trades, now_ms) if en_voi else SignalResult("VOI", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
@@ -126,6 +129,7 @@ class CompositeAlphaSignal(BaseSignal):
         res_qr = self.signal_queue_replenishment.compute(book, trades, now_ms) if en_qr else SignalResult("QueueReplenishment", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
         res_instant_fill = self.signal_instant_fill.compute(book, trades, now_ms) if en_instant_fill else SignalResult("InstantFill", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
         res_dynamic_spread = self.signal_dynamic_spread.compute(book, trades, now_ms) if en_dynamic_spread else SignalResult("DynamicSpread", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
+        res_stock_micro = self.signal_stock_micro.compute(book, trades, now_ms) if en_stock_micro else SignalResult("StockMicrostructure", 0.0, 0.0, 0.0, now_ms, {"enabled": False})
 
         # Attach enabled state to sub-signal metadata
         res_wobi.metadata["enabled"] = en_wobi
@@ -142,6 +146,7 @@ class CompositeAlphaSignal(BaseSignal):
         res_qr.metadata["enabled"] = en_qr
         res_instant_fill.metadata["enabled"] = en_instant_fill
         res_dynamic_spread.metadata["enabled"] = en_dynamic_spread
+        res_stock_micro.metadata["enabled"] = en_stock_micro
 
         # Detect regime
         is_toxic = res_vpin.metadata.get("is_toxic", False) and en_vpin
@@ -222,6 +227,7 @@ class CompositeAlphaSignal(BaseSignal):
                     "QueueReplenishment": res_qr,
                     "InstantFill": res_instant_fill,
                     "DynamicSpread": res_dynamic_spread,
+                    "StockMicrostructure": res_stock_micro,
                 },
             },
         )

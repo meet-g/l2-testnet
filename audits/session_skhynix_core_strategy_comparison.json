@@ -1,0 +1,57 @@
+{
+  "Hedged_Convexity": {
+    "trades": 0,
+    "wins": 0,
+    "losses": 0,
+    "win_rate_pct": 0.0,
+    "gross_pnl_usd": 0,
+    "total_fees_usd": 0,
+    "net_pnl_usd": 0,
+    "profit_factor": 0.0,
+    "avg_return_bps": 0.0
+  },
+  "Convexity_Cascade": {
+    "trades": 1,
+    "wins": 0,
+    "losses": 1,
+    "win_rate_pct": 0.0,
+    "gross_pnl_usd": -4.72,
+    "total_fees_usd": 0.51,
+    "net_pnl_usd": -5.23,
+    "profit_factor": 0.0,
+    "avg_return_bps": -6.15
+  },
+  "Momentum_Expansion": {
+    "trades": 0,
+    "wins": 0,
+    "losses": 0,
+    "win_rate_pct": 0.0,
+    "gross_pnl_usd": 0,
+    "total_fees_usd": 0,
+    "net_pnl_usd": 0,
+    "profit_factor": 0.0,
+    "avg_return_bps": 0.0
+  },
+  "Queue_Replenishment": {
+    "trades": 0,
+    "wins": 0,
+    "losses": 0,
+    "win_rate_pct": 0.0,
+    "gross_pnl_usd": 0,
+    "total_fees_usd": 0,
+    "net_pnl_usd": 0,
+    "profit_factor": 0.0,
+    "avg_return_bps": 0.0
+  },
+  "Stock_Microstructure_Alpha": {
+    "trades": 126,
+    "wins": 80,
+    "losses": 46,
+    "win_rate_pct": 63.5,
+    "gross_pnl_usd": 162.91,
+    "total_fees_usd": 71.61,
+    "net_pnl_usd": 91.3,
+    "profit_factor": 1.52,
+    "avg_return_bps": 0.86
+  }
+}

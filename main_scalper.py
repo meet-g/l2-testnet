@@ -73,9 +73,11 @@ def print_scalper_strategies_status(cfg: Optional[AppConfig] = None, console: Op
     mkt_forced = getattr(strat_cfg.live_execution, "force_market_orders", False)
     mkt_slip = getattr(strat_cfg.live_execution, "market_slippage_pct", 0.0005)
     if mkt_forced:
-        console.print(f"Forced Market Orders:    [bold red]ENABLED (Taker IOC)[/bold red] [dim]|[/dim] Slippage Tolerance: [bold yellow]{mkt_slip*100:.2f}%[/bold yellow] ({mkt_slip*10000:.1f} bps)\n")
+        console.print(f"Forced Market Orders:    [bold red]ENABLED (Taker IOC)[/bold red] [dim]|[/dim] Slippage Tolerance: [bold yellow]{mkt_slip*100:.2f}%[/bold yellow] ({mkt_slip*10000:.1f} bps)")
     else:
-        console.print(f"Forced Market Orders:    [dim green]DISABLED (Standard Maker / Smart Taker Scalp)[/dim green]\n")
+        console.print(f"Forced Market Orders:    [dim green]DISABLED (Standard Maker / Smart Taker Scalp)[/dim green]")
+    warmup_s = getattr(strat_cfg.live_execution, "warmup_secs", 10.0)
+    console.print(f"Warmup Wait Buffer:      [bold yellow]{warmup_s:.1f}s[/bold yellow] (Microstructure stabilization delay)\n")
 
     table_scalp = Table(title="Scalping Strategies (11 Micro-Scalp Maker & Taker Strategies)", header_style="bold yellow")
     table_scalp.add_column("Strategy Name", justify="left", style="bold", no_wrap=True)
@@ -211,6 +213,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Force program to execute via market orders (aggressive IOC taker). Usage: --market true/false.",
     )
     parser.add_argument("--slippage", type=float, default=None, help="Market order slippage tolerance percentage (e.g. 0.05 for 5 bps)")
+    parser.add_argument(
+        "--warmup",
+        type=float,
+        default=None,
+        help="Initial warmup buffer wait time in seconds before strategies can enter trades (default: 10.0s, set 0 to disable)",
+    )
     return parser
 
 
@@ -254,6 +262,10 @@ def main():
     if args.priority_fee is not None:
         cfg.strategies.live_execution.priority_fee_bps = args.priority_fee
         cfg.backtest.priority_fee_bps = args.priority_fee
+
+    if args.warmup is not None:
+        cfg.strategies.live_execution.warmup_secs = float(args.warmup)
+        cfg.backtest.warmup_secs = float(args.warmup)
 
     if (args.save_config or force_market is not None or market_slippage is not None) and not args.no_save and args.save_config:
         cfg.strategies.save()
@@ -420,6 +432,12 @@ def main():
         else:
             console.print(f"[bold cyan]Priority Fee:[/bold cyan] [dim]0.0 bps (Standard Consensus Queue)[/dim]")
 
+        warmup_val = args.warmup if args.warmup is not None else getattr(cfg.strategies.live_execution, "warmup_secs", 10.0)
+        if warmup_val > 0:
+            console.print(f"[bold cyan]Warmup Wait Time:[/bold cyan] [bold yellow]{warmup_val:.1f}s[/bold yellow] (Buffers L2 book, trades, CVD, and VPIN before trading)")
+        else:
+            console.print(f"[bold cyan]Warmup Wait Time:[/bold cyan] [dim]Disabled (0.0s - Instant execution)[/dim]")
+
         if args.live_orders:
             cfg.backtest.order_size_btc = args.order_size
             net = cfg.hyperliquid.network_name.upper()
@@ -435,6 +453,7 @@ def main():
             web_mode=enable_web,
             web_port=args.port,
             open_browser=args.open_browser,
+            warmup_secs=warmup_val,
         )
         try:
             asyncio.run(runner.run_live(duration_secs=args.duration if args.duration > 0 else None, show_ui=show_cli_ui))
