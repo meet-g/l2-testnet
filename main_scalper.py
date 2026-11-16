@@ -77,7 +77,12 @@ def print_scalper_strategies_status(cfg: Optional[AppConfig] = None, console: Op
     else:
         console.print(f"Forced Market Orders:    [dim green]DISABLED (Standard Maker / Smart Taker Scalp)[/dim green]")
     warmup_s = getattr(strat_cfg.live_execution, "warmup_secs", 10.0)
-    console.print(f"Warmup Wait Buffer:      [bold yellow]{warmup_s:.1f}s[/bold yellow] (Microstructure stabilization delay)\n")
+    console.print(f"Warmup Wait Buffer:      [bold yellow]{warmup_s:.1f}s[/bold yellow] (Microstructure stabilization delay)")
+    midpoint_peg = getattr(strat_cfg.live_execution, "midpoint_pegging", False)
+    if midpoint_peg:
+        console.print(f"Midpoint Pegging:        [bold green]ENABLED (Aggressive inside-spread maker pricing)[/bold green]\n")
+    else:
+        console.print(f"Midpoint Pegging:        [dim]DISABLED (Passive touch / Penny jumping)[/dim]\n")
 
     table_scalp = Table(title="Scalping Strategies (11 Micro-Scalp Maker & Taker Strategies)", header_style="bold yellow")
     table_scalp.add_column("Strategy Name", justify="left", style="bold", no_wrap=True)
@@ -206,11 +211,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--priority-fee", type=float, default=None, help="Sequencer priority fee in bps")
     parser.add_argument(
         "--market",
+        "--market-orders",
+        "--force-market",
+        "--force-market-orders",
         nargs="?",
         const="true",
         default=None,
         type=str,
-        help="Force program to execute via market orders (aggressive IOC taker). Usage: --market true/false.",
+        help="Force program to execute via market orders (aggressive IOC taker). Usage: --market, --market true/false.",
+    )
+    parser.add_argument(
+        "--no-market",
+        "--no-market-orders",
+        "--no-force-market",
+        dest="no_market",
+        action="store_true",
+        help="Disable forced market orders (use standard maker / smart taker scalping).",
     )
     parser.add_argument("--slippage", type=float, default=None, help="Market order slippage tolerance percentage (e.g. 0.05 for 5 bps)")
     parser.add_argument(
@@ -218,6 +234,34 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help="Initial warmup buffer wait time in seconds before strategies can enter trades (default: 10.0s, set 0 to disable)",
+    )
+    parser.add_argument(
+        "--midpoint-pegging",
+        dest="midpoint_pegging",
+        action="store_true",
+        default=None,
+        help="Enable midpoint pegging for maker orders (quotes inside spread at mid price, cushion >= 1 tick)",
+    )
+    parser.add_argument(
+        "--no-midpoint-pegging",
+        dest="midpoint_pegging",
+        action="store_false",
+        default=None,
+        help="Disable midpoint pegging for maker orders (fall back to passive touch or penny jumping)",
+    )
+    parser.add_argument(
+        "--fast-ws",
+        dest="enable_fast_ws",
+        action="store_true",
+        default=None,
+        help="Enable sidecar fast WebSocket stream for low-latency trade taking alongside normal full-depth recording stream (default: enabled in scalper)",
+    )
+    parser.add_argument(
+        "--no-fast-ws",
+        dest="enable_fast_ws",
+        action="store_false",
+        default=None,
+        help="Disable sidecar fast WebSocket stream (use single normal WebSocket for everything)",
     )
     return parser
 
@@ -241,7 +285,9 @@ def main():
 
     # Market order and slippage configuration
     force_market = None
-    if args.market is not None:
+    if getattr(args, "no_market", False):
+        force_market = False
+    elif args.market is not None:
         force_market = str(args.market).strip().lower() in ("true", "1", "yes", "t", "on")
     elif args.slippage is not None:
         force_market = True
@@ -267,7 +313,11 @@ def main():
         cfg.strategies.live_execution.warmup_secs = float(args.warmup)
         cfg.backtest.warmup_secs = float(args.warmup)
 
-    if (args.save_config or force_market is not None or market_slippage is not None) and not args.no_save and args.save_config:
+    if args.midpoint_pegging is not None:
+        cfg.strategies.live_execution.midpoint_pegging = bool(args.midpoint_pegging)
+        cfg.backtest.midpoint_pegging = bool(args.midpoint_pegging)
+
+    if (args.save_config or force_market is not None or market_slippage is not None or args.midpoint_pegging is not None) and not args.no_save and args.save_config:
         cfg.strategies.save()
 
     # Configure network environment
@@ -432,11 +482,23 @@ def main():
         else:
             console.print(f"[bold cyan]Priority Fee:[/bold cyan] [dim]0.0 bps (Standard Consensus Queue)[/dim]")
 
+        if getattr(cfg.strategies.live_execution, "force_market_orders", False):
+            m_slip = getattr(cfg.strategies.live_execution, "market_slippage_pct", 0.0005)
+            console.print(f"[bold cyan]Execution Mode:[/bold cyan] [bold magenta]FORCED MARKET ORDERS (Taker IOC)[/bold magenta] | Slippage: [bold yellow]{m_slip*100:.2f}%[/bold yellow] ({m_slip*10000:.1f} bps)")
+        else:
+            console.print(f"[bold cyan]Execution Mode:[/bold cyan] [bold green]Standard Maker / Smart Taker Scalp[/bold green]")
+
         warmup_val = args.warmup if args.warmup is not None else getattr(cfg.strategies.live_execution, "warmup_secs", 10.0)
         if warmup_val > 0:
             console.print(f"[bold cyan]Warmup Wait Time:[/bold cyan] [bold yellow]{warmup_val:.1f}s[/bold yellow] (Buffers L2 book, trades, CVD, and VPIN before trading)")
         else:
             console.print(f"[bold cyan]Warmup Wait Time:[/bold cyan] [dim]Disabled (0.0s - Instant execution)[/dim]")
+
+        midpoint_peg_val = getattr(cfg.strategies.live_execution, "midpoint_pegging", False)
+        console.print(f"[bold cyan]Midpoint-Pegging:[/bold cyan] {'[bold green]ENABLED (Aggressive inside-spread maker pricing)[/bold green]' if midpoint_peg_val else '[dim]DISABLED (Passive touch / Penny jumping)[/dim]'}")
+
+        enable_fast_ws_val = args.enable_fast_ws if args.enable_fast_ws is not None else True
+        console.print(f"[bold cyan]Dual-WebSocket Mode:[/bold cyan] {'[bold green]ENABLED (Normal 20-level book for clean data gathering + Sidecar Fast book for taking trades)[/bold green]' if enable_fast_ws_val else '[dim]DISABLED (Single Normal WebSocket)[/dim]'}")
 
         if args.live_orders:
             cfg.backtest.order_size_btc = args.order_size
@@ -454,6 +516,7 @@ def main():
             web_port=args.port,
             open_browser=args.open_browser,
             warmup_secs=warmup_val,
+            enable_fast_ws=args.enable_fast_ws,
         )
         try:
             asyncio.run(runner.run_live(duration_secs=args.duration if args.duration > 0 else None, show_ui=show_cli_ui))
@@ -467,6 +530,13 @@ def main():
     elif args.mode == "benchmark":
         duration = args.duration if args.duration > 0 else 30
         console.print(f"[bold yellow]Running scalper benchmark on {cfg.market.coin} ({cfg.hyperliquid.network_name}) for {duration} seconds...[/bold yellow]")
+        if getattr(cfg.strategies.live_execution, "force_market_orders", False):
+            m_slip = getattr(cfg.strategies.live_execution, "market_slippage_pct", 0.0005)
+            console.print(f"[bold cyan]Execution Mode:[/bold cyan] [bold magenta]FORCED MARKET ORDERS (Taker IOC)[/bold magenta] | Slippage: [bold yellow]{m_slip*100:.2f}%[/bold yellow] ({m_slip*10000:.1f} bps)")
+        else:
+            console.print(f"[bold cyan]Execution Mode:[/bold cyan] [bold green]Standard Maker / Smart Taker Scalp[/bold green]")
+        enable_fast_ws_val = args.enable_fast_ws if args.enable_fast_ws is not None else True
+        console.print(f"[bold cyan]Dual-WebSocket Mode:[/bold cyan] {'[bold green]ENABLED (Normal 20-level book for clean data gathering + Sidecar Fast book for taking trades)[/bold green]' if enable_fast_ws_val else '[dim]DISABLED (Single Normal WebSocket)[/dim]'}")
         runner = L2EngineRunner(
             config=cfg,
             record_data=True,
@@ -474,6 +544,7 @@ def main():
             web_mode=enable_web,
             web_port=args.port,
             open_browser=args.open_browser,
+            enable_fast_ws=args.enable_fast_ws,
         )
         try:
             asyncio.run(runner.run_live(duration_secs=duration, show_ui=show_cli_ui))

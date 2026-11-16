@@ -109,10 +109,11 @@ class OrderBook:
             return ((self.mid_price - self.oracle_price) / self.oracle_price) * 10_000.0
         return self.premium_bps
 
-    def update_from_raw(self, raw_data: Dict[str, Any], is_macro: Optional[bool] = None) -> None:
+    def update_from_raw(self, raw_data: Dict[str, Any], is_macro: Optional[bool] = None, is_fast: bool = False) -> None:
         """Parses and updates the order book from Hyperliquid WS or REST payload.
         
-        Supports both raw 1-tick order books and aggregated macro depth (e.g. nSigFigs=4).
+        Supports raw 1-tick order books, aggregated macro depth (e.g. nSigFigs=4),
+        and high-frequency fast touch updates (which refresh the top-of-book without dropping deeper depth).
         If is_macro is None, automatically detects macro book by analyzing level tick spacing.
         """
         levels = raw_data.get("levels", [[], []])
@@ -150,14 +151,28 @@ class OrderBook:
             return
 
         # Granular / Microstructure 1-tick book
-        self.bids = parsed_bids
-        self.asks = parsed_asks
+        if is_fast and len(parsed_bids) <= 10 and len(self.bids) > len(parsed_bids):
+            # Retain deeper levels beyond the fast touch window
+            fast_lowest_bid = parsed_bids[-1].px
+            deeper_bids = [b for b in self.bids if b.px < fast_lowest_bid]
+            self.bids = parsed_bids + deeper_bids
+        else:
+            self.bids = parsed_bids
+
+        if is_fast and len(parsed_asks) <= 10 and len(self.asks) > len(parsed_asks):
+            # Retain deeper levels beyond the fast touch window
+            fast_highest_ask = parsed_asks[-1].px
+            deeper_asks = [a for a in self.asks if a.px > fast_highest_ask]
+            self.asks = parsed_asks + deeper_asks
+        else:
+            self.asks = parsed_asks
+
         self.last_update_time_ms = timestamp
         self.update_count += 1
 
         # Store in rolling history for delta / VOI calculations only if enabled
         if self.enable_history and self.history is not None:
-            snapshot = BookSnapshot(timestamp_ms=timestamp, bids=parsed_bids, asks=parsed_asks)
+            snapshot = BookSnapshot(timestamp_ms=timestamp, bids=self.bids, asks=self.asks)
             self.history.append(snapshot)
 
     @property

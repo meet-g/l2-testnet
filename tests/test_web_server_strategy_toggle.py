@@ -14,6 +14,7 @@ from ui.web_server import (
     DashboardWebServer,
     ScalpingModeRequest,
     StrategyToggleRequest,
+    MarketOrdersToggleRequest,
     TelemetryBroadcaster,
     create_web_app,
 )
@@ -253,14 +254,14 @@ class TestWebServerStrategyToggle(unittest.TestCase):
             paper_state.trades = [mock_trade] * 11
             paper_state.realized_pnl_usd = 2.23
 
-        # 2. Configure runner in LIVE MODE with 1 actual losing trade (-$1.50)
+        # 2. Configure runner in LIVE MODE with 1 actual losing trade (-$1.60 net)
         self.runner.live_orders = True
         mock_lx = MagicMock()
         mock_lx.cached_position = 0.0
         mock_lx.entry_price = 0.0
         mock_lx.account_value = 100.0
-        mock_lx.initial_account_value = 101.50
-        mock_lx.session_realized_pnl = -1.50
+        mock_lx.initial_account_value = 101.60
+        mock_lx.session_realized_pnl = -1.60
         mock_lx.completed_trades = [
             {
                 "strategy": "Momentum_Expansion",
@@ -310,7 +311,68 @@ class TestWebServerStrategyToggle(unittest.TestCase):
         port = snap["portfolio"]
         self.assertTrue(port["is_live"])
         self.assertEqual(port["total_trades"], 1)
-        self.assertEqual(port["total_realized_pnl"], -1.50)
+        self.assertEqual(port["total_realized_pnl"], -1.60)
+
+    def test_toggle_market_orders_endpoint(self):
+        """Verifies /api/config/market_orders endpoint toggles market orders and propagates to runner & live executor."""
+        mock_executor = MagicMock()
+        mock_executor.force_market_orders = False
+        mock_executor.market_slippage_pct = 0.0005
+        self.runner.live_executor = mock_executor
+
+        endpoint = self._get_route_endpoint("/api/config/market_orders", "POST")
+
+        # 1. Turn Forced Market Orders ON with 1.5% (150 bps) slippage
+        req_on = MarketOrdersToggleRequest(enabled=True, slippage_pct=0.015, save=False)
+        res_on = asyncio.run(endpoint(req_on))
+
+        self.assertEqual(res_on["status"], "ok")
+        self.assertTrue(res_on["force_market_orders"])
+        self.assertEqual(res_on["market_slippage_pct"], 0.015)
+        self.assertTrue(self.runner.config.strategies.live_execution.force_market_orders)
+        self.assertEqual(self.runner.config.strategies.live_execution.market_slippage_pct, 0.015)
+        self.assertTrue(self.runner.config.backtest.force_market_orders)
+        self.assertEqual(self.runner.config.backtest.market_slippage_pct, 0.015)
+        self.assertTrue(mock_executor.force_market_orders)
+        self.assertEqual(mock_executor.market_slippage_pct, 0.015)
+
+        # 2. Turn Forced Market Orders OFF
+        req_off = MarketOrdersToggleRequest(enabled=False, save=False)
+        res_off = asyncio.run(endpoint(req_off))
+
+        self.assertEqual(res_off["status"], "ok")
+        self.assertFalse(res_off["force_market_orders"])
+        self.assertFalse(self.runner.config.strategies.live_execution.force_market_orders)
+        self.assertFalse(self.runner.config.backtest.force_market_orders)
+        self.assertFalse(mock_executor.force_market_orders)
+
+    def test_telemetry_snapshot_includes_market_orders_state(self):
+        """Verifies emitted telemetry snapshot carries force_market_orders and market_slippage_pct flags."""
+        server = DashboardWebServer(self.runner, port=8888)
+        self.runner.config.strategies.live_execution.force_market_orders = True
+        self.runner.config.strategies.live_execution.market_slippage_pct = 0.0075
+
+        captured = []
+        async def mock_broadcast(data, force=False):
+            captured.append(data)
+
+        server.broadcaster.broadcast_snapshot = mock_broadcast
+        server.broadcaster.last_broadcast_time = 0.0
+
+        asyncio.run(server.emit_telemetry(
+            book=self.runner.book,
+            trades=self.runner.trades,
+            display_signals={"CompositeAlpha": 0.0},
+            evaluator=self.evaluator,
+            network="Testnet",
+        ))
+
+        self.assertEqual(len(captured), 1)
+        snap = captured[0]
+        self.assertTrue(snap["force_market_orders"])
+        self.assertEqual(snap["market_slippage_pct"], 0.0075)
+        self.assertTrue(snap["market"]["force_market_orders"])
+        self.assertEqual(snap["market"]["market_slippage_pct"], 0.0075)
 
 
 if __name__ == "__main__":

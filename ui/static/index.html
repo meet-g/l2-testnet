@@ -78,6 +78,12 @@
         <span id="nav-scalping-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
         <span id="nav-scalping-label">NORMAL MODE</span>
       </button>
+      <button id="nav-market-toggle-btn" onclick="toggleForcedMarketOrders()"
+              title="Click to toggle Forced Market Orders (aggressive IOC taker) ON / OFF"
+              class="flex items-center space-x-1.5 px-2.5 py-0.5 text-xs font-mono font-bold rounded-full border transition-all cursor-pointer bg-slate-900 border-slate-700 text-slate-400 hover:text-white">
+        <span id="nav-market-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+        <span id="nav-market-label">MAKER MODE</span>
+      </button>
     </div>
 
     <!-- Live Telemetry Quick Pills -->
@@ -284,6 +290,31 @@
                       title="Turn Scalping ON (8 scalping strategies) or OFF (4 core strategies)"
                       class="w-12 h-6 flex items-center rounded-full p-0.5 cursor-pointer transition-colors duration-200 bg-slate-700 focus:outline-none">
                 <div id="scalping-switch-circle"
+                     class="bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-200 translate-x-0"></div>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Forced Market Orders Master Switch -->
+        <div class="bg-dark-bg/80 border border-dark-border/80 rounded-lg p-2.5 mb-2 transition-all">
+          <div class="flex items-center justify-between">
+            <div class="flex flex-col">
+              <div class="flex items-center space-x-1.5">
+                <span class="text-xs font-bold text-slate-200 tracking-wide">Market Orders Override</span>
+                <span id="market-mode-badge" class="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">HYBRID (MAKER)</span>
+              </div>
+              <span id="market-mode-subtitle" class="text-[10px] text-slate-400 font-mono mt-0.5">Passive maker quoting / smart hedged hybrid</span>
+            </div>
+
+            <!-- Animated Master Market Switch -->
+            <div class="flex items-center space-x-2">
+              <span id="market-switch-text" class="text-xs font-mono font-bold text-slate-400">OFF</span>
+              <button id="btn-master-market-switch"
+                      onclick="toggleForcedMarketOrders()"
+                      title="Force all strategy entries & exits to execute immediately as aggressive market orders (IOC taker)"
+                      class="w-12 h-6 flex items-center rounded-full p-0.5 cursor-pointer transition-colors duration-200 bg-slate-700 focus:outline-none hover:bg-slate-600">
+                <div id="market-switch-circle"
                      class="bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-200 translate-x-0"></div>
               </button>
             </div>
@@ -534,6 +565,12 @@
       document.getElementById('badge-mode').className = data.is_live_orders 
         ? 'px-2 py-0.5 text-xs font-semibold rounded bg-rose-950 text-rose-300 border border-rose-800'
         : 'px-2 py-0.5 text-xs font-semibold rounded bg-purple-950 text-purple-300 border border-purple-800';
+
+      if (data.force_market_orders !== undefined || (m && m.force_market_orders !== undefined)) {
+        const isMkt = (data.force_market_orders !== undefined) ? data.force_market_orders : m.force_market_orders;
+        const slip = (data.market_slippage_pct !== undefined) ? data.market_slippage_pct : (m.market_slippage_pct || 0.0005);
+        updateMarketOrdersUI(isMkt, slip);
+      }
 
       const midStr = `$${(m.mid_price || 0).toLocaleString(undefined, {minimumFractionDigits: (m.mid_price < 100 ? 2 : 1), maximumFractionDigits: (m.mid_price < 100 ? 3 : 2)})}`;
       document.getElementById('nav-mid').innerText = midStr;
@@ -847,6 +884,95 @@
         } else {
           btnCore.className = 'px-2 py-0.5 rounded text-[10px] font-mono transition-all border border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200';
           btnScalp.className = 'px-2 py-0.5 rounded text-[10px] font-mono transition-all border border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200';
+        }
+      }
+    }
+
+    let isForcedMarketOrdersActive = false;
+    let currentMarketSlippage = 0.0005;
+
+    function toggleForcedMarketOrders() {
+      setForcedMarketOrders(!isForcedMarketOrdersActive);
+    }
+
+    async function setForcedMarketOrders(enabled, slippagePct = null) {
+      try {
+        const payload = { enabled: Boolean(enabled), save: true };
+        if (slippagePct !== null) payload.slippage_pct = parseFloat(slippagePct);
+        const res = await fetch('/api/config/market_orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const d = await res.json();
+        if (d.status === 'ok') {
+          updateMarketOrdersUI(d.force_market_orders, d.market_slippage_pct);
+          const msg = d.force_market_orders 
+            ? `Forced Market Orders ENABLED (Taker IOC | ${(d.market_slippage_pct * 100).toFixed(2)}% slippage)`
+            : `Forced Market Orders DISABLED (Passive Maker / Smart Taker)`;
+          showToast(msg, d.force_market_orders ? 'warning' : 'success');
+        } else {
+          showToast('Failed to toggle market orders: ' + (d.detail || d.message), 'error');
+        }
+      } catch (e) {
+        showToast('Failed to toggle market orders: ' + e.message, 'error');
+      }
+    }
+
+    function updateMarketOrdersUI(isMarket, slippagePct) {
+      isForcedMarketOrdersActive = Boolean(isMarket);
+      if (slippagePct !== undefined && slippagePct !== null) {
+        currentMarketSlippage = slippagePct;
+      }
+      const slipBps = (currentMarketSlippage * 10000).toFixed(0);
+
+      // 1. Navigation header button
+      const navBtn = document.getElementById('nav-market-toggle-btn');
+      const navDot = document.getElementById('nav-market-dot');
+      const navLabel = document.getElementById('nav-market-label');
+      if (navBtn && navDot && navLabel) {
+        if (isForcedMarketOrdersActive) {
+          navBtn.className = 'flex items-center space-x-1.5 px-2.5 py-0.5 text-xs font-mono font-bold rounded-full border transition-all cursor-pointer bg-fuchsia-950/80 border-fuchsia-700 text-fuchsia-300 shadow-sm';
+          navDot.className = 'w-2 h-2 rounded-full bg-fuchsia-400 live-pulse';
+          navLabel.innerText = `MARKET IOC (${slipBps}b)`;
+        } else {
+          navBtn.className = 'flex items-center space-x-1.5 px-2.5 py-0.5 text-xs font-mono font-bold rounded-full border transition-all cursor-pointer bg-slate-900 border-slate-700 text-slate-400 hover:text-white';
+          navDot.className = 'w-2 h-2 rounded-full bg-slate-500';
+          navLabel.innerText = 'MAKER MODE';
+        }
+      }
+
+      // 2. Control card toggle switch in sidebar
+      const switchBtn = document.getElementById('btn-master-market-switch');
+      const switchCircle = document.getElementById('market-switch-circle');
+      const switchText = document.getElementById('market-switch-text');
+      const badgeEl = document.getElementById('market-mode-badge');
+      const subtitleEl = document.getElementById('market-mode-subtitle');
+      if (switchBtn && switchCircle && switchText) {
+        if (isForcedMarketOrdersActive) {
+          switchBtn.className = 'w-12 h-6 flex items-center rounded-full p-0.5 cursor-pointer transition-colors duration-200 bg-fuchsia-600 focus:outline-none ring-2 ring-fuchsia-500/40 shadow-sm';
+          switchCircle.className = 'bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-200 translate-x-6';
+          switchText.innerText = 'IOC';
+          switchText.className = 'text-xs font-mono font-bold text-fuchsia-400';
+          if (badgeEl) {
+            badgeEl.innerText = `FORCED TAKER (${slipBps} bps)`;
+            badgeEl.className = 'text-[9px] font-mono px-1.5 py-0.5 rounded font-bold bg-fuchsia-950 text-fuchsia-300 border border-fuchsia-800';
+          }
+          if (subtitleEl) {
+            subtitleEl.innerText = `All orders cross book immediately as IOC takers (tol: ${(currentMarketSlippage * 100).toFixed(2)}%)`;
+          }
+        } else {
+          switchBtn.className = 'w-12 h-6 flex items-center rounded-full p-0.5 cursor-pointer transition-colors duration-200 bg-slate-700 focus:outline-none hover:bg-slate-600';
+          switchCircle.className = 'bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-200 translate-x-0';
+          switchText.innerText = 'OFF';
+          switchText.className = 'text-xs font-mono font-bold text-slate-400';
+          if (badgeEl) {
+            badgeEl.innerText = 'HYBRID (MAKER)';
+            badgeEl.className = 'text-[9px] font-mono px-1.5 py-0.5 rounded font-bold bg-emerald-950 text-emerald-300 border border-emerald-800';
+          }
+          if (subtitleEl) {
+            subtitleEl.innerText = 'Standard passive maker quoting and smart hedged taker hybrid';
+          }
         }
       }
     }

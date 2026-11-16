@@ -1,0 +1,575 @@
+{
+  "strategy": "Stock_Microstructure_Alpha",
+  "market": "HYPE",
+  "min_size_mb": 10.0,
+  "total_datasets": 28,
+  "total_size_mb": 381.3,
+  "elapsed_seconds": 51.04,
+  "total_trades": 463,
+  "wins": 172,
+  "losses": 291,
+  "win_rate_pct": 37.15,
+  "profit_factor": 1.56,
+  "cumulative_gross_pnl_usd": 62.2768,
+  "cumulative_fees_usd": 232.3717,
+  "cumulative_net_pnl_usd": -170.0949,
+  "avg_return_bps": -4.57,
+  "exit_distribution": {
+    "TIME_LIMIT": 18,
+    "TRAILING_STOP": 129,
+    "TAKE_PROFIT": 154,
+    "DEFENSIVE_MAKER_HEDGE": 80,
+    "STOP_LOSS": 68,
+    "SIGNAL_REVERSAL": 12,
+    "SESSION_SHUTDOWN": 2
+  },
+  "session_results": [
+    {
+      "filename": "hl_hype_l2_20261029_1000.jsonl",
+      "size_mb": 32.25,
+      "trades": 8,
+      "wins": 5,
+      "losses": 3,
+      "win_rate_pct": 62.5,
+      "profit_factor": 171.13,
+      "gross_pnl": 6.8051,
+      "fees": 3.6198,
+      "net_pnl": 3.1853,
+      "avg_return_bps": 4.91,
+      "exit_counts": {
+        "TIME_LIMIT": 1,
+        "TRAILING_STOP": 2,
+        "TAKE_PROFIT": 5
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261008_1600.jsonl",
+      "size_mb": 19.31,
+      "trades": 22,
+      "wins": 9,
+      "losses": 13,
+      "win_rate_pct": 40.91,
+      "profit_factor": 1.26,
+      "gross_pnl": 1.6965,
+      "fees": 11.1434,
+      "net_pnl": -9.4469,
+      "avg_return_bps": -5.09,
+      "exit_counts": {
+        "DEFENSIVE_MAKER_HEDGE": 5,
+        "TAKE_PROFIT": 8,
+        "TIME_LIMIT": 1,
+        "TRAILING_STOP": 4,
+        "STOP_LOSS": 4
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261020_1500.jsonl",
+      "size_mb": 18.14,
+      "trades": 19,
+      "wins": 9,
+      "losses": 10,
+      "win_rate_pct": 47.37,
+      "profit_factor": 4.4,
+      "gross_pnl": 7.27,
+      "fees": 8.9994,
+      "net_pnl": -1.7294,
+      "avg_return_bps": -1.11,
+      "exit_counts": {
+        "TRAILING_STOP": 7,
+        "TAKE_PROFIT": 8,
+        "DEFENSIVE_MAKER_HEDGE": 4
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261026_1700.jsonl",
+      "size_mb": 17.08,
+      "trades": 13,
+      "wins": 4,
+      "losses": 9,
+      "win_rate_pct": 30.77,
+      "profit_factor": 1.53,
+      "gross_pnl": 2.7139,
+      "fees": 6.4203,
+      "net_pnl": -3.7065,
+      "avg_return_bps": -3.54,
+      "exit_counts": {
+        "TRAILING_STOP": 3,
+        "TAKE_PROFIT": 4,
+        "STOP_LOSS": 3,
+        "DEFENSIVE_MAKER_HEDGE": 3
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261015_1500.jsonl",
+      "size_mb": 16.48,
+      "trades": 18,
+      "wins": 5,
+      "losses": 13,
+      "win_rate_pct": 27.78,
+      "profit_factor": 0.59,
+      "gross_pnl": -3.1829,
+      "fees": 9.0774,
+      "net_pnl": -12.2603,
+      "avg_return_bps": -8.57,
+      "exit_counts": {
+        "STOP_LOSS": 4,
+        "TAKE_PROFIT": 4,
+        "TRAILING_STOP": 4,
+        "DEFENSIVE_MAKER_HEDGE": 6
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261029_1100.jsonl",
+      "size_mb": 15.29,
+      "trades": 5,
+      "wins": 3,
+      "losses": 2,
+      "win_rate_pct": 60.0,
+      "profit_factor": 99.9,
+      "gross_pnl": 2.8371,
+      "fees": 2.0712,
+      "net_pnl": 0.7659,
+      "avg_return_bps": 1.77,
+      "exit_counts": {
+        "TAKE_PROFIT": 3,
+        "TRAILING_STOP": 2
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261013_0100.jsonl",
+      "size_mb": 14.76,
+      "trades": 18,
+      "wins": 7,
+      "losses": 11,
+      "win_rate_pct": 38.89,
+      "profit_factor": 1.26,
+      "gross_pnl": 1.1513,
+      "fees": 9.1649,
+      "net_pnl": -8.0137,
+      "avg_return_bps": -5.54,
+      "exit_counts": {
+        "TAKE_PROFIT": 6,
+        "SIGNAL_REVERSAL": 1,
+        "TRAILING_STOP": 2,
+        "TIME_LIMIT": 1,
+        "DEFENSIVE_MAKER_HEDGE": 5,
+        "STOP_LOSS": 3
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261013_0000.jsonl",
+      "size_mb": 14.36,
+      "trades": 15,
+      "wins": 3,
+      "losses": 12,
+      "win_rate_pct": 20.0,
+      "profit_factor": 0.67,
+      "gross_pnl": -1.8739,
+      "fees": 8.3211,
+      "net_pnl": -10.195,
+      "avg_return_bps": -8.34,
+      "exit_counts": {
+        "DEFENSIVE_MAKER_HEDGE": 3,
+        "TRAILING_STOP": 2,
+        "TAKE_PROFIT": 3,
+        "STOP_LOSS": 4,
+        "TIME_LIMIT": 2,
+        "SIGNAL_REVERSAL": 1
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261015_0300.jsonl",
+      "size_mb": 14.23,
+      "trades": 27,
+      "wins": 10,
+      "losses": 17,
+      "win_rate_pct": 37.04,
+      "profit_factor": 1.82,
+      "gross_pnl": 4.8647,
+      "fees": 13.6041,
+      "net_pnl": -8.7395,
+      "avg_return_bps": -4.06,
+      "exit_counts": {
+        "TAKE_PROFIT": 9,
+        "TRAILING_STOP": 11,
+        "STOP_LOSS": 4,
+        "DEFENSIVE_MAKER_HEDGE": 2,
+        "SIGNAL_REVERSAL": 1
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261008_1700.jsonl",
+      "size_mb": 14.03,
+      "trades": 18,
+      "wins": 5,
+      "losses": 13,
+      "win_rate_pct": 27.78,
+      "profit_factor": 1.07,
+      "gross_pnl": 0.4202,
+      "fees": 9.3168,
+      "net_pnl": -8.8966,
+      "avg_return_bps": -5.88,
+      "exit_counts": {
+        "TRAILING_STOP": 5,
+        "TAKE_PROFIT": 4,
+        "STOP_LOSS": 4,
+        "DEFENSIVE_MAKER_HEDGE": 4,
+        "SIGNAL_REVERSAL": 1
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261108_2100.jsonl",
+      "size_mb": 13.72,
+      "trades": 6,
+      "wins": 2,
+      "losses": 4,
+      "win_rate_pct": 33.33,
+      "profit_factor": 1.55,
+      "gross_pnl": 0.5057,
+      "fees": 2.7172,
+      "net_pnl": -2.2114,
+      "avg_return_bps": -4.87,
+      "exit_counts": {
+        "TIME_LIMIT": 3,
+        "TAKE_PROFIT": 1,
+        "DEFENSIVE_MAKER_HEDGE": 1,
+        "TRAILING_STOP": 1
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261008_1800.jsonl",
+      "size_mb": 12.88,
+      "trades": 29,
+      "wins": 11,
+      "losses": 18,
+      "win_rate_pct": 37.93,
+      "profit_factor": 1.83,
+      "gross_pnl": 5.4846,
+      "fees": 15.2541,
+      "net_pnl": -9.7695,
+      "avg_return_bps": -4.04,
+      "exit_counts": {
+        "TAKE_PROFIT": 10,
+        "DEFENSIVE_MAKER_HEDGE": 5,
+        "TRAILING_STOP": 6,
+        "STOP_LOSS": 3,
+        "SIGNAL_REVERSAL": 3,
+        "TIME_LIMIT": 1,
+        "SESSION_SHUTDOWN": 1
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261109_1400.jsonl",
+      "size_mb": 12.66,
+      "trades": 17,
+      "wins": 7,
+      "losses": 10,
+      "win_rate_pct": 41.18,
+      "profit_factor": 2.55,
+      "gross_pnl": 4.5525,
+      "fees": 7.6235,
+      "net_pnl": -3.071,
+      "avg_return_bps": -2.42,
+      "exit_counts": {
+        "TAKE_PROFIT": 7,
+        "TRAILING_STOP": 4,
+        "TIME_LIMIT": 1,
+        "DEFENSIVE_MAKER_HEDGE": 4,
+        "STOP_LOSS": 1
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261015_1400.jsonl",
+      "size_mb": 12.61,
+      "trades": 13,
+      "wins": 1,
+      "losses": 12,
+      "win_rate_pct": 7.69,
+      "profit_factor": 0.79,
+      "gross_pnl": -0.6903,
+      "fees": 7.026,
+      "net_pnl": -7.7162,
+      "avg_return_bps": -7.61,
+      "exit_counts": {
+        "STOP_LOSS": 4,
+        "TRAILING_STOP": 8,
+        "TAKE_PROFIT": 1
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261010_1500.jsonl",
+      "size_mb": 12.08,
+      "trades": 19,
+      "wins": 5,
+      "losses": 14,
+      "win_rate_pct": 26.32,
+      "profit_factor": 0.89,
+      "gross_pnl": -0.6476,
+      "fees": 10.2748,
+      "net_pnl": -10.9225,
+      "avg_return_bps": -6.7,
+      "exit_counts": {
+        "DEFENSIVE_MAKER_HEDGE": 5,
+        "TRAILING_STOP": 6,
+        "TAKE_PROFIT": 4,
+        "STOP_LOSS": 3,
+        "SIGNAL_REVERSAL": 1
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261109_0700.jsonl",
+      "size_mb": 12.03,
+      "trades": 25,
+      "wins": 11,
+      "losses": 14,
+      "win_rate_pct": 44.0,
+      "profit_factor": 1.65,
+      "gross_pnl": 3.7237,
+      "fees": 11.4428,
+      "net_pnl": -7.7191,
+      "avg_return_bps": -4.2,
+      "exit_counts": {
+        "TRAILING_STOP": 7,
+        "DEFENSIVE_MAKER_HEDGE": 3,
+        "TAKE_PROFIT": 10,
+        "TIME_LIMIT": 1,
+        "STOP_LOSS": 4
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261108_2200.jsonl",
+      "size_mb": 11.63,
+      "trades": 23,
+      "wins": 13,
+      "losses": 10,
+      "win_rate_pct": 56.52,
+      "profit_factor": 1.61,
+      "gross_pnl": 3.8726,
+      "fees": 11.631,
+      "net_pnl": -7.7584,
+      "avg_return_bps": -4.51,
+      "exit_counts": {
+        "STOP_LOSS": 6,
+        "TAKE_PROFIT": 12,
+        "TRAILING_STOP": 3,
+        "DEFENSIVE_MAKER_HEDGE": 1,
+        "SIGNAL_REVERSAL": 1
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261102_1700.jsonl",
+      "size_mb": 11.58,
+      "trades": 13,
+      "wins": 5,
+      "losses": 8,
+      "win_rate_pct": 38.46,
+      "profit_factor": 1.33,
+      "gross_pnl": 1.1468,
+      "fees": 6.8112,
+      "net_pnl": -5.6644,
+      "avg_return_bps": -5.19,
+      "exit_counts": {
+        "TAKE_PROFIT": 4,
+        "DEFENSIVE_MAKER_HEDGE": 2,
+        "TRAILING_STOP": 5,
+        "STOP_LOSS": 2
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261007_0300.jsonl",
+      "size_mb": 11.55,
+      "trades": 15,
+      "wins": 7,
+      "losses": 8,
+      "win_rate_pct": 46.67,
+      "profit_factor": 1.64,
+      "gross_pnl": 2.4898,
+      "fees": 8.1408,
+      "net_pnl": -5.651,
+      "avg_return_bps": -4.16,
+      "exit_counts": {
+        "TRAILING_STOP": 6,
+        "TAKE_PROFIT": 4,
+        "STOP_LOSS": 3,
+        "DEFENSIVE_MAKER_HEDGE": 2
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261016_1600.jsonl",
+      "size_mb": 11.31,
+      "trades": 15,
+      "wins": 5,
+      "losses": 10,
+      "win_rate_pct": 33.33,
+      "profit_factor": 2.03,
+      "gross_pnl": 2.198,
+      "fees": 7.3691,
+      "net_pnl": -5.1711,
+      "avg_return_bps": -4.36,
+      "exit_counts": {
+        "TRAILING_STOP": 6,
+        "TAKE_PROFIT": 5,
+        "DEFENSIVE_MAKER_HEDGE": 3,
+        "STOP_LOSS": 1
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261015_1600.jsonl",
+      "size_mb": 10.82,
+      "trades": 17,
+      "wins": 7,
+      "losses": 10,
+      "win_rate_pct": 41.18,
+      "profit_factor": 2.15,
+      "gross_pnl": 3.1155,
+      "fees": 8.2697,
+      "net_pnl": -5.1542,
+      "avg_return_bps": -3.74,
+      "exit_counts": {
+        "SIGNAL_REVERSAL": 1,
+        "DEFENSIVE_MAKER_HEDGE": 2,
+        "TRAILING_STOP": 7,
+        "TAKE_PROFIT": 5,
+        "STOP_LOSS": 2
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261024_0900.jsonl",
+      "size_mb": 10.78,
+      "trades": 7,
+      "wins": 1,
+      "losses": 6,
+      "win_rate_pct": 14.29,
+      "profit_factor": 2.72,
+      "gross_pnl": 1.0343,
+      "fees": 3.1878,
+      "net_pnl": -2.1535,
+      "avg_return_bps": -4.05,
+      "exit_counts": {
+        "TIME_LIMIT": 2,
+        "TRAILING_STOP": 3,
+        "TAKE_PROFIT": 1,
+        "DEFENSIVE_MAKER_HEDGE": 1
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261020_1600.jsonl",
+      "size_mb": 10.7,
+      "trades": 15,
+      "wins": 5,
+      "losses": 10,
+      "win_rate_pct": 33.33,
+      "profit_factor": 1.18,
+      "gross_pnl": 0.7805,
+      "fees": 7.6973,
+      "net_pnl": -6.9169,
+      "avg_return_bps": -5.78,
+      "exit_counts": {
+        "TAKE_PROFIT": 4,
+        "SIGNAL_REVERSAL": 1,
+        "TRAILING_STOP": 4,
+        "DEFENSIVE_MAKER_HEDGE": 4,
+        "STOP_LOSS": 2
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261021_1600.jsonl",
+      "size_mb": 10.54,
+      "trades": 11,
+      "wins": 4,
+      "losses": 7,
+      "win_rate_pct": 36.36,
+      "profit_factor": 1.62,
+      "gross_pnl": 1.487,
+      "fees": 5.6444,
+      "net_pnl": -4.1574,
+      "avg_return_bps": -4.61,
+      "exit_counts": {
+        "DEFENSIVE_MAKER_HEDGE": 2,
+        "TRAILING_STOP": 3,
+        "SIGNAL_REVERSAL": 1,
+        "TAKE_PROFIT": 4,
+        "STOP_LOSS": 1
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261012_1500.jsonl",
+      "size_mb": 10.25,
+      "trades": 16,
+      "wins": 5,
+      "losses": 11,
+      "win_rate_pct": 31.25,
+      "profit_factor": 3.07,
+      "gross_pnl": 3.5682,
+      "fees": 8.1311,
+      "net_pnl": -4.5629,
+      "avg_return_bps": -3.37,
+      "exit_counts": {
+        "TRAILING_STOP": 5,
+        "TAKE_PROFIT": 5,
+        "TIME_LIMIT": 3,
+        "DEFENSIVE_MAKER_HEDGE": 3
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261023_1500.jsonl",
+      "size_mb": 10.11,
+      "trades": 20,
+      "wins": 8,
+      "losses": 12,
+      "win_rate_pct": 40.0,
+      "profit_factor": 1.12,
+      "gross_pnl": 0.6611,
+      "fees": 10.2897,
+      "net_pnl": -9.6286,
+      "avg_return_bps": -6.17,
+      "exit_counts": {
+        "STOP_LOSS": 4,
+        "TRAILING_STOP": 3,
+        "DEFENSIVE_MAKER_HEDGE": 4,
+        "TAKE_PROFIT": 8,
+        "TIME_LIMIT": 1
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261014_1500.jsonl",
+      "size_mb": 10.08,
+      "trades": 14,
+      "wins": 3,
+      "losses": 11,
+      "win_rate_pct": 21.43,
+      "profit_factor": 1.11,
+      "gross_pnl": 0.4166,
+      "fees": 7.199,
+      "net_pnl": -6.7824,
+      "avg_return_bps": -6.05,
+      "exit_counts": {
+        "TAKE_PROFIT": 3,
+        "DEFENSIVE_MAKER_HEDGE": 3,
+        "TRAILING_STOP": 4,
+        "TIME_LIMIT": 1,
+        "STOP_LOSS": 2,
+        "SESSION_SHUTDOWN": 1
+      }
+    },
+    {
+      "filename": "hl_hype_l2_20261109_1600.jsonl",
+      "size_mb": 10.04,
+      "trades": 25,
+      "wins": 12,
+      "losses": 13,
+      "win_rate_pct": 48.0,
+      "profit_factor": 2.03,
+      "gross_pnl": 5.8758,
+      "fees": 11.9237,
+      "net_pnl": -6.0479,
+      "avg_return_bps": -3.22,
+      "exit_counts": {
+        "TAKE_PROFIT": 12,
+        "STOP_LOSS": 4,
+        "TRAILING_STOP": 6,
+        "DEFENSIVE_MAKER_HEDGE": 3
+      }
+    }
+  ]
+}

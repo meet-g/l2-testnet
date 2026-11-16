@@ -71,7 +71,12 @@ def print_core_strategies_status(cfg: Optional[AppConfig] = None, console: Optio
     else:
         console.print(f"Forced Market Orders:    [dim green]DISABLED (Passive Maker / Smart Hedged Hybrid)[/dim green]")
     warmup_s = getattr(strat_cfg.live_execution, "warmup_secs", 10.0)
-    console.print(f"Warmup Wait Buffer:      [bold yellow]{warmup_s:.1f}s[/bold yellow] (Microstructure stabilization delay)\n")
+    console.print(f"Warmup Wait Buffer:      [bold yellow]{warmup_s:.1f}s[/bold yellow] (Microstructure stabilization delay)")
+    midpoint_peg = getattr(strat_cfg.live_execution, "midpoint_pegging", False)
+    if midpoint_peg:
+        console.print(f"Midpoint Pegging:        [bold green]ENABLED (Aggressive inside-spread maker pricing)[/bold green]\n")
+    else:
+        console.print(f"Midpoint Pegging:        [dim]DISABLED (Passive touch / Penny jumping)[/dim]\n")
 
     table_exec = Table(title=f"Primary Execution Strategies ({len(CORE_EXECUTION_STRATEGIES)} Core Microstructure Strategies)", header_style="bold cyan")
     table_exec.add_column("Strategy Name", justify="left", style="bold", no_wrap=True)
@@ -200,11 +205,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--priority-fee", type=float, default=None, help="Sequencer priority fee in bps")
     parser.add_argument(
         "--market",
+        "--market-orders",
+        "--force-market",
+        "--force-market-orders",
         nargs="?",
         const="true",
         default=None,
         type=str,
-        help="Force program to execute via market orders (aggressive IOC taker). Usage: --market true/false.",
+        help="Force program to execute via market orders (aggressive IOC taker). Usage: --market, --market true/false.",
+    )
+    parser.add_argument(
+        "--no-market",
+        "--no-market-orders",
+        "--no-force-market",
+        dest="no_market",
+        action="store_true",
+        help="Disable forced market orders (use passive maker / smart hedged hybrid).",
     )
     parser.add_argument("--slippage", type=float, default=None, help="Market order slippage tolerance percentage (e.g. 0.05 for 5 bps)")
     parser.add_argument(
@@ -212,6 +228,20 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help="Initial warmup buffer wait time in seconds before strategies can enter trades (default: 10.0s, set 0 to disable)",
+    )
+    parser.add_argument(
+        "--midpoint-pegging",
+        dest="midpoint_pegging",
+        action="store_true",
+        default=None,
+        help="Enable midpoint pegging for maker orders (quotes inside spread at mid price, cushion >= 1 tick)",
+    )
+    parser.add_argument(
+        "--no-midpoint-pegging",
+        dest="midpoint_pegging",
+        action="store_false",
+        default=None,
+        help="Disable midpoint pegging for maker orders (fall back to passive touch or penny jumping)",
     )
     return parser
 
@@ -225,17 +255,27 @@ def main():
     # Strategy override validation
     if args.strategy:
         strat_name = args.strategy.strip()
-        if args.mode not in ("audit",) and strat_name not in CORE_EXECUTION_STRATEGIES:
-            Console().print(f"[bold red]Error: Strategy '{strat_name}' is not a Core execution strategy. Valid options: {', '.join(CORE_EXECUTION_STRATEGIES)}[/bold red]")
-            sys.exit(1)
-        cfg.strategies.live_execution.active_strategy = strat_name
-        s = cfg.strategies.get_strategy(strat_name)
-        if s:
-            s.enabled = True
+        if strat_name.lower() in ("all", "all_core", "all-core"):
+            for s in cfg.strategies.execution_strategies.values():
+                s.enabled = True
+            cfg.strategies.live_execution.active_strategy = "all"
+        else:
+            if args.mode not in ("audit",) and strat_name not in CORE_EXECUTION_STRATEGIES:
+                Console().print(f"[bold red]Error: Strategy '{strat_name}' is not a Core execution strategy. Valid options: {', '.join(CORE_EXECUTION_STRATEGIES)}, all[/bold red]")
+                sys.exit(1)
+            # When specifically selecting a single strategy, disable the others so only that strategy trades
+            for s in cfg.strategies.execution_strategies.values():
+                s.enabled = (s.name == strat_name)
+            cfg.strategies.live_execution.active_strategy = strat_name
+            s = cfg.strategies.get_strategy(strat_name)
+            if s:
+                s.enabled = True
 
     # Market order and slippage configuration
     force_market = None
-    if args.market is not None:
+    if getattr(args, "no_market", False):
+        force_market = False
+    elif args.market is not None:
         force_market = str(args.market).strip().lower() in ("true", "1", "yes", "t", "on")
     elif args.slippage is not None:
         force_market = True
@@ -261,7 +301,11 @@ def main():
         cfg.strategies.live_execution.warmup_secs = float(args.warmup)
         cfg.backtest.warmup_secs = float(args.warmup)
 
-    if (args.save_config or force_market is not None or market_slippage is not None) and not args.no_save and args.save_config:
+    if args.midpoint_pegging is not None:
+        cfg.strategies.live_execution.midpoint_pegging = bool(args.midpoint_pegging)
+        cfg.backtest.midpoint_pegging = bool(args.midpoint_pegging)
+
+    if (args.save_config or force_market is not None or market_slippage is not None or args.midpoint_pegging is not None) and not args.no_save and args.save_config:
         cfg.strategies.save()
 
     # Configure network environment
@@ -426,17 +470,31 @@ def main():
         else:
             console.print(f"[bold cyan]Priority Fee:[/bold cyan] [dim]0.0 bps (Standard Consensus Queue)[/dim]")
 
+        if getattr(cfg.strategies.live_execution, "force_market_orders", False):
+            m_slip = getattr(cfg.strategies.live_execution, "market_slippage_pct", 0.0005)
+            console.print(f"[bold cyan]Execution Mode:[/bold cyan] [bold magenta]FORCED MARKET ORDERS (Taker IOC)[/bold magenta] | Slippage: [bold yellow]{m_slip*100:.2f}%[/bold yellow] ({m_slip*10000:.1f} bps)")
+        else:
+            console.print(f"[bold cyan]Execution Mode:[/bold cyan] [bold green]Standard Maker / Smart Hedged Hybrid[/bold green]")
+
         warmup_val = args.warmup if args.warmup is not None else getattr(cfg.strategies.live_execution, "warmup_secs", 10.0)
         if warmup_val > 0:
             console.print(f"[bold cyan]Warmup Wait Time:[/bold cyan] [bold yellow]{warmup_val:.1f}s[/bold yellow] (Buffers L2 book, trades, CVD, and VPIN before trading)")
         else:
             console.print(f"[bold cyan]Warmup Wait Time:[/bold cyan] [dim]Disabled (0.0s - Instant execution)[/dim]")
 
+        midpoint_peg_val = getattr(cfg.strategies.live_execution, "midpoint_pegging", False)
+        console.print(f"[bold cyan]Midpoint-Pegging:[/bold cyan] {'[bold green]ENABLED (Aggressive inside-spread maker pricing)[/bold green]' if midpoint_peg_val else '[dim]DISABLED (Passive touch / Penny jumping)[/dim]'}")
+
         if args.live_orders:
             cfg.backtest.order_size_btc = args.order_size
             net = cfg.hyperliquid.network_name.upper()
             active_live = cfg.strategies.get_effective_live_strategy()
-            console.print(f"\n[bold red blink]⚠ LIVE {net} ORDER EXECUTION ENABLED! Primary Core Strategy: {active_live}[/bold red blink]\n")
+            en_strats = list(cfg.strategies.get_enabled_strategy_defs().keys())
+            if active_live == "all" or len(en_strats) > 1:
+                strats_desc = f"Active Core Strategies: {', '.join(en_strats)} (Dynamic Multi-Strategy Dispatch)"
+            else:
+                strats_desc = f"Primary Core Strategy: {active_live}"
+            console.print(f"\n[bold red blink]⚠ LIVE {net} ORDER EXECUTION ENABLED! {strats_desc}[/bold red blink]\n")
 
         runner = L2EngineRunner(
             config=cfg,
@@ -461,6 +519,11 @@ def main():
     elif args.mode == "benchmark":
         duration = args.duration if args.duration > 0 else 30
         console.print(f"[bold yellow]Running core benchmark on {cfg.market.coin} ({cfg.hyperliquid.network_name}) for {duration} seconds...[/bold yellow]")
+        if getattr(cfg.strategies.live_execution, "force_market_orders", False):
+            m_slip = getattr(cfg.strategies.live_execution, "market_slippage_pct", 0.0005)
+            console.print(f"[bold cyan]Execution Mode:[/bold cyan] [bold magenta]FORCED MARKET ORDERS (Taker IOC)[/bold magenta] | Slippage: [bold yellow]{m_slip*100:.2f}%[/bold yellow] ({m_slip*10000:.1f} bps)")
+        else:
+            console.print(f"[bold cyan]Execution Mode:[/bold cyan] [bold green]Standard Maker / Smart Hedged Hybrid[/bold green]")
         runner = L2EngineRunner(
             config=cfg,
             record_data=True,

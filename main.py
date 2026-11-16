@@ -55,6 +55,7 @@ class L2EngineRunner:
         web_port: int = 8000,
         open_browser: bool = False,
         warmup_secs: Optional[float] = None,
+        enable_fast_ws: Optional[bool] = None,
     ):
         self.config = config or AppConfig()
         self.record_data = record_data
@@ -64,6 +65,18 @@ class L2EngineRunner:
         self.web_port = web_port
         self.open_browser = open_browser
         self.console = Console()
+
+        if enable_fast_ws is not None:
+            self.enable_fast_ws: bool = bool(enable_fast_ws)
+        else:
+            strat_mgr = getattr(self.config, "strategies", None)
+            is_scalping = (
+                getattr(strat_mgr, "is_scalping_mode_active", False)
+                or (hasattr(strat_mgr, "scalping_strategies") and any(s.enabled for s in getattr(strat_mgr, "scalping_strategies", {}).values()))
+                or getattr(strat_mgr, "program_name", "") == "scalper"
+            )
+            self.enable_fast_ws = bool(is_scalping)
+        self.fast_ws_task: Optional[asyncio.Task] = None
 
         if warmup_secs is not None:
             self.warmup_secs: float = float(warmup_secs)
@@ -176,6 +189,9 @@ class L2EngineRunner:
 
     def close(self) -> None:
         """Closes all runner resources including auditor, live executor, and data recorder."""
+        self.is_running = False
+        if self.fast_ws_task and not self.fast_ws_task.done():
+            self.fast_ws_task.cancel()
         if self.live_executor and hasattr(self.live_executor, "close"):
             self.live_executor.close()
         if self.web_server and self.web_server.server:
@@ -233,28 +249,47 @@ class L2EngineRunner:
             # 3. When completely flat with no resting order, dispatch across enabled strategies
             else:
                 active_name = self.config.strategies.get_effective_live_strategy()
-                active_strat = self.config.strategies.get_strategy(active_name)
+                active_strat = self.config.strategies.get_strategy(active_name) if active_name != "all" else None
+                en_defs = self.config.strategies.get_enabled_strategy_defs()
 
-                strat_to_use = active_name
-                sig_score = scores.get(active_strat.signal_key, 0.0) if (active_strat and active_strat.enabled) else 0.0
-                sig_conf = confidences.get(active_strat.signal_key, 0.0) if (active_strat and active_strat.enabled) else 0.0
-                if active_strat and active_strat.min_confidence is not None and sig_conf < active_strat.min_confidence:
-                    sig_score = 0.0
-                threshold = active_strat.entry_threshold if active_strat else 0.85
+                # If a single dedicated strategy is explicitly targeted (and not "all" or multi-strategy dispatch)
+                if active_strat and active_strat.enabled and active_name != "all":
+                    strat_to_use = active_name
+                    sig_score = scores.get(active_strat.signal_key, 0.0)
+                    sig_conf = confidences.get(active_strat.signal_key, 0.0)
+                    if active_strat.min_confidence is not None and sig_conf < active_strat.min_confidence:
+                        sig_score = 0.0
+                else:
+                    # Dynamic multi-strategy dispatch across all enabled strategies
+                    # Find candidate with highest conviction exceeding its entry threshold
+                    best_excess = -1.0
+                    fallback_name = active_name if (active_strat and active_strat.enabled) else (list(en_defs.keys())[0] if en_defs else "Hedged_Convexity")
+                    fallback_strat = self.config.strategies.get_strategy(fallback_name)
+                    strat_to_use = fallback_name
+                    sig_score = scores.get(fallback_strat.signal_key, 0.0) if fallback_strat else 0.0
+                    sig_conf = confidences.get(fallback_strat.signal_key, 0.0) if fallback_strat else 0.0
 
-                # Only dispatch alternative enabled strategy if active_strategy is disabled or not configured
-                if not (active_strat and active_strat.enabled):
-                    for s_name, s_def in self.config.strategies.all_strategies.items():
-                        if s_def.enabled and s_name != active_name:
-                            s_score = scores.get(s_def.signal_key, 0.0)
-                            s_conf = confidences.get(s_def.signal_key, 0.0)
-                            if s_def.min_confidence is not None and s_conf < s_def.min_confidence:
-                                continue
-                            if abs(s_score) >= s_def.entry_threshold and (abs(sig_score) < threshold or abs(s_score) > abs(sig_score)):
-                                sig_score = s_score
-                                sig_conf = s_conf
-                                strat_to_use = s_name
-                                threshold = s_def.entry_threshold
+                    now_sec = now_ms / 1000.0
+                    last_loss_t = getattr(self.live_executor, "last_loss_exit_time", 0.0)
+                    for s_name in en_defs.keys():
+                        s_def = self.config.strategies.get_strategy(s_name)
+                        if not s_def:
+                            continue
+                        # Loss cooldown guardrail: skip strategy if in post-loss cooldown
+                        loss_cd = getattr(s_def, "loss_cooldown_secs", 30) or 30
+                        if (now_sec - last_loss_t) < loss_cd:
+                            continue
+                        s_score = scores.get(s_def.signal_key, 0.0)
+                        s_conf = confidences.get(s_def.signal_key, 0.0)
+                        if s_def.min_confidence is not None and s_conf < s_def.min_confidence:
+                            continue
+                        threshold = s_def.entry_threshold
+                        excess = abs(s_score) - threshold
+                        if excess >= 0 and excess > best_excess:
+                            best_excess = excess
+                            sig_score = s_score
+                            sig_conf = s_conf
+                            strat_to_use = s_name
 
             self.live_executor.strategy_name = strat_to_use
             self.live_executor.on_signal_update(
@@ -305,7 +340,7 @@ class L2EngineRunner:
         return (time.time() - self._last_eval_time) >= 0.050
 
     async def _handle_message(self, raw_msg: str) -> None:
-        """Processes an incoming WebSocket message from Hyperliquid."""
+        """Processes an incoming WebSocket message from the normal full-depth Hyperliquid feed."""
         try:
             msg = json.loads(raw_msg)
         except Exception:
@@ -319,12 +354,12 @@ class L2EngineRunner:
         if not channel or not data:
             return
 
-        # Record event if recording enabled
+        # Record event on normal connection for clean, unskewed full-depth data gathering and storing
         if self.recorder:
             self.recorder.record_event(channel, data)
 
         if channel == "l2Book":
-            self.book.update_from_raw(data)
+            self.book.update_from_raw(data, is_fast=False)
             if self.book.is_valid and self._first_valid_book_time is None:
                 self._first_valid_book_time = time.time()
             # FAST-PATH: Strategy-adaptive event-driven signal evaluation (<0.1ms local latency)
@@ -344,6 +379,88 @@ class L2EngineRunner:
         elif channel in ("userFills", "orderUpdates"):
             if self.live_executor:
                 self.live_executor.handle_user_fill_event(data)
+
+    async def _handle_fast_l2_message(self, raw_msg: str) -> None:
+        """Processes high-frequency orderbook ticks from the sidecar fast WebSocket.
+        
+        Updates the active orderbook and triggers immediate signal evaluation / trade execution.
+        DOES NOT record to self.recorder, ensuring stored historical data remains unskewed and full-depth.
+        """
+        try:
+            msg = json.loads(raw_msg)
+        except Exception:
+            return
+
+        channel = msg.get("channel")
+        if channel != "l2Book":
+            return
+
+        data = msg.get("data")
+        if not data:
+            return
+
+        # Update order book with fast touch levels (without recording to self.recorder)
+        self.book.update_from_raw(data, is_fast=True)
+        if self.book.is_valid and self._first_valid_book_time is None:
+            self._first_valid_book_time = time.time()
+
+        # FAST-PATH: Immediate trade execution & resting order update on fast L2 book tick
+        if self._should_evaluate_signals():
+            self._evaluate_signals()
+
+    async def _run_fast_l2_stream(self) -> None:
+        """Concurrent sidecar WebSocket stream connecting to Hyperliquid specifically for low-latency fast l2Book ticks.
+        
+        This stream runs on the side to assist taking trades and executing scalping strategies with minimum wire latency.
+        It does NOT pass events to self.recorder, guaranteeing that data gathering and storage on the primary connection
+        remain unskewed, complete, and full-depth (20 levels).
+        """
+        ws_url = self.config.hyperliquid.ws_url
+        reconnect_delay = 1.0
+
+        async def _ping_heartbeat(ws):
+            while self.is_running:
+                try:
+                    await asyncio.sleep(20.0)
+                    if hasattr(ws, "closed") and ws.closed:
+                        break
+                    await ws.send(json.dumps({"method": "ping"}))
+                except (asyncio.CancelledError, Exception):
+                    break
+
+        while self.is_running:
+            try:
+                async with websockets.connect(
+                    ws_url,
+                    ping_interval=20,
+                    ping_timeout=20,
+                    max_size=20_000_000,
+                ) as fast_ws:
+                    reconnect_delay = 1.0
+                    sub_fast = {
+                        "method": "subscribe",
+                        "subscription": {"type": "l2Book", "coin": self.config.market.coin, "fast": True},
+                    }
+                    await fast_ws.send(json.dumps(sub_fast))
+                    ping_task = asyncio.create_task(_ping_heartbeat(fast_ws))
+
+                    try:
+                        while self.is_running:
+                            try:
+                                msg = await asyncio.wait_for(fast_ws.recv(), timeout=0.5)
+                                await self._handle_fast_l2_message(msg)
+                            except asyncio.TimeoutError:
+                                pass
+                    finally:
+                        ping_task.cancel()
+
+            except (asyncio.CancelledError, KeyboardInterrupt):
+                break
+            except (ConnectionResetError, websockets.ConnectionClosed, OSError, Exception):
+                if not self.is_running:
+                    break
+                await asyncio.sleep(reconnect_delay)
+                reconnect_delay = min(15.0, reconnect_delay * 1.5)
 
     async def _evaluation_loop(self) -> None:
         """Runs periodic fallback/heartbeat loop to guarantee continuous alpha and resting order maintenance."""
@@ -378,6 +495,16 @@ class L2EngineRunner:
         eval_task = asyncio.create_task(self._evaluation_loop())
         start_time = time.time()
         reconnect_delay = 1.0
+
+        fast_ws_task = None
+        if self.enable_fast_ws:
+            self.console.print(
+                f"[bold cyan]⚡ Dual-WebSocket Engine Active:[/bold cyan] "
+                f"[green]Normal WS (unskewed full depth & data recording)[/green] + "
+                f"[bold yellow]Sidecar Fast WS (low-latency trade taking)[/bold yellow]"
+            )
+            fast_ws_task = asyncio.create_task(self._run_fast_l2_stream())
+            self.fast_ws_task = fast_ws_task
 
         stop_event = asyncio.Event()
 
@@ -435,17 +562,10 @@ class L2EngineRunner:
                                 max_size=20_000_000,
                             ) as ws:
                                 reconnect_delay = 1.0
-                                # Subscriptions: Granular 1-tick book, trades, deep macro book, and real-time user fills
-                                is_scalping = (
-                                    self.config.strategies.is_scalping_mode_active
-                                    or any(s.enabled for s in self.config.strategies.scalping_strategies.values())
-                                )
-                                l2_sub_params = {"type": "l2Book", "coin": self.config.market.coin}
-                                if is_scalping:
-                                    l2_sub_params["fast"] = True
+                                # Normal full-depth L2 book subscription (fast turned off for unskewed data gathering & storage)
                                 sub_l2 = {
                                     "method": "subscribe",
-                                    "subscription": l2_sub_params,
+                                    "subscription": {"type": "l2Book", "coin": self.config.market.coin},
                                 }
                                 sub_trades = {
                                     "method": "subscribe",
@@ -543,16 +663,10 @@ class L2EngineRunner:
                             max_size=20_000_000,
                         ) as ws:
                             reconnect_delay = 1.0
-                            is_scalping = (
-                                self.config.strategies.is_scalping_mode_active
-                                or any(s.enabled for s in self.config.strategies.scalping_strategies.values())
-                            )
-                            l2_sub_params = {"type": "l2Book", "coin": self.config.market.coin}
-                            if is_scalping:
-                                l2_sub_params["fast"] = True
+                            # Normal full-depth L2 book subscription (fast turned off for unskewed data gathering & storage)
                             sub_l2 = {
                                 "method": "subscribe",
-                                "subscription": l2_sub_params,
+                                "subscription": {"type": "l2Book", "coin": self.config.market.coin},
                             }
                             sub_trades = {
                                 "method": "subscribe",
@@ -624,10 +738,17 @@ class L2EngineRunner:
         finally:
             self.is_running = False
             eval_task.cancel()
+            if fast_ws_task:
+                fast_ws_task.cancel()
             try:
                 await eval_task
             except (asyncio.CancelledError, Exception):
                 pass
+            if fast_ws_task:
+                try:
+                    await fast_ws_task
+                except (asyncio.CancelledError, Exception):
+                    pass
             if orig_sigint is not None:
                 try:
                     signal.signal(signal.SIGINT, orig_sigint)
@@ -1395,9 +1516,14 @@ def print_strategies_status(cfg: Optional[AppConfig] = None, console: Optional[C
     mkt_forced = getattr(strat_cfg.live_execution, "force_market_orders", False)
     mkt_slip = getattr(strat_cfg.live_execution, "market_slippage_pct", 0.01)
     if mkt_forced:
-        console.print(f"Forced Market Orders:    [bold red]ENABLED (Taker IOC)[/bold red] [dim]|[/dim] Slippage Tolerance: [bold yellow]{mkt_slip*100:.2f}%[/bold yellow] ({mkt_slip*10000:.1f} bps)\n")
+        console.print(f"Forced Market Orders:    [bold red]ENABLED (Taker IOC)[/bold red] [dim]|[/dim] Slippage Tolerance: [bold yellow]{mkt_slip*100:.2f}%[/bold yellow] ({mkt_slip*10000:.1f} bps)")
     else:
-        console.print(f"Forced Market Orders:    [dim green]DISABLED (Standard Maker/Taker Hybrid)[/dim green]\n")
+        console.print(f"Forced Market Orders:    [dim green]DISABLED (Standard Maker/Taker Hybrid)[/dim green]")
+    midpoint_peg = getattr(strat_cfg.live_execution, "midpoint_pegging", False)
+    if midpoint_peg:
+        console.print(f"Midpoint Pegging:        [bold green]ENABLED (Aggressive inside-spread maker pricing)[/bold green]\n")
+    else:
+        console.print(f"Midpoint Pegging:        [dim]DISABLED (Passive touch / Penny jumping)[/dim]\n")
 
     table_exec = Table(title="Primary Execution Strategies (4 New Core Microstructure Strategies)", header_style="bold cyan")
     table_exec.add_column("Strategy Name", justify="left", style="bold")
@@ -1755,7 +1881,8 @@ def handle_audit_mode(cfg: AppConfig, args: argparse.Namespace, console: Console
     console.print(f"  - Formatted Report:      [dim]{os.path.join(session_path, 'session_audit_report.md')}[/dim]\n")
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
+    """Builds argument parser for the Hyperliquid L2 Microstructure Alpha Engine."""
     parser = argparse.ArgumentParser(description="Hyperliquid L2 Microstructure Alpha Engine")
     parser.add_argument("mode", nargs="?", choices=["live", "test-connection", "testnet", "check-account", "transfer-to-perp", "place-order", "cancel-orders", "benchmark", "replay", "train-ml", "collect", "strategies", "audit"], default="strategies", help="Execution mode (default: strategies)")
     parser.add_argument("--strategies-config", type=str, default="strategies.json", help="Path to strategies configuration JSON (default: strategies.json)")
@@ -1844,11 +1971,22 @@ def main():
     )
     parser.add_argument(
         "--market",
+        "--market-orders",
+        "--force-market",
+        "--force-market-orders",
         nargs="?",
         const="true",
         default=None,
         type=str,
-        help="Force program to execute via market orders (aggressive IOC taker crossing the spread with slippage). Usage: --market true, --market false, or simply --market.",
+        help="Force program to execute via market orders (aggressive IOC taker crossing the spread with slippage). Usage: --market, --market true/false.",
+    )
+    parser.add_argument(
+        "--no-market",
+        "--no-market-orders",
+        "--no-force-market",
+        dest="no_market",
+        action="store_true",
+        help="Disable forced market orders (use standard maker/taker hybrid).",
     )
     parser.add_argument(
         "--slippage",
@@ -1862,6 +2000,39 @@ def main():
         default=None,
         help="Initial warmup buffer wait time in seconds before strategies can enter trades (default: 10.0s, set 0 to disable)",
     )
+    parser.add_argument(
+        "--midpoint-pegging",
+        dest="midpoint_pegging",
+        action="store_true",
+        default=None,
+        help="Enable midpoint pegging for maker orders (quotes inside spread at mid price, cushion >= 1 tick)",
+    )
+    parser.add_argument(
+        "--no-midpoint-pegging",
+        dest="midpoint_pegging",
+        action="store_false",
+        default=None,
+        help="Disable midpoint pegging for maker orders (fall back to passive touch or penny jumping)",
+    )
+    parser.add_argument(
+        "--fast-ws",
+        dest="enable_fast_ws",
+        action="store_true",
+        default=None,
+        help="Enable sidecar fast WebSocket stream for low-latency trade taking alongside normal full-depth recording stream",
+    )
+    parser.add_argument(
+        "--no-fast-ws",
+        dest="enable_fast_ws",
+        action="store_false",
+        default=None,
+        help="Disable sidecar fast WebSocket stream (use single normal WebSocket for everything)",
+    )
+    return parser
+
+
+def main():
+    parser = build_parser()
     args = parser.parse_args()
 
     cfg = AppConfig()
@@ -1889,10 +2060,20 @@ def main():
 
     if args.strategy:
         strat_name = args.strategy.strip()
-        valid_strats = list(cfg.strategies.all_strategies.keys())
-        if args.mode not in ("audit",) and strat_name not in valid_strats:
-            Console().print(f"[bold red]Error: Unknown strategy '{strat_name}'. Valid strategies: {', '.join(valid_strats)}[/bold red]")
-            sys.exit(1)
+        if strat_name.lower() in ("all", "all_core", "all-core"):
+            cfg.strategies.live_execution.active_strategy = "all"
+            for s in cfg.strategies.all_strategies.values():
+                if cfg.strategies.is_scalping_mode_active:
+                    s.enabled = s.is_scalping
+                else:
+                    s.enabled = not s.is_scalping
+            if should_save:
+                cfg.strategies.save()
+        else:
+            valid_strats = list(cfg.strategies.all_strategies.keys())
+            if args.mode not in ("audit",) and strat_name not in valid_strats:
+                Console().print(f"[bold red]Error: Unknown strategy '{strat_name}'. Valid strategies: {', '.join(valid_strats)}, all[/bold red]")
+                sys.exit(1)
 
         # Conflict resolution between --scalping and --strategy
         if args.scalping is not None:
@@ -1926,7 +2107,9 @@ def main():
 
     # Market order and slippage configuration
     force_market = None
-    if args.market is not None:
+    if getattr(args, "no_market", False):
+        force_market = False
+    elif args.market is not None:
         force_market = str(args.market).strip().lower() in ("true", "1", "yes", "t", "on")
     elif args.slippage is not None:
         force_market = True
@@ -1947,7 +2130,11 @@ def main():
         cfg.strategies.live_execution.warmup_secs = float(args.warmup)
         cfg.backtest.warmup_secs = float(args.warmup)
 
-    if should_save and (force_market is not None or market_slippage is not None):
+    if args.midpoint_pegging is not None:
+        cfg.strategies.live_execution.midpoint_pegging = bool(args.midpoint_pegging)
+        cfg.backtest.midpoint_pegging = bool(args.midpoint_pegging)
+
+    if should_save and (force_market is not None or market_slippage is not None or args.midpoint_pegging is not None):
         cfg.strategies.save()
     
     # Configure asset and fee schedule (auto-detects XYZ stocks like SKHYNIX)
@@ -2132,6 +2319,19 @@ def main():
         else:
             console.print(f"[bold cyan]Warmup Wait Time:[/bold cyan] [dim]Disabled (0.0s - Instant execution)[/dim]")
 
+        midpoint_peg_val = getattr(cfg.strategies.live_execution, "midpoint_pegging", False)
+        console.print(f"[bold cyan]Midpoint-Pegging:[/bold cyan] {'[bold green]ENABLED (Aggressive inside-spread maker pricing)[/bold green]' if midpoint_peg_val else '[dim]DISABLED (Passive touch / Penny jumping)[/dim]'}")
+
+        enable_fast_ws_val = (
+            args.enable_fast_ws if args.enable_fast_ws is not None
+            else (
+                getattr(cfg.strategies, "is_scalping_mode_active", False)
+                or (hasattr(cfg.strategies, "scalping_strategies") and any(s.enabled for s in getattr(cfg.strategies, "scalping_strategies", {}).values()))
+                or getattr(cfg.strategies, "program_name", "") == "scalper"
+            )
+        )
+        console.print(f"[bold cyan]Dual-WebSocket Mode:[/bold cyan] {'[bold green]ENABLED (Normal 20-level book for clean data gathering + Sidecar Fast book for taking trades)[/bold green]' if enable_fast_ws_val else '[dim]DISABLED (Single Normal WebSocket)[/dim]'}")
+
         runner = L2EngineRunner(
             config=cfg,
             record_data=True,
@@ -2142,6 +2342,7 @@ def main():
             web_port=args.port,
             open_browser=args.open_browser,
             warmup_secs=warmup_val,
+            enable_fast_ws=args.enable_fast_ws,
         )
         try:
             asyncio.run(runner.run_live(duration_secs=args.duration if args.duration > 0 else None, show_ui=show_cli_ui))
@@ -2173,6 +2374,16 @@ def main():
             console.print(f"[bold cyan]Execution Mode:[/bold cyan] [bold magenta]FORCED MARKET ORDERS (Taker IOC)[/bold magenta] | Slippage: [bold yellow]{m_slip*100:.2f}%[/bold yellow] ({m_slip*10000:.1f} bps)")
         else:
             console.print(f"[bold cyan]Execution Mode:[/bold cyan] [bold green]Standard Maker / Smart Taker Hybrid[/bold green]")
+        
+        enable_fast_ws_val = (
+            args.enable_fast_ws if args.enable_fast_ws is not None
+            else (
+                getattr(cfg.strategies, "is_scalping_mode_active", False)
+                or (hasattr(cfg.strategies, "scalping_strategies") and any(s.enabled for s in getattr(cfg.strategies, "scalping_strategies", {}).values()))
+                or getattr(cfg.strategies, "program_name", "") == "scalper"
+            )
+        )
+        console.print(f"[bold cyan]Dual-WebSocket Mode:[/bold cyan] {'[bold green]ENABLED (Normal 20-level book for clean data gathering + Sidecar Fast book for taking trades)[/bold green]' if enable_fast_ws_val else '[dim]DISABLED (Single Normal WebSocket)[/dim]'}")
         runner = L2EngineRunner(
             config=cfg,
             record_data=True,
@@ -2180,6 +2391,7 @@ def main():
             web_mode=enable_web,
             web_port=args.port,
             open_browser=args.open_browser,
+            enable_fast_ws=args.enable_fast_ws,
         )
         try:
             asyncio.run(runner.run_live(duration_secs=duration, show_ui=show_cli_ui))

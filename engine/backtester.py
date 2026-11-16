@@ -847,11 +847,27 @@ class EdgeEvaluator:
                 if score >= entry_thresh:
                     entry_offset = float(params.get("price_offset", 0.0) or params.get("entry_price_offset", 0.0) or 0.0)
                     concession = float(params.get("price_concession", 0.0) or 0.0)
+                    use_midpoint = bool(params.get("midpoint_pegging", False) or getattr(self.bt_cfg, "midpoint_pegging", False))
+                    tick_size = float(getattr(self.market_cfg, "tick_size", 0.01) or 0.01)
                     if concession <= 0.0 and params.get("price_concession_ratio") is not None:
                         concession = mid_price * float(params["price_concession_ratio"])
                     if is_maker:
                         base_px = best_bid
-                        if entry_offset > 0:
+                        if use_midpoint and best_ask > best_bid:
+                            spread = best_ask - best_bid
+                            if spread >= 2.0 * tick_size:
+                                raw_mid = (best_bid + best_ask) / 2.0
+                                mid_tick = math.floor(round(raw_mid / tick_size, 4)) * tick_size
+                                base_px = min(best_ask - tick_size, mid_tick)
+                            else:
+                                base_px = best_bid
+                            if entry_offset > 0:
+                                entry_price = round(min(best_ask - tick_size, base_px + entry_offset), 4)
+                            else:
+                                entry_price = round(base_px, 4)
+                            fee = entry_price * sz * (maker_fee_pct + priority_fee_pct)
+                            entry_exec_label = "MAKER (MID)"
+                        elif entry_offset > 0:
                             entry_price = base_px + entry_offset
                             if entry_price >= best_ask:
                                 fee = entry_price * sz * (taker_fee_pct + priority_fee_pct)
@@ -909,11 +925,27 @@ class EdgeEvaluator:
                 elif score <= -entry_thresh:
                     entry_offset = float(params.get("price_offset", 0.0) or params.get("entry_price_offset", 0.0) or 0.0)
                     concession = float(params.get("price_concession", 0.0) or 0.0)
+                    use_midpoint = bool(params.get("midpoint_pegging", False) or getattr(self.bt_cfg, "midpoint_pegging", False))
+                    tick_size = float(getattr(self.market_cfg, "tick_size", 0.01) or 0.01)
                     if concession <= 0.0 and params.get("price_concession_ratio") is not None:
                         concession = mid_price * float(params["price_concession_ratio"])
                     if is_maker:
                         base_px = best_ask
-                        if entry_offset > 0:
+                        if use_midpoint and best_ask > best_bid:
+                            spread = best_ask - best_bid
+                            if spread >= 2.0 * tick_size:
+                                raw_mid = (best_bid + best_ask) / 2.0
+                                mid_tick = math.ceil(round(raw_mid / tick_size, 4)) * tick_size
+                                base_px = max(best_bid + tick_size, mid_tick)
+                            else:
+                                base_px = best_ask
+                            if entry_offset > 0:
+                                entry_price = round(max(best_bid + tick_size, base_px - entry_offset), 4)
+                            else:
+                                entry_price = round(base_px, 4)
+                            fee = entry_price * sz * (maker_fee_pct + priority_fee_pct)
+                            entry_exec_label = "MAKER (MID)"
+                        elif entry_offset > 0:
                             entry_price = max(0.01, base_px - entry_offset)
                             if entry_price <= best_bid:
                                 fee = entry_price * sz * (taker_fee_pct + priority_fee_pct)

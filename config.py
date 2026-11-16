@@ -356,6 +356,7 @@ class BacktestConfig:
     priority_fee_bps: float = 0.0  # Hyperliquid write priority fee (Optimization 5) in basis points
     priority_fee_on_exit: bool = False  # Whether priority fee is also bid on exit orders
     force_market_orders: bool = False  # Forces all strategy entries and exits to use aggressive IOC market orders
+    midpoint_pegging: bool = False  # Pegs maker entry quotes at the midpoint of the bid-ask spread
     market_slippage_pct: float = 0.0005  # Slippage percentage for market orders (0.0005 = 0.05% = 5 bps)
     dynamic_slippage: bool = True  # Volatility-calibrated dynamic slippage modeling
     warmup_secs: float = 0.0  # Warmup wait time in seconds (0.0 for immediate backtests, >0 for live runner)
@@ -423,6 +424,7 @@ DEFAULT_STRATEGIES_JSON = {
         "order_size_btc": 0.0005,
         "max_position_btc": 0.05,
         "penny_jumping": True,
+        "midpoint_pegging": False,
         "use_ioc_on_marketable": True,
         "use_native_tpsl": True,
         "priority_fee_bps": 0.0,
@@ -829,6 +831,7 @@ DEFAULT_CORE_STRATEGIES_JSON = {
         "order_size_btc": DEFAULT_STRATEGIES_JSON["live_execution"]["order_size_btc"],
         "max_position_btc": DEFAULT_STRATEGIES_JSON["live_execution"]["max_position_btc"],
         "penny_jumping": DEFAULT_STRATEGIES_JSON["live_execution"]["penny_jumping"],
+        "midpoint_pegging": DEFAULT_STRATEGIES_JSON["live_execution"].get("midpoint_pegging", False),
         "use_ioc_on_marketable": DEFAULT_STRATEGIES_JSON["live_execution"]["use_ioc_on_marketable"],
         "use_native_tpsl": DEFAULT_STRATEGIES_JSON["live_execution"]["use_native_tpsl"],
         "priority_fee_bps": DEFAULT_STRATEGIES_JSON["live_execution"]["priority_fee_bps"],
@@ -856,6 +859,7 @@ DEFAULT_SCALPER_STRATEGIES_JSON = {
         "order_size_btc": DEFAULT_STRATEGIES_JSON["live_execution"]["order_size_btc"],
         "max_position_btc": DEFAULT_STRATEGIES_JSON["live_execution"]["max_position_btc"],
         "penny_jumping": DEFAULT_STRATEGIES_JSON["live_execution"]["penny_jumping"],
+        "midpoint_pegging": DEFAULT_STRATEGIES_JSON["live_execution"].get("midpoint_pegging", False),
         "use_ioc_on_marketable": DEFAULT_STRATEGIES_JSON["live_execution"]["use_ioc_on_marketable"],
         "use_native_tpsl": DEFAULT_STRATEGIES_JSON["live_execution"]["use_native_tpsl"],
         "priority_fee_bps": DEFAULT_STRATEGIES_JSON["live_execution"]["priority_fee_bps"],
@@ -905,6 +909,7 @@ class ExecutionStrategyConfig:
     min_confidence: Optional[float] = None
     coentry_group: Optional[str] = None
     trend_filter_enabled: Optional[bool] = None
+    midpoint_pegging: Optional[bool] = None
     trend_window_secs: Optional[float] = None
     max_counter_trend_bps: Optional[float] = None
     require_cvd_alignment: Optional[bool] = None
@@ -980,6 +985,7 @@ class LiveExecutionConfig:
     order_size_btc: float = 0.0005
     max_position_btc: float = 0.05
     penny_jumping: bool = True
+    midpoint_pegging: bool = False
     use_ioc_on_marketable: bool = True
     use_native_tpsl: bool = True
     priority_fee_bps: float = 0.0
@@ -1042,6 +1048,7 @@ class StrategiesConfig:
             order_size_btc=float(live_raw.get("order_size_btc", 0.0005)),
             max_position_btc=float(live_raw.get("max_position_btc", 0.05)),
             penny_jumping=bool(live_raw.get("penny_jumping", True)),
+            midpoint_pegging=bool(live_raw.get("midpoint_pegging", False)),
             use_ioc_on_marketable=bool(live_raw.get("use_ioc_on_marketable", True)),
             use_native_tpsl=bool(live_raw.get("use_native_tpsl", True)),
             priority_fee_bps=float(live_raw.get("priority_fee_bps", 0.0)),
@@ -1221,6 +1228,20 @@ class StrategiesConfig:
         if save:
             self.save()
 
+    def set_market_orders(self, enabled: bool = True, slippage_pct: Optional[float] = None, save: bool = False) -> None:
+        """Configures forced market order execution override across all orders.
+
+        Args:
+            enabled: If True, forces all order entries, exits, and defensive hedges to cross the book as IOC market orders.
+            slippage_pct: Optional market order slippage tolerance percentage (e.g. 0.0005 for 5 bps, or 0.01 for 1%).
+            save: If True, immediately persists changes to configuration JSON file.
+        """
+        self.live_execution.force_market_orders = bool(enabled)
+        if slippage_pct is not None:
+            self.live_execution.market_slippage_pct = float(slippage_pct)
+        if save:
+            self.save()
+
     def get_strategy(self, name: str) -> Optional[ExecutionStrategyConfig]:
         """Lookup strategy in execution_strategies first, then scalping_strategies."""
         return self.execution_strategies.get(name) or self.scalping_strategies.get(name)
@@ -1245,6 +1266,8 @@ class StrategiesConfig:
         is inadvertently assigned to live orders and exits when running in single-strategy mode (e.g. MicroPrice_FastFill).
         """
         current = self.live_execution.active_strategy
+        if current in ("all", "all_core", "all-core", "all_scalp", "all-scalp"):
+            return "all"
         current_cfg = self.get_strategy(current)
         if current_cfg and current_cfg.enabled:
             return current
@@ -1556,6 +1579,7 @@ class StrategiesConfig:
                 "order_size_btc": self.live_execution.order_size_btc,
                 "max_position_btc": self.live_execution.max_position_btc,
                 "penny_jumping": self.live_execution.penny_jumping,
+                "midpoint_pegging": getattr(self.live_execution, "midpoint_pegging", False),
                 "use_ioc_on_marketable": self.live_execution.use_ioc_on_marketable,
                 "use_native_tpsl": self.live_execution.use_native_tpsl,
                 "priority_fee_bps": self.live_execution.priority_fee_bps,
@@ -1620,6 +1644,7 @@ class CoreStrategiesConfig(StrategiesConfig):
             order_size_btc=float(live_raw.get("order_size_btc", 0.0005)),
             max_position_btc=float(live_raw.get("max_position_btc", 0.05)),
             penny_jumping=bool(live_raw.get("penny_jumping", True)),
+            midpoint_pegging=bool(live_raw.get("midpoint_pegging", False)),
             use_ioc_on_marketable=bool(live_raw.get("use_ioc_on_marketable", True)),
             use_native_tpsl=bool(live_raw.get("use_native_tpsl", True)),
             priority_fee_bps=float(live_raw.get("priority_fee_bps", 0.0)),
@@ -1725,6 +1750,8 @@ class CoreStrategiesConfig(StrategiesConfig):
 
     def get_effective_live_strategy(self) -> str:
         current = self.live_execution.active_strategy
+        if current in ("all", "all_core", "all-core"):
+            return "all"
         current_cfg = self.execution_strategies.get(current)
         if current_cfg and current_cfg.enabled:
             return current
@@ -1805,6 +1832,7 @@ class CoreStrategiesConfig(StrategiesConfig):
                 "order_size_btc": self.live_execution.order_size_btc,
                 "max_position_btc": self.live_execution.max_position_btc,
                 "penny_jumping": self.live_execution.penny_jumping,
+                "midpoint_pegging": getattr(self.live_execution, "midpoint_pegging", False),
                 "use_ioc_on_marketable": self.live_execution.use_ioc_on_marketable,
                 "use_native_tpsl": self.live_execution.use_native_tpsl,
                 "priority_fee_bps": self.live_execution.priority_fee_bps,
@@ -1849,6 +1877,7 @@ class ScalperStrategiesConfig(StrategiesConfig):
             order_size_btc=float(live_raw.get("order_size_btc", 0.0005)),
             max_position_btc=float(live_raw.get("max_position_btc", 0.05)),
             penny_jumping=bool(live_raw.get("penny_jumping", True)),
+            midpoint_pegging=bool(live_raw.get("midpoint_pegging", False)),
             use_ioc_on_marketable=bool(live_raw.get("use_ioc_on_marketable", True)),
             use_native_tpsl=bool(live_raw.get("use_native_tpsl", True)),
             priority_fee_bps=float(live_raw.get("priority_fee_bps", 0.0)),
@@ -2030,6 +2059,7 @@ class ScalperStrategiesConfig(StrategiesConfig):
                 "order_size_btc": self.live_execution.order_size_btc,
                 "max_position_btc": self.live_execution.max_position_btc,
                 "penny_jumping": self.live_execution.penny_jumping,
+                "midpoint_pegging": getattr(self.live_execution, "midpoint_pegging", False),
                 "use_ioc_on_marketable": self.live_execution.use_ioc_on_marketable,
                 "use_native_tpsl": self.live_execution.use_native_tpsl,
                 "priority_fee_bps": self.live_execution.priority_fee_bps,
@@ -2060,6 +2090,23 @@ class AppConfig:
     data_dir: str = "data"
     log_dir: str = "logs"
     sample_rate_hz: float = 20.0  # Sampling frequency for engine loop (20Hz = 50ms evaluation tick)
+
+    def __post_init__(self):
+        # Sync backtest force_market_orders and market_slippage_pct from live_execution if present
+        if hasattr(self, "strategies") and hasattr(self.strategies, "live_execution"):
+            live_mkt = getattr(self.strategies.live_execution, "force_market_orders", False)
+            if live_mkt:
+                self.backtest.force_market_orders = True
+            live_slip = getattr(self.strategies.live_execution, "market_slippage_pct", None)
+            if live_slip is not None:
+                self.backtest.market_slippage_pct = live_slip
+
+    def set_market_orders(self, enabled: bool = True, slippage_pct: Optional[float] = None, save: bool = False) -> None:
+        """Configures forced market order execution override across both live_execution and backtest configs."""
+        self.strategies.set_market_orders(enabled=enabled, slippage_pct=slippage_pct, save=save)
+        self.backtest.force_market_orders = bool(enabled)
+        if slippage_pct is not None:
+            self.backtest.market_slippage_pct = float(slippage_pct)
 
     @property
     def live_execution(self) -> LiveExecutionConfig:

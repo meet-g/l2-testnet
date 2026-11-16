@@ -2,7 +2,7 @@
 
 - **Network**: Hyperliquid Mainnet
 - **Asset**: BTC-PERP
-- **Timestamp**: 2026-11-09 20:48:36
+- **Timestamp**: 2026-11-16 19:26:22
 - **Mid Price**: $84,454.50
 - **Book Spread**: $1.00 (0.12 bps)
 - **Total Cumulative CVD**: -0.7358 BTC

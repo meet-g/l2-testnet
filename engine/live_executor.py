@@ -67,6 +67,7 @@ class LiveOrderExecutor:
         force_market_orders: Optional[bool] = None,
         market_slippage_pct: Optional[float] = None,
         warmup_secs: Optional[float] = None,
+        midpoint_pegging: Optional[bool] = None,
     ):
         self.config = config or AppConfig()
         self.console = console or Console()
@@ -146,6 +147,7 @@ class LiveOrderExecutor:
         # Execution Speed & Optimization Guardrails (Optimizations 1-5)
         live_cfg = getattr(getattr(self.config, "strategies", None), "live_execution", None) or getattr(self.config, "live_execution", None)
         self.penny_jumping: bool = getattr(live_cfg, "penny_jumping", True)
+        self.midpoint_pegging: bool = midpoint_pegging if midpoint_pegging is not None else getattr(live_cfg, "midpoint_pegging", False)
         self.use_ioc_on_marketable: bool = getattr(live_cfg, "use_ioc_on_marketable", True)
         self.use_native_tpsl: bool = getattr(live_cfg, "use_native_tpsl", True)
         self.priority_fee_bps: float = priority_fee_bps if priority_fee_bps is not None else getattr(live_cfg, "priority_fee_bps", 0.0)
@@ -260,7 +262,9 @@ class LiveOrderExecutor:
                 f"Coin: [bold cyan]{self.coin}[/bold cyan] (szDec: {self.sz_decimals}, maxPxDec: {self.max_price_decimals})"
             )
             opt_labels = []
-            if self.penny_jumping:
+            if self.midpoint_pegging:
+                opt_labels.append("Midpoint-Pegging: ON")
+            elif self.penny_jumping:
                 opt_labels.append("Penny-Jumping: ON")
             if self.use_ioc_on_marketable:
                 opt_labels.append("IOC Escalation: ON")
@@ -326,8 +330,15 @@ class LiveOrderExecutor:
 
         if is_buy and getattr(self, "last_best_ask", 0.0) > 0.0:
             if px_fmt >= self.last_best_ask:
-                # Inside-spread penny-jumping captures Queue Rank #1 as Maker
-                if (
+                if getattr(self, "midpoint_pegging", False):
+                    # Midpoint pegging: clamp strictly to midpoint with at least 1 tick cushion below ask
+                    if (self.last_best_ask - self.last_best_bid) >= tick_size * 2.0:
+                        raw_mid = (self.last_best_bid + self.last_best_ask) / 2.0
+                        mid_tick = math.floor(round(raw_mid / tick_size, 4)) * tick_size
+                        px_fmt = self.format_price(min(self.last_best_ask - tick_size, mid_tick))
+                    else:
+                        px_fmt = self.format_price(self.last_best_bid)
+                elif (
                     getattr(self, "penny_jumping", True)
                     and getattr(self, "last_best_bid", 0.0) > 0.0
                     and (self.last_best_ask - self.last_best_bid) > tick_size * 1.01
@@ -343,8 +354,15 @@ class LiveOrderExecutor:
                     px_fmt = self.format_price(self.last_best_bid if (getattr(self, "last_best_bid", 0.0) > 0.0 and self.last_best_bid < self.last_best_ask) else (self.last_best_ask - tick_size))
         elif not is_buy and getattr(self, "last_best_bid", 0.0) > 0.0:
             if px_fmt <= self.last_best_bid:
-                # Inside-spread penny-jumping captures Queue Rank #1 as Maker
-                if (
+                if getattr(self, "midpoint_pegging", False):
+                    # Midpoint pegging: clamp strictly to midpoint with at least 1 tick cushion above bid
+                    if (self.last_best_ask - self.last_best_bid) >= tick_size * 2.0:
+                        raw_mid = (self.last_best_bid + self.last_best_ask) / 2.0
+                        mid_tick = math.ceil(round(raw_mid / tick_size, 4)) * tick_size
+                        px_fmt = self.format_price(max(self.last_best_bid + tick_size, mid_tick))
+                    else:
+                        px_fmt = self.format_price(self.last_best_ask)
+                elif (
                     getattr(self, "penny_jumping", True)
                     and getattr(self, "last_best_ask", 0.0) > 0.0
                     and (self.last_best_ask - self.last_best_bid) > tick_size * 1.01
@@ -819,7 +837,7 @@ class LiveOrderExecutor:
                 if is_loss:
                     self.last_loss_exit_time = time.time()
 
-                self._record_completed_trade(
+                completed_tr = self._record_completed_trade(
                     strategy_name=strat_tag,
                     side="LONG" if was_long else "SHORT",
                     execution_type="TAKER" if crossed else "MAKER",
@@ -834,6 +852,8 @@ class LiveOrderExecutor:
                     tif="Ioc" if crossed else "Alo",
                     notes=f"Real-time WS fill on {self.coin}",
                 )
+                if completed_tr and completed_tr.get("net_pnl_usd", 0.0) < 0.0:
+                    self.last_loss_exit_time = time.time()
                 self.cached_position = 0.0
                 self.entry_price = 0.0
                 self.entry_fee_usd = 0.0
@@ -882,9 +902,16 @@ class LiveOrderExecutor:
 
     @property
     def session_realized_pnl(self) -> float:
-        """Returns the real change in account balance (settled on-chain) since session initialization."""
+        """Returns the realized net PnL across all closed strategy trades during this session."""
+        if self.auditor and getattr(self.auditor, "trades", None):
+            return sum(float(getattr(t, "net_pnl_usd", 0.0)) for t in self.auditor.trades)
         if self.completed_trades:
-            return sum(t.get("net_pnl_usd", 0.0) for t in self.completed_trades)
+            return sum(float(t.get("net_pnl_usd", 0.0)) for t in self.completed_trades)
+        return 0.0
+
+    @property
+    def account_equity_delta(self) -> float:
+        """Returns the real change in on-chain account balance since session initialization."""
         if self.initial_account_value > 0 and self.account_value > 0:
             return self.account_value - self.initial_account_value
         return 0.0
@@ -1460,6 +1487,10 @@ class LiveOrderExecutor:
                 for orphan_oid in list(self.active_order_oids):
                     self.cancel_order(orphan_oid, non_blocking=False)
 
+        # Forced market orders override: Never quote passive post-only maker orders
+        if getattr(self, "force_market_orders", False):
+            post_only = False
+
         # Format price and size conforming to Hyperliquid tick rules
         px_fmt = self.format_price(price)
         if post_only:
@@ -1910,12 +1941,34 @@ class LiveOrderExecutor:
             return None
 
         strat_tag = strategy_name or self.strategy_name
+
+        # Forced market orders override: Never quote passive post-only bracket entry
+        if getattr(self, "force_market_orders", False):
+            post_only = False
+
         px_fmt = self.format_price(price)
         if post_only:
             px_fmt = self._clamp_post_only_price(px_fmt, is_buy)
         sz_fmt = self.ensure_min_notional(self.format_size(size_btc), px_fmt)
         tp_px_fmt = self.format_price(tp_price)
         sl_px_fmt = self.format_price(sl_price)
+
+        # Anti-Immediate-Stopout Guardrail: Stop-loss trigger price MUST NOT sit at or inside the current opposing touch
+        tick_sz = 10.0 ** (-self.max_price_decimals) if self.max_price_decimals > 0 else (0.01 if "xyz:" in str(self.coin).lower() else 1.0)
+        if is_buy and self.last_best_bid > 0:
+            cushion = max(tick_sz * 2.0, self.last_best_bid * 0.0006)
+            max_sl = self.format_price(self.last_best_bid - cushion)
+            if sl_px_fmt >= self.last_best_bid:
+                sl_px_fmt = max_sl
+            else:
+                sl_px_fmt = min(sl_px_fmt, max_sl)
+        elif not is_buy and self.last_best_ask > 0:
+            cushion = max(tick_sz * 2.0, self.last_best_ask * 0.0006)
+            min_sl = self.format_price(self.last_best_ask + cushion)
+            if sl_px_fmt <= self.last_best_ask:
+                sl_px_fmt = min_sl
+            else:
+                sl_px_fmt = max(sl_px_fmt, min_sl)
 
         tif = "Alo" if post_only else "Ioc"
         exit_side = not is_buy
@@ -3081,9 +3134,22 @@ class LiveOrderExecutor:
                     )
                 return
 
-            if spread > tick_size * 1.5 and (best_bid + tick_size < best_ask):
-                base_px = self.format_price(best_bid + tick_size)
-                if base_px >= best_ask:
+            strat_midpoint = getattr(strat_cfg, "midpoint_pegging", None)
+            use_midpoint = strat_midpoint if strat_midpoint is not None else getattr(self, "midpoint_pegging", False)
+
+            if use_midpoint:
+                if spread >= 2.0 * tick_size:
+                    raw_mid = (best_bid + best_ask) / 2.0
+                    mid_tick = math.floor(round(raw_mid / tick_size, 4)) * tick_size
+                    base_px = self.format_price(min(best_ask - tick_size, mid_tick))
+                else:
+                    base_px = self.format_price(best_bid)
+            elif self.penny_jumping:
+                if spread > tick_size * 1.5 and (best_bid + tick_size < best_ask):
+                    base_px = self.format_price(best_bid + tick_size)
+                    if base_px >= best_ask:
+                        base_px = self.format_price(best_bid)
+                else:
                     base_px = self.format_price(best_bid)
             else:
                 base_px = self.format_price(best_bid)
@@ -3093,7 +3159,10 @@ class LiveOrderExecutor:
                 or getattr(strat_cfg, "entry_price_offset", 0.0)
                 or 0.0
             )
-            target_px = self.format_price(base_px + entry_offset) if entry_offset > 0 else base_px
+            if use_midpoint:
+                target_px = self.format_price(min(best_ask - tick_size, base_px + entry_offset)) if entry_offset > 0 else base_px
+            else:
+                target_px = self.format_price(base_px + entry_offset) if entry_offset > 0 else base_px
             entry_post_only = (target_px < best_ask)
 
             # Check existing resting order persistence with fast-fill escalation
@@ -3270,9 +3339,22 @@ class LiveOrderExecutor:
                     )
                 return
 
-            if spread > tick_size * 1.5 and (best_ask - tick_size > best_bid):
-                base_px = self.format_price(best_ask - tick_size)
-                if base_px <= best_bid:
+            strat_midpoint = getattr(strat_cfg, "midpoint_pegging", None)
+            use_midpoint = strat_midpoint if strat_midpoint is not None else getattr(self, "midpoint_pegging", False)
+
+            if use_midpoint:
+                if spread >= 2.0 * tick_size:
+                    raw_mid = (best_bid + best_ask) / 2.0
+                    mid_tick = math.ceil(round(raw_mid / tick_size, 4)) * tick_size
+                    base_px = self.format_price(max(best_bid + tick_size, mid_tick))
+                else:
+                    base_px = self.format_price(best_ask)
+            elif self.penny_jumping:
+                if spread > tick_size * 1.5 and (best_ask - tick_size > best_bid):
+                    base_px = self.format_price(best_ask - tick_size)
+                    if base_px <= best_bid:
+                        base_px = self.format_price(best_ask)
+                else:
                     base_px = self.format_price(best_ask)
             else:
                 base_px = self.format_price(best_ask)
@@ -3282,7 +3364,10 @@ class LiveOrderExecutor:
                 or getattr(strat_cfg, "entry_price_offset", 0.0)
                 or 0.0
             )
-            target_px = self.format_price(max(0.01, base_px - entry_offset)) if entry_offset > 0 else base_px
+            if use_midpoint:
+                target_px = self.format_price(max(best_bid + tick_size, base_px - entry_offset)) if entry_offset > 0 else base_px
+            else:
+                target_px = self.format_price(max(0.01, base_px - entry_offset)) if entry_offset > 0 else base_px
             entry_post_only = (target_px > best_bid)
 
             # Check existing resting order persistence with fast-fill escalation

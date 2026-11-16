@@ -33,6 +33,12 @@ class ScalpingModeRequest(BaseModel):
     save: bool = True
 
 
+class MarketOrdersToggleRequest(BaseModel):
+    enabled: bool
+    slippage_pct: Optional[float] = None
+    save: bool = True
+
+
 class OrderSizeRequest(BaseModel):
     order_size_btc: Optional[float] = None
     order_size: Optional[float] = None
@@ -383,6 +389,47 @@ def create_web_app(runner_ref: Any, broadcaster: TelemetryBroadcaster) -> FastAP
             "price": mid_px,
         }
 
+    @app.post("/api/config/market_orders")
+    @app.post("/api/market_orders/toggle")
+    async def toggle_market_orders(req: MarketOrdersToggleRequest):
+        runner = runner_ref()
+        if not runner:
+            raise HTTPException(status_code=503, detail="Engine runner unavailable")
+
+        force_mkt = bool(req.enabled)
+        slip = float(req.slippage_pct) if req.slippage_pct is not None else None
+
+        # Update strategies configuration
+        if hasattr(runner, "config") and hasattr(runner.config, "strategies"):
+            runner.config.strategies.set_market_orders(enabled=force_mkt, slippage_pct=slip, save=req.save)
+        if hasattr(runner, "config") and hasattr(runner.config, "backtest"):
+            runner.config.backtest.force_market_orders = force_mkt
+            if slip is not None:
+                runner.config.backtest.market_slippage_pct = slip
+
+        # Propagate immediately to live order executor
+        if hasattr(runner, "live_executor") and runner.live_executor:
+            runner.live_executor.force_market_orders = force_mkt
+            if slip is not None:
+                runner.live_executor.market_slippage_pct = slip
+
+        # Propagate to evaluator
+        if hasattr(runner, "evaluator") and runner.evaluator and hasattr(runner.evaluator, "bt_cfg"):
+            runner.evaluator.bt_cfg.force_market_orders = force_mkt
+            if slip is not None:
+                runner.evaluator.bt_cfg.market_slippage_pct = slip
+
+        action_verb = "ENABLED (Taker IOC)" if force_mkt else "DISABLED (Passive Maker / Smart Taker)"
+        cur_slip = getattr(getattr(runner.config.strategies, "live_execution", None), "market_slippage_pct", 0.0005)
+        logger.info(f"Forced Market Orders {action_verb} (Slippage: {cur_slip*100:.2f}%, Saved: {req.save})")
+
+        return {
+            "status": "ok",
+            "force_market_orders": force_mkt,
+            "market_slippage_pct": cur_slip,
+            "message": f"Forced market orders {action_verb}",
+        }
+
     @app.post("/api/config/order_size")
     async def update_order_size(req: OrderSizeRequest):
         runner = runner_ref()
@@ -519,6 +566,8 @@ class DashboardWebServer:
             "maker_fee_bps": float(getattr(getattr(self.runner, "config", None), "market", None) and getattr(self.runner.config.market, "maker_fee_bps", 1.5) or 1.5),
             "is_warming_up": bool(getattr(self.runner, "is_warming_up", False)),
             "warmup_remaining_secs": round(float(getattr(self.runner, "warmup_remaining_secs", 0.0)), 1),
+            "force_market_orders": bool(getattr(getattr(getattr(self.runner, "config", None), "strategies", None), "live_execution", None) and getattr(self.runner.config.strategies.live_execution, "force_market_orders", False)),
+            "market_slippage_pct": float(getattr(getattr(getattr(self.runner, "config", None), "strategies", None), "live_execution", None) and getattr(self.runner.config.strategies.live_execution, "market_slippage_pct", 0.0005) or 0.0005),
         }
 
         # 2. Signals
@@ -755,7 +804,7 @@ class DashboardWebServer:
                 "active_strategy": getattr(lx, "position_strategy", None) or getattr(lx, "strategy_name", "LiveExecution"),
                 "account_value": round(getattr(lx, "account_value", 0.0), 2),
                 "initial_account_value": round(getattr(lx, "initial_account_value", 0.0), 2),
-                "session_realized_pnl": round(getattr(lx, "session_realized_pnl", 0.0), 2),
+                "session_realized_pnl": round(total_realized_pnl, 2),
                 "available_margin": round(getattr(lx, "available_margin", 0.0), 2),
             }
 
@@ -775,31 +824,17 @@ class DashboardWebServer:
                 }
 
         real_acct_val = round(getattr(self.runner.live_executor, "account_value", 0.0), 2) if (hasattr(self.runner, "live_executor") and self.runner.live_executor) else 0.0
-        real_acct_pnl = round(getattr(self.runner.live_executor, "session_realized_pnl", 0.0), 2) if (hasattr(self.runner, "live_executor") and self.runner.live_executor) else 0.0
+        real_acct_delta = round(getattr(self.runner.live_executor, "account_equity_delta", 0.0), 2) if (hasattr(self.runner, "live_executor") and self.runner.live_executor) else 0.0
 
-        if is_live and live_position_data:
-            live_realized = float(live_position_data.get("session_realized_pnl", 0.0))
-            live_unrealized_usd = float(live_position_data.get("unrealized_usd", 0.0))
-            live_trades_n = len(getattr(self.runner.auditor, "trades", [])) if getattr(self.runner, "auditor", None) else len(getattr(self.runner.live_executor, "completed_trades", []))
-            portfolio_payload = {
-                "total_realized_pnl": round(live_realized, 2),
-                "total_unrealized_pnl": round(live_unrealized_usd, 2),
-                "total_pnl": round(live_realized + live_unrealized_usd, 2),
-                "total_trades": live_trades_n,
-                "real_account_value": real_acct_val,
-                "real_account_pnl": real_acct_pnl,
-                "is_live": True,
-            }
-        else:
-            portfolio_payload = {
-                "total_realized_pnl": round(total_realized_pnl, 2),
-                "total_unrealized_pnl": round(total_unrealized_pnl, 2),
-                "total_pnl": round(total_realized_pnl + total_unrealized_pnl, 2),
-                "total_trades": total_trades_count,
-                "real_account_value": real_acct_val,
-                "real_account_pnl": real_acct_pnl,
-                "is_live": False,
-            }
+        portfolio_payload = {
+            "total_realized_pnl": round(total_realized_pnl, 2),
+            "total_unrealized_pnl": round(total_unrealized_pnl, 2),
+            "total_pnl": round(total_realized_pnl + total_unrealized_pnl, 2),
+            "total_trades": total_trades_count,
+            "real_account_value": real_acct_val,
+            "real_account_pnl": real_acct_delta,
+            "is_live": is_live,
+        }
 
         snapshot = {
             "timestamp": now_ms,
@@ -818,6 +853,16 @@ class DashboardWebServer:
                 getattr(self.runner.config.strategies, "is_scalping_mode_active", False)
                 if hasattr(self.runner, "config") and hasattr(self.runner.config, "strategies")
                 else False
+            ),
+            "force_market_orders": (
+                getattr(self.runner.config.strategies.live_execution, "force_market_orders", False)
+                if hasattr(self.runner, "config") and hasattr(self.runner.config, "strategies") and hasattr(self.runner.config.strategies, "live_execution")
+                else False
+            ),
+            "market_slippage_pct": (
+                getattr(self.runner.config.strategies.live_execution, "market_slippage_pct", 0.0005)
+                if hasattr(self.runner, "config") and hasattr(self.runner.config, "strategies") and hasattr(self.runner.config.strategies, "live_execution")
+                else 0.0005
             ),
             "program_name": (
                 getattr(self.runner.config.strategies, "program_name", "unified")
