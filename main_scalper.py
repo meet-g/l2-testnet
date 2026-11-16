@@ -274,14 +274,31 @@ def main():
 
     # Strategy override validation
     if args.strategy:
-        strat_name = args.strategy.strip()
-        if args.mode not in ("audit",) and strat_name not in SCALPING_STRATEGIES:
-            Console().print(f"[bold red]Error: Strategy '{strat_name}' is not a Scalping strategy. Valid options: {', '.join(SCALPING_STRATEGIES)}[/bold red]")
-            sys.exit(1)
-        cfg.strategies.live_execution.active_strategy = strat_name
-        s = cfg.strategies.get_strategy(strat_name)
-        if s:
-            s.enabled = True
+        raw_strat = args.strategy.strip()
+        if raw_strat.lower() in ("all", "all_scalper", "all-scalper"):
+            for s in cfg.strategies.scalping_strategies.values():
+                s.enabled = True
+            cfg.strategies.live_execution.active_strategy = "all"
+        elif "," in raw_strat:
+            selected_strats = [s.strip() for s in raw_strat.split(",") if s.strip()]
+            for s_name in selected_strats:
+                if args.mode not in ("audit",) and s_name not in SCALPING_STRATEGIES:
+                    Console().print(f"[bold red]Error: Strategy '{s_name}' is not a Scalping strategy. Valid options: {', '.join(SCALPING_STRATEGIES)}, all[/bold red]")
+                    sys.exit(1)
+            for s in cfg.strategies.scalping_strategies.values():
+                s.enabled = (s.name in selected_strats)
+            cfg.strategies.live_execution.active_strategy = "all"
+        else:
+            strat_name = raw_strat
+            if args.mode not in ("audit",) and strat_name not in SCALPING_STRATEGIES:
+                Console().print(f"[bold red]Error: Strategy '{strat_name}' is not a Scalping strategy. Valid options: {', '.join(SCALPING_STRATEGIES)}, all[/bold red]")
+                sys.exit(1)
+            for s in cfg.strategies.scalping_strategies.values():
+                s.enabled = (s.name == strat_name)
+            cfg.strategies.live_execution.active_strategy = strat_name
+            s = cfg.strategies.get_strategy(strat_name)
+            if s:
+                s.enabled = True
 
     # Market order and slippage configuration
     force_market = None

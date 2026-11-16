@@ -254,12 +254,22 @@ def main():
 
     # Strategy override validation
     if args.strategy:
-        strat_name = args.strategy.strip()
-        if strat_name.lower() in ("all", "all_core", "all-core"):
+        raw_strat = args.strategy.strip()
+        if raw_strat.lower() in ("all", "all_core", "all-core"):
             for s in cfg.strategies.execution_strategies.values():
                 s.enabled = True
             cfg.strategies.live_execution.active_strategy = "all"
+        elif "," in raw_strat:
+            selected_strats = [s.strip() for s in raw_strat.split(",") if s.strip()]
+            for s_name in selected_strats:
+                if args.mode not in ("audit",) and s_name not in CORE_EXECUTION_STRATEGIES:
+                    Console().print(f"[bold red]Error: Strategy '{s_name}' is not a Core execution strategy. Valid options: {', '.join(CORE_EXECUTION_STRATEGIES)}, all[/bold red]")
+                    sys.exit(1)
+            for s in cfg.strategies.execution_strategies.values():
+                s.enabled = (s.name in selected_strats)
+            cfg.strategies.live_execution.active_strategy = "all"
         else:
+            strat_name = raw_strat
             if args.mode not in ("audit",) and strat_name not in CORE_EXECUTION_STRATEGIES:
                 Console().print(f"[bold red]Error: Strategy '{strat_name}' is not a Core execution strategy. Valid options: {', '.join(CORE_EXECUTION_STRATEGIES)}, all[/bold red]")
                 sys.exit(1)
