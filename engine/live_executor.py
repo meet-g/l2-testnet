@@ -1417,18 +1417,39 @@ class LiveOrderExecutor:
         if bid <= 0 or ask <= 0:
             if self.info:
                 try:
-                    mids = self.info.all_mids() if hasattr(self.info, "all_mids") else {}
-                    mid = float(mids.get(self.coin, 0.0))
-                    if mid > 0:
-                        bid = mid
-                        ask = mid
-                except Exception:
-                    pass
+                    # 1. Try DEX-specific mids if coin is a builder DEX asset
+                    if self.dex and hasattr(self.info, "all_mids"):
+                        mids_dex = self.info.all_mids(dex=self.dex)
+                        mid = float(mids_dex.get(self.coin, mids_dex.get(self.coin.split(":")[-1], 0.0)))
+                        if mid > 0:
+                            bid = mid
+                            ask = mid
+                    # 2. Try global all_mids
+                    if bid <= 0 or ask <= 0:
+                        mids = self.info.all_mids() if hasattr(self.info, "all_mids") else {}
+                        mid = float(mids.get(self.coin, 0.0))
+                        if mid > 0:
+                            bid = mid
+                            ask = mid
+                    # 3. Fall back to authoritative live L2 snapshot if bid/ask still 0
+                    if (bid <= 0 or ask <= 0) and hasattr(self.info, "l2_snapshot"):
+                        snap = self.info.l2_snapshot(self.coin)
+                        bids_l = snap.get("levels", [[]])[0]
+                        asks_l = snap.get("levels", [[], []])[1]
+                        if bids_l and asks_l:
+                            bid = float(bids_l[0]["px"])
+                            ask = float(asks_l[0]["px"])
+                except Exception as px_err:
+                    logging.debug(f"[LiveExecutor] Error resolving market order price: {px_err}")
+
+        ref_px = (ask if is_buy else bid) if (ask > 0 and bid > 0) else (ask if ask > 0 else bid)
+        if ref_px <= 0:
+            self.console.print(f"[bold red][LiveExecutor] Cannot place market order: could not resolve reference price for {self.coin}.[/bold red]")
+            return None
+
         if is_buy:
-            ref_px = ask if ask > 0 else (bid if bid > 0 else 83000.0)
             raw_px = ref_px * (1.0 + slip)
         else:
-            ref_px = bid if bid > 0 else (ask if ask > 0 else 83000.0)
             raw_px = ref_px * (1.0 - slip)
 
         limit_px = self.format_price(raw_px)

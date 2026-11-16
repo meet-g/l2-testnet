@@ -469,9 +469,14 @@ def main():
             px = args.price
             if px <= 0:
                 info = executor.info
-                mids = info.all_mids() if info else {}
-                mid = float(mids.get(cfg.market.coin, 83000.0))
-                px = round(mid * 0.95 if is_buy else mid * 1.05, 1)
+                mids = info.all_mids(dex=executor.dex) if (info and executor.dex) else (info.all_mids() if info else {})
+                mid = float(mids.get(cfg.market.coin, mids.get(cfg.market.coin.split(":")[-1], 0.0))) if mids else 0.0
+                if mid <= 0 and info:
+                    snap = info.l2_snapshot(cfg.market.coin)
+                    bids_l = snap.get("levels", [[]])[0]
+                    asks_l = snap.get("levels", [[], []])[1]
+                    mid = (float(bids_l[0]["px"]) + float(asks_l[0]["px"])) / 2.0 if (bids_l and asks_l) else 0.0
+                px = round(mid * 0.95 if is_buy else mid * 1.05, executor.max_price_decimals)
             executor.place_limit_order(is_buy=is_buy, size_btc=args.order_size, price=px, post_only=True)
 
     elif args.mode == "cancel-orders":
