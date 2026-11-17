@@ -2275,10 +2275,12 @@ def main():
             args.size = round(3.0 * ratio, 4)
         elif cfg.market.is_xyz_stock:
             base_shares = 8.0 if cfg.market.coin == "xyz:SKHX" else 50.0
+            min_stock_sz = 0.02 if cfg.market.coin == "xyz:SKHX" else 0.15
             if args.size == 0.1:
-                args.size = round(base_shares * ratio, 2)
+                args.size = max(min_stock_sz, round(base_shares * ratio, 3))
             if args.order_size == 0.0005:
-                args.order_size = max(0.1 if cfg.market.coin == "xyz:SKHX" else 1.0, round(base_shares * 0.5 * ratio * args.allocation, 2))
+                scaled_sz = round(base_shares * 0.5 * ratio * args.allocation, 3)
+                args.order_size = max(min_stock_sz, scaled_sz)
     else:
         if cfg.market.coin == "HYPE":
             if args.order_size == 0.0005:
@@ -2526,7 +2528,7 @@ def main():
             cfg.backtest.order_size_btc = round(3.0 * ratio, 4)
         elif cfg.market.is_xyz_stock and args.size == 0.1:
             base_shares = 8.0 if cfg.market.coin == "xyz:SKHX" else 50.0
-            cfg.backtest.order_size_btc = round(base_shares * ratio, 2)
+            cfg.backtest.order_size_btc = round(base_shares * ratio, 3)
 
         # Offline replay
         runner = L2EngineRunner(config=cfg, record_data=False, enable_audit=not args.no_audit)

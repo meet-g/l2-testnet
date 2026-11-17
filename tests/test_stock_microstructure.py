@@ -180,6 +180,51 @@ class TestStockMicrostructureStrategy(unittest.TestCase):
         self.assertTrue(st.is_in_position)
         self.assertAlmostEqual(st.entry_price, 90.04, places=4)  # 90.05 - 0.01
 
+    def test_capital_usd_sizing_and_drawdown(self):
+        """Verifies that capital_usd=100 scales trade size to ~$100 notional without 85x blowout and keeps drawdown correct."""
+        app_cfg = AppConfig.for_core()
+        app_cfg.market.coin = "xyz:SKHX"
+        app_cfg.market.is_xyz_stock = True
+        app_cfg.backtest.capital_usd = 100.0
+        app_cfg.backtest.initial_cash_usd = 100.0
+        app_cfg.backtest.max_spread_bps = 10.0
+
+        strat_params = {
+            "Stock_Microstructure_Alpha": {
+                "execution_type": "HEDGED_MAKER",
+                "price_offset": 0.01,
+                "entry_threshold": 0.50,
+                "order_size_btc": 10.0,
+            }
+        }
+
+        evaluator = EdgeEvaluator(
+            market_cfg=app_cfg.market,
+            bt_cfg=app_cfg.backtest,
+            strategy_defs={"Stock_Microstructure_Alpha": ("StockMicrostructure", "HEDGED_MAKER")},
+            strategy_params=strat_params,
+        )
+
+        st = evaluator.strategies["Stock_Microstructure_Alpha"]
+        self.assertEqual(st.peak_equity, 100.0)
+        self.assertEqual(st.cash_usd, 100.0)
+
+        # Trigger bullish entry @ mid=840.0
+        evaluator.record_step(
+            timestamp_ms=1794211200000,
+            mid_price=840.0,
+            best_bid=839.9,
+            best_ask=840.1,
+            signals={"StockMicrostructure": 0.85},
+        )
+        self.assertTrue(st.is_in_position)
+        # 100 USD / 840.0 = ~0.119 shares ($99.96 notional)
+        self.assertAlmostEqual(st.position_btc, 0.119, places=3)
+        notional = st.position_btc * 840.0
+        self.assertLessEqual(notional, 100.5)
+        self.assertGreaterEqual(notional, 90.0)
+        self.assertLess(st.max_drawdown_usd, 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

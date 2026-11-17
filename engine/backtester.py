@@ -45,8 +45,12 @@ class StrategyState:
     cash_usd: float = 10_000.0
     category: str = "execution"  # 'execution' for 4 new strategies or 'scalping' for legacy strategies
     trades: List[TradeRecord] = field(default_factory=list)
-    peak_equity: float = 10_000.0
+    peak_equity: Optional[float] = None
     max_drawdown_usd: float = 0.0
+
+    def __post_init__(self):
+        if self.peak_equity is None:
+            self.peak_equity = self.cash_usd
 
     # Dynamic trade management
     entry_fee_usd: float = 0.0  # Fee paid on entry leg
@@ -138,6 +142,7 @@ class EdgeEvaluator:
                 execution_type=self.strategy_defs[s][1],
                 signal_key=self.strategy_defs[s][0],
                 cash_usd=self.bt_cfg.initial_cash_usd,
+                peak_equity=self.bt_cfg.initial_cash_usd,
                 category="scalping" if s in LEGACY_SCALPING_STRATEGIES else "execution",
             )
             for s in self.strategy_names
@@ -829,18 +834,31 @@ class EdgeEvaluator:
                         continue
 
                 sz = self.strategy_params.get(s_name, {}).get("order_size_btc", self.bt_cfg.order_size_btc)
+
                 if getattr(self.bt_cfg, "capital_usd", None) is not None and self.bt_cfg.capital_usd > 0:
-                    capital_ratio = self.bt_cfg.capital_usd / 10_000.0
-                    sz = sz * capital_ratio
-                is_coin_units = (sz > 1.0)
-                if same_dir_active:
-                    sz = sz * 0.5  # 50% size discount on co-entry within the same group
-                if self.market_cfg.coin.upper() != "BTC" and mid_price > 0 and not is_coin_units:
-                    sz = round(sz * (85000.0 / mid_price), 2)
-                elif self.market_cfg.coin.upper() == "BTC":
-                    sz = round(sz, 4)
+                    target_usd = float(self.bt_cfg.capital_usd) * float(getattr(self.bt_cfg, "capital_allocation_pct", 1.0))
+                    if same_dir_active:
+                        target_usd *= 0.5  # 50% size discount on co-entry within the same group
+                    sz = target_usd / mid_price if mid_price > 0 else 0.01
+                    is_stock = getattr(self.market_cfg, "is_xyz_stock", False) or "xyz:" in str(self.market_cfg.coin).lower()
+                    if self.market_cfg.coin.upper() == "BTC":
+                        sz = round(sz, 4)
+                    elif is_stock:
+                        sz = round(sz, 3)
+                    else:
+                        sz = round(sz, 2)
+                    min_sz = 0.001 if is_stock else (0.0001 if self.market_cfg.coin.upper() == "BTC" else 0.01)
+                    sz = max(sz, min_sz)
                 else:
-                    sz = round(sz, 2)
+                    is_coin_units = (sz > 1.0)
+                    if same_dir_active:
+                        sz = sz * 0.5  # 50% size discount on co-entry within the same group
+                    if self.market_cfg.coin.upper() != "BTC" and mid_price > 0 and not is_coin_units:
+                        sz = round(sz * (85000.0 / mid_price), 2)
+                    elif self.market_cfg.coin.upper() == "BTC":
+                        sz = round(sz, 4)
+                    else:
+                        sz = round(sz, 2)
 
 
                 # Bullish Entry Trigger

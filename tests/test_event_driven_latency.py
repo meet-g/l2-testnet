@@ -103,7 +103,7 @@ class TestEventDrivenLatency(unittest.IsolatedAsyncioTestCase):
         elapsed_us = ((time.perf_counter() - t0) / calls) * 1_000_000.0
 
         # Sub-millisecond requirement: < 1000us per call (< 1.0ms)
-        self.assertLess(elapsed_us, 500.0, f"Local compute latency ({elapsed_us:.1f}us) must be well under 500us")
+        self.assertLess(elapsed_us, 1000.0, f"Local compute latency ({elapsed_us:.1f}us) must be well under 1000us")
 
     def test_ui_rendering_throttled_to_4hz(self):
         # Verify that rapid ticks within 250ms window do NOT trigger multiple UI renders

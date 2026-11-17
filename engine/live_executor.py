@@ -1137,6 +1137,10 @@ class LiveOrderExecutor:
             sz_fmt = min(raw_sz, cur_abs_pos)
         else:
             sz_fmt = self.ensure_min_notional(raw_sz, px_fmt)
+            if not is_exit and self.capital_usd is not None and self.capital_usd > 0 and px_fmt > 0:
+                max_capital_sz = self.format_size(self.capital_usd / px_fmt)
+                if max_capital_sz * px_fmt >= 10.0:
+                    sz_fmt = min(sz_fmt, max_capital_sz)
 
         notional = sz_fmt * px_fmt
         if not is_exit and notional < 10.0:
@@ -1558,6 +1562,10 @@ class LiveOrderExecutor:
             sz_fmt = min(raw_sz, cur_abs_pos)
         else:
             sz_fmt = self.ensure_min_notional(raw_sz, px_fmt)
+            if not is_exit and self.capital_usd is not None and self.capital_usd > 0 and px_fmt > 0:
+                max_capital_sz = self.format_size(self.capital_usd / px_fmt)
+                if max_capital_sz * px_fmt >= 10.0:
+                    sz_fmt = min(sz_fmt, max_capital_sz)
 
         notional = sz_fmt * px_fmt
         if not is_exit and notional < 10.0:
@@ -1976,6 +1984,10 @@ class LiveOrderExecutor:
         if post_only:
             px_fmt = self._clamp_post_only_price(px_fmt, is_buy)
         sz_fmt = self.ensure_min_notional(self.format_size(size_btc), px_fmt)
+        if self.capital_usd is not None and self.capital_usd > 0 and px_fmt > 0:
+            max_capital_sz = self.format_size(self.capital_usd / px_fmt)
+            if max_capital_sz * px_fmt >= 10.0:
+                sz_fmt = min(sz_fmt, max_capital_sz)
         tp_px_fmt = self.format_price(tp_price)
         sl_px_fmt = self.format_price(sl_price)
 
@@ -3079,8 +3091,13 @@ class LiveOrderExecutor:
             return
 
         # Position safety guard: Do not place new entries if already holding a position at or above max_position
-        eff_max_pos = max(self.max_position_btc, order_size * 2.0)
-        if abs(self.cached_position) >= (eff_max_pos - 1e-6):
+        if self.capital_usd is not None and self.capital_usd > 0 and mid_price > 0:
+            max_capital_sz = self.capital_usd / mid_price
+            eff_max_pos = min(max_capital_sz, max(self.max_position_btc, order_size))
+        else:
+            eff_max_pos = max(self.max_position_btc, order_size * 2.0)
+
+        if (abs(self.cached_position) + order_size * 0.5) >= (eff_max_pos - 1e-6):
             return
 
         # High Confidence Guard: Strictly require minimum confidence if configured

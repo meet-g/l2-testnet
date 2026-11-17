@@ -64,6 +64,30 @@ class TestLiveOrderExecutor(unittest.TestCase):
         self.assertEqual(len(actions), 1)
         self.assertEqual(actions[0][2], 0.0625)
 
+    def test_capital_usd_skhx_clamping(self):
+        # With capital_usd = $100 and allocation_pct = 1.0 at price $840:
+        # Target size = 100 / 840 = 0.119 shares ($99.96 notional <= $100)
+        self.executor.coin = "xyz:SKHX"
+        self.executor.sz_decimals = 3
+        self.executor.capital_usd = 100.0
+        self.executor.allocation_pct = 1.0
+        actions = []
+        self.executor.place_limit_order = lambda is_buy, size_btc, price, post_only=True, signal_score=0, **kwargs: (
+            actions.append(("PLACE", is_buy, size_btc, price)),
+            {"status": "ok"}
+        )[1]
+
+        self.executor.on_signal_update(0.99, 839.9, 840.1, 1.0)
+        self.assertEqual(len(actions), 1)
+        self.assertAlmostEqual(actions[0][2], 0.119, places=3)
+        self.assertLessEqual(actions[0][2] * 840.0, 100.5)
+
+        # Holding 0.119 shares ($100 notional) must block further entries
+        self.executor.cached_position = 0.119
+        actions.clear()
+        self.executor.on_signal_update(0.99, 839.9, 840.1, 1.0)
+        self.assertEqual(len(actions), 0, "Further entry should be blocked when capital limit is reached")
+
     def test_resting_order_persistence_no_churn(self):
         actions = []
         self.executor.place_limit_order = lambda is_buy, size_btc, price, post_only=True, signal_score=0, **kwargs: (
