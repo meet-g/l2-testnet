@@ -381,7 +381,7 @@
       "description": "Momentum Expansion (QDAP queue exhaustion + rolling CVD volume impulse + 2-min trend alignment)"
     },
     "ConvexityCascade": {
-      "enabled": true,
+      "enabled": false,
       "weight": 0.0,
       "description": "Order Book Convexity & Liquidity Hole Cascade (queue depletion + depth slope + hole vacuum + CVD impulse)"
     },

@@ -36,7 +36,7 @@
       "coentry_group": "triad"
     },
     "Convexity_Cascade": {
-      "enabled": true,
+      "enabled": false,
       "description": "Multi-tier order book convexity and liquidity hole cascade with order count dispersion and trade flow impulse",
       "signal_key": "ConvexityCascade",
       "execution_type": "HEDGED_MAKER",
@@ -123,7 +123,7 @@
       "description": "Hedged Convexity Alpha (depth curvature + order count dispersion + dynamic VPIN toxicity shielding & defensive maker hedge triggers)"
     },
     "ConvexityCascade": {
-      "enabled": true,
+      "enabled": false,
       "weight": 0.0,
       "description": "Order Book Convexity & Liquidity Hole Cascade (queue depletion + depth slope + hole vacuum + CVD impulse)"
     },

@@ -251,7 +251,10 @@ class TestProgramSeparation(unittest.TestCase):
         # Trying to enable scalping on core config should not disable core strategies
         core_cfg.set_scalping_mode(enabled=True)
         for name in CORE_EXECUTION_STRATEGIES:
-            self.assertTrue(core_cfg.execution_strategies[name].enabled)
+            if name == "Convexity_Cascade":
+                self.assertFalse(core_cfg.execution_strategies[name].enabled)
+            else:
+                self.assertTrue(core_cfg.execution_strategies[name].enabled)
         self.assertFalse(core_cfg.is_scalping_mode_active)
 
         scalp_cfg = ScalperStrategiesConfig.load("strategies_scalper.json")
@@ -303,7 +306,10 @@ class TestProgramSeparation(unittest.TestCase):
         self.assertEqual(len(cfg.execution_strategies), len(CORE_EXECUTION_STRATEGIES))
         for name in CORE_EXECUTION_STRATEGIES:
             self.assertIn(name, cfg.execution_strategies)
-            self.assertTrue(cfg.execution_strategies[name].enabled)
+            if name == "Convexity_Cascade":
+                self.assertFalse(cfg.execution_strategies[name].enabled)
+            else:
+                self.assertTrue(cfg.execution_strategies[name].enabled)
 
 
 if __name__ == "__main__":
