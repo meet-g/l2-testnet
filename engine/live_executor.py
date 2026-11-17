@@ -2155,7 +2155,7 @@ class LiveOrderExecutor:
                         self.active_order = None
                 else:
                     self.active_order = None
-                    self.console.print(f"[bold red]✗ [LiveExecutor] Bracket order failed: {res}[/bold red]")
+                    self.console.print(f"[bold red]✗ [LiveExecutor] Bracket order failed: {res}. Falling back to standard limit/market order...[/bold red]")
                     if self.auditor:
                         self.auditor.record_live_order_event(
                             strategy_name=strat_tag,
@@ -2164,11 +2164,23 @@ class LiveOrderExecutor:
                             size_btc=sz_fmt,
                             price=px_fmt,
                             tif=tif,
-                            status="failed",
+                            status="bracket_failed",
                             error_message=str(res),
                             signal_score=signal_score,
                         )
-                return res
+                    return self.place_limit_order(
+                        is_buy=is_buy,
+                        size_btc=size_btc,
+                        price=price,
+                        post_only=post_only,
+                        tif=kwargs.get("tif", "Alo" if post_only else "Ioc"),
+                        signal_score=signal_score,
+                        is_exit=False,
+                        strategy_name=strategy_name or self.strategy_name,
+                        non_blocking=False,
+                        bypass_cooldown=True,
+                        **kwargs,
+                    )
             except Exception as e:
                 self.active_order = None
                 self.console.print(f"[dim yellow][LiveExecutor] Native bracket exception: {e}. Falling back to standard limit order.[/dim yellow]")

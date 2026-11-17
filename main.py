@@ -243,8 +243,10 @@ class L2EngineRunner:
         if self.live_executor:
             # 1. If holding an active position, preserve the owning strategy
             if abs(self.live_executor.cached_position) > 1e-6:
-                if not self.live_executor.position_strategy:
-                    self.live_executor.position_strategy = self.config.strategies.get_effective_live_strategy()
+                if not self.live_executor.position_strategy or self.live_executor.position_strategy == "all":
+                    active_name = self.config.strategies.get_effective_live_strategy()
+                    en_defs = self.config.strategies.get_enabled_strategy_defs()
+                    self.live_executor.position_strategy = active_name if (active_name != "all" and self.config.strategies.get_strategy(active_name)) else (list(en_defs.keys())[0] if en_defs else "Hedged_Convexity")
                 strat_to_use = self.live_executor.position_strategy
                 active_strat = self.config.strategies.get_strategy(strat_to_use)
                 sig_score = scores.get(active_strat.signal_key, 0.0) if active_strat else 0.0
@@ -837,19 +839,49 @@ class L2EngineRunner:
             cur_pos = self.live_executor.cached_position
             pos_c = "green" if cur_pos > 0 else ("red" if cur_pos < 0 else "dim")
             pnl_c = "green" if live_net_pnl >= 0 else "red"
-            live_table.add_row(
-                self.live_executor.strategy_name or "LiveExecution",
-                f"{self.live_executor.account_address[:8]}..." if self.live_executor.account_address else "-",
-                str(getattr(self.live_executor, "_order_counter", 0)),
-                str(len(live_trades)),
-                f"[{pnl_c}]${live_net_pnl:+.4f}[/{pnl_c}]",
-                f"[red]-${live_fees:.4f}[/red]" if live_fees > 0 else "$0.00",
-                f"[{pos_c}]{cur_pos:+.4f} {self.config.market.coin}[/{pos_c}]",
-            )
+
+            trades_by_strat = {}
+            for t in live_trades:
+                sn = t.get("strategy") or self.live_executor.strategy_name or "LiveExecution"
+                if sn not in trades_by_strat:
+                    trades_by_strat[sn] = []
+                trades_by_strat[sn].append(t)
+
+            if trades_by_strat:
+                for sn, s_trades in trades_by_strat.items():
+                    s_net = sum(t.get("net_pnl_usd", 0.0) for t in s_trades)
+                    s_fees = sum(t.get("fee_usd", 0.0) for t in s_trades)
+                    s_pnl_c = "green" if s_net >= 0 else "red"
+                    live_table.add_row(
+                        sn,
+                        f"{self.live_executor.account_address[:8]}..." if self.live_executor.account_address else "-",
+                        str(getattr(self.live_executor, "_order_counter", 0)),
+                        str(len(s_trades)),
+                        f"[{s_pnl_c}]${s_net:+.4f}[/{s_pnl_c}]",
+                        f"[red]-${s_fees:.4f}[/red]" if s_fees > 0 else "$0.00",
+                        f"[{pos_c}]{cur_pos:+.4f} {self.config.market.coin}[/{pos_c}]",
+                    )
+            else:
+                active_lbl = "Multi-Strategy Dispatch (All Active)" if self.live_executor.strategy_name == "all" else (self.live_executor.strategy_name or "LiveExecution")
+                live_table.add_row(
+                    active_lbl,
+                    f"{self.live_executor.account_address[:8]}..." if self.live_executor.account_address else "-",
+                    str(getattr(self.live_executor, "_order_counter", 0)),
+                    "0",
+                    f"[{pnl_c}]${live_net_pnl:+.4f}[/{pnl_c}]",
+                    "$0.00",
+                    f"[{pos_c}]{cur_pos:+.4f} {self.config.market.coin}[/{pos_c}]",
+                )
             self.console.print(live_table)
             self.console.print("\n")
 
         # 1. Performance Table
+        if self.live_orders:
+            self.console.print(
+                "[bold yellow]ℹ NOTE: Live Orders Mode was ENABLED. Real orders and fills executed on Hyperliquid "
+                "are reported in the table above. The table below represents a parallel paper simulation "
+                "benchmark tracking theoretical edge across all strategies.[/bold yellow]\n"
+            )
         table_title = "Theoretical Paper Simulation Benchmark" if self.live_orders else "Paper Trading Performance (Realistic Fees & Slippage)"
         table_perf = Table(title=table_title, header_style="bold cyan")
         table_perf.add_column("Strategy", justify="left")
@@ -2219,6 +2251,10 @@ def main():
     cfg.backtest.initial_cash_usd = args.cash
     cfg.backtest.capital_usd = args.capital if args.capital > 0 else (args.cash if args.cash != 10000.0 else None)
     cfg.backtest.capital_allocation_pct = args.allocation
+
+    # Sync --size to order_size if user specified --size for live execution
+    if args.size != 0.1 and args.order_size == 0.0005:
+        args.order_size = args.size
 
     # Dynamic scaling for backtesting & live trading based on capital
     if cfg.backtest.capital_usd is not None and cfg.backtest.capital_usd > 0:

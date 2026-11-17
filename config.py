@@ -1983,6 +1983,8 @@ class ScalperStrategiesConfig(StrategiesConfig):
 
     def get_effective_live_strategy(self) -> str:
         current = self.live_execution.active_strategy
+        if current in ("all", "all_scalp", "all-scalp"):
+            return "all"
         current_cfg = self.scalping_strategies.get(current)
         if current_cfg and current_cfg.enabled:
             return current

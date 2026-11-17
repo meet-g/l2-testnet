@@ -280,6 +280,10 @@ def main():
             s = cfg.strategies.get_strategy(strat_name)
             if s:
                 s.enabled = True
+    else:
+        # Default behavior: If multiple strategies are enabled in config, default to dynamic multi-strategy dispatch ("all")
+        if len(cfg.strategies.get_enabled_strategy_defs()) > 1:
+            cfg.strategies.live_execution.active_strategy = "all"
 
     # Market order and slippage configuration
     force_market = None
@@ -347,6 +351,10 @@ def main():
     cfg.backtest.initial_cash_usd = args.cash
     cfg.backtest.capital_usd = args.capital if args.capital > 0 else (args.cash if args.cash != 10000.0 else None)
     cfg.backtest.capital_allocation_pct = args.allocation
+
+    # Sync --size to order_size if user specified --size for live execution
+    if args.size != 0.1 and args.order_size == 0.0005:
+        args.order_size = args.size
 
     # Dynamic scaling for backtesting & live trading based on capital
     if cfg.backtest.capital_usd is not None and cfg.backtest.capital_usd > 0:

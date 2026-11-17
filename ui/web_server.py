@@ -823,6 +823,16 @@ class DashboardWebServer:
                     "hold_secs": round((now_ms - getattr(lx, "entry_time_ms", now_ms)) / 1000.0, 1) if getattr(lx, "entry_time_ms", 0) > 0 else 0.0,
                 }
 
+            if lx and getattr(lx, "active_order", None):
+                ao = lx.active_order
+                live_position_data["resting_order"] = {
+                    "side": "BUY" if ao.get("is_buy") else "SELL",
+                    "price": ao.get("price", 0.0),
+                    "size": ao.get("size", 0.0),
+                    "strategy": ao.get("strategy_name", ""),
+                    "is_bracket": ao.get("is_bracket", False),
+                }
+
         real_acct_val = round(getattr(self.runner.live_executor, "account_value", 0.0), 2) if (hasattr(self.runner, "live_executor") and self.runner.live_executor) else 0.0
         real_acct_delta = round(getattr(self.runner.live_executor, "account_equity_delta", 0.0), 2) if (hasattr(self.runner, "live_executor") and self.runner.live_executor) else 0.0
 
