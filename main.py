@@ -140,19 +140,28 @@ class L2EngineRunner:
         if live_orders:
             from engine.live_executor import LiveOrderExecutor
             active_name = self.config.strategies.get_effective_live_strategy()
+            strat_live_cfg = getattr(self.config.strategies, "live_execution", None)
+            cfg_max_pos = getattr(strat_live_cfg, "max_position_btc", 0.05) if strat_live_cfg else 0.05
+            cfg_p_fee = getattr(strat_live_cfg, "priority_fee_bps", 0.0) if strat_live_cfg else 0.0
+            cfg_force_mkt = getattr(strat_live_cfg, "force_market_orders", False) if strat_live_cfg else False
+            cfg_mkt_slip = getattr(strat_live_cfg, "market_slippage_pct", 0.0005) if strat_live_cfg else 0.0005
+            cfg_midpoint = getattr(strat_live_cfg, "midpoint_pegging", False) if strat_live_cfg else False
+
             self.live_executor = LiveOrderExecutor(
                 config=self.config,
                 console=self.console,
                 default_order_size_btc=order_size_btc,
+                max_position_btc=cfg_max_pos,
                 capital_usd=getattr(self.config.backtest, "capital_usd", None),
                 allocation_pct=getattr(self.config.backtest, "capital_allocation_pct", 1.0),
                 auditor=self.auditor,
                 strategy_name=active_name,
                 non_blocking=True,
-                priority_fee_bps=self.config.strategies.live_execution.priority_fee_bps,
-                force_market_orders=getattr(self.config.strategies.live_execution, "force_market_orders", False),
-                market_slippage_pct=getattr(self.config.strategies.live_execution, "market_slippage_pct", 0.01),
+                priority_fee_bps=cfg_p_fee,
+                force_market_orders=cfg_force_mkt,
+                market_slippage_pct=cfg_mkt_slip,
                 warmup_secs=self.warmup_secs,
+                midpoint_pegging=cfg_midpoint,
             )
 
         self.dashboard = TerminalDashboard(console=self.console)
@@ -545,7 +554,15 @@ class L2EngineRunner:
         try:
             if show_ui:
                 with Live(
-                    self.dashboard.render(self.book, self.trades, {}, self.evaluator, network=network_name),
+                    self.dashboard.render(
+                        self.book,
+                        self.trades,
+                        {},
+                        self.evaluator,
+                        network=network_name,
+                        is_live_orders=self.live_orders,
+                        live_executor=self.live_executor,
+                    ),
                     console=self.console,
                     refresh_per_second=4,
                     screen=False,
@@ -630,6 +647,8 @@ class L2EngineRunner:
                                                     self.evaluator,
                                                     network=network_name,
                                                     warmup_remaining_secs=self.warmup_remaining_secs,
+                                                    is_live_orders=self.live_orders,
+                                                    live_executor=self.live_executor,
                                                 )
                                             )
                                         if self.web_server and self.book.is_valid and self.web_server.broadcaster.should_broadcast(now_t):
@@ -685,7 +704,12 @@ class L2EngineRunner:
                                     "method": "subscribe",
                                     "subscription": {"type": "userFills", "user": self.live_executor.account_address},
                                 }
+                                sub_orders = {
+                                    "method": "subscribe",
+                                    "subscription": {"type": "orderUpdates", "user": self.live_executor.account_address},
+                                }
                                 await ws.send(json.dumps(sub_fills))
+                                await ws.send(json.dumps(sub_orders))
 
                             if getattr(self.config.market, "subscribe_macro_book", False):
                                 sub_macro = {
@@ -793,8 +817,41 @@ class L2EngineRunner:
 
         mid = self.book.mid_price
 
+        # 0. Real Live Exchange Execution Table (When running in live orders mode)
+        if self.live_orders and self.live_executor:
+            live_trades = getattr(self.live_executor, "completed_trades", [])
+            live_net_pnl = sum(t.get("net_pnl_usd", 0.0) for t in live_trades)
+            live_fees = sum(t.get("fee_usd", 0.0) for t in live_trades)
+            live_table = Table(
+                title=f"Hyperliquid Real Exchange Execution ({self.config.market.coin} - {network_str.upper()}) [LIVE ORDERS]",
+                header_style="bold magenta",
+            )
+            live_table.add_column("Strategy", justify="left")
+            live_table.add_column("Account Master", justify="center", style="dim")
+            live_table.add_column("Live Orders", justify="right")
+            live_table.add_column("Executed Fills", justify="right")
+            live_table.add_column("Total Real PnL ($)", justify="right", style="bold")
+            live_table.add_column("Fees Paid ($)", justify="right")
+            live_table.add_column("Current Position", justify="right")
+
+            cur_pos = self.live_executor.cached_position
+            pos_c = "green" if cur_pos > 0 else ("red" if cur_pos < 0 else "dim")
+            pnl_c = "green" if live_net_pnl >= 0 else "red"
+            live_table.add_row(
+                self.live_executor.strategy_name or "LiveExecution",
+                f"{self.live_executor.account_address[:8]}..." if self.live_executor.account_address else "-",
+                str(getattr(self.live_executor, "_order_counter", 0)),
+                str(len(live_trades)),
+                f"[{pnl_c}]${live_net_pnl:+.4f}[/{pnl_c}]",
+                f"[red]-${live_fees:.4f}[/red]" if live_fees > 0 else "$0.00",
+                f"[{pos_c}]{cur_pos:+.4f} {self.config.market.coin}[/{pos_c}]",
+            )
+            self.console.print(live_table)
+            self.console.print("\n")
+
         # 1. Performance Table
-        table_perf = Table(title="Paper Trading Performance (Realistic Fees & Slippage)", header_style="bold cyan")
+        table_title = "Theoretical Paper Simulation Benchmark" if self.live_orders else "Paper Trading Performance (Realistic Fees & Slippage)"
+        table_perf = Table(title=table_title, header_style="bold cyan")
         table_perf.add_column("Strategy", justify="left")
         table_perf.add_column("Type", justify="center", style="dim")
         table_perf.add_column("Trades", justify="right")
@@ -2195,7 +2252,13 @@ def main():
         elif cfg.market.is_xyz_stock:
             base_shares = 8.0 if cfg.market.coin == "xyz:SKHX" else 50.0
             if args.order_size == 0.0005:
-                args.order_size = 0.8 if cfg.market.coin == "xyz:SKHX" else 1.0
+                # Default to safe, margin-friendly ~15-20 notional sizing: 0.02 shares (~$17) for SKHX ($840+), 0.15 shares (~$23) for SKHY ($154)
+                if cfg.market.coin == "xyz:SKHX":
+                    args.order_size = 0.02
+                elif cfg.market.coin == "xyz:SKHY":
+                    args.order_size = 0.15
+                else:
+                    args.order_size = 1.0
             if args.size == 0.1:
                 args.size = base_shares
 

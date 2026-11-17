@@ -380,7 +380,13 @@ def main():
         elif cfg.market.is_xyz_stock:
             base_shares = 8.0 if cfg.market.coin == "xyz:SKHX" else 50.0
             if args.order_size == 0.0005:
-                args.order_size = 0.8 if cfg.market.coin == "xyz:SKHX" else 1.0
+                # Default to safe, margin-friendly ~15-20 notional sizing: 0.02 shares (~$17) for SKHX ($840+), 0.15 shares (~$23) for SKHY ($154)
+                if cfg.market.coin == "xyz:SKHX":
+                    args.order_size = 0.02
+                elif cfg.market.coin == "xyz:SKHY":
+                    args.order_size = 0.15
+                else:
+                    args.order_size = 1.0
             if args.size == 0.1:
                 args.size = base_shares
 

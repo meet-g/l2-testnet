@@ -103,6 +103,11 @@ class LiveOrderExecutor:
         self.max_px_decimals: int = self.max_price_decimals
         self.max_leverage: int = 40
 
+        # Dynamic max position scaling: for non-BTC assets (e.g. XYZ stocks, SOL, altcoins),
+        # prevent 0.05 BTC hardcoded value from choking orders
+        if self.coin != "BTC" and self.max_position_btc <= 0.05:
+            self.max_position_btc = max(self.max_position_btc, self.default_order_size_btc * 5.0)
+
         # Margin and account state
         self.account_value: float = 0.0
         self.initial_account_value: float = 0.0
@@ -2118,7 +2123,7 @@ class LiveOrderExecutor:
                         elif "error" in first_status:
                             err_msg = first_status["error"]
                             self.active_order = None
-                            self.console.print(f"[bold red]✗ [LiveExecutor] [{strat_tag}] Exchange rejected bracket order: {err_msg}[/bold red]")
+                            self.console.print(f"[bold red]✗ [LiveExecutor] [{strat_tag}] Exchange rejected bracket order: {err_msg}. Falling back to standard limit/market order...[/bold red]")
                             if self.auditor:
                                 self.auditor.record_live_order_event(
                                     strategy_name=strat_tag,
@@ -2127,10 +2132,23 @@ class LiveOrderExecutor:
                                     size_btc=sz_fmt,
                                     price=px_fmt,
                                     tif=tif,
-                                    status="rejected",
+                                    status="bracket_rejected",
                                     error_message=str(err_msg),
                                     signal_score=signal_score,
                                 )
+                            return self.place_limit_order(
+                                is_buy=is_buy,
+                                size_btc=size_btc,
+                                price=price,
+                                post_only=post_only,
+                                tif=kwargs.get("tif", "Alo" if post_only else "Ioc"),
+                                signal_score=signal_score,
+                                is_exit=False,
+                                strategy_name=strategy_name or self.strategy_name,
+                                non_blocking=False,
+                                bypass_cooldown=True,
+                                **kwargs,
+                            )
                         else:
                             self.active_order = None
                     else:
@@ -2433,7 +2451,15 @@ class LiveOrderExecutor:
             computed_sz = self.format_size(target_notional / mid_price)
             order_size = self.ensure_min_notional(computed_sz, mid_price)
         else:
-            order_size = self.ensure_min_notional(self.default_order_size_btc, mid_price)
+            raw_sz = self.format_size(self.default_order_size_btc)
+            # Universal Margin safety guard: Cap raw_sz to safe leverage capacity if available_margin is known
+            if self.available_margin > 0 and self.max_leverage > 0 and mid_price > 0:
+                max_safe_notional = self.available_margin * self.max_leverage * 0.80
+                if raw_sz * mid_price > max_safe_notional:
+                    safe_sz = self.format_size(max_safe_notional / mid_price)
+                    if safe_sz > 0:
+                        raw_sz = safe_sz
+            order_size = self.ensure_min_notional(raw_sz, mid_price)
 
         # ---------------------------------------------------------------------
         # 1. POSITION MANAGEMENT (ACTIVE EXITS: TP, SL, TRAILING STOP, HEDGE, REVERSAL)
@@ -3040,8 +3066,9 @@ class LiveOrderExecutor:
                 self.cancel_order(self.active_order["oid"])
             return
 
-        # Position safety guard: Do not place new entries if already holding a position at or above max_position_btc
-        if abs(self.cached_position) >= (self.max_position_btc - 1e-6):
+        # Position safety guard: Do not place new entries if already holding a position at or above max_position
+        eff_max_pos = max(self.max_position_btc, order_size * 2.0)
+        if abs(self.cached_position) >= (eff_max_pos - 1e-6):
             return
 
         # High Confidence Guard: Strictly require minimum confidence if configured

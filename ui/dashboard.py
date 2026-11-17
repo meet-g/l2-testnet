@@ -27,7 +27,15 @@ class TerminalDashboard:
     def __init__(self, console: Optional[Console] = None):
         self.console = console or Console()
 
-    def make_header(self, book: OrderBook, trades: TradeManager, network: str = "Testnet", warmup_remaining_secs: float = 0.0) -> Panel:
+    def make_header(
+        self,
+        book: OrderBook,
+        trades: TradeManager,
+        network: str = "Testnet",
+        warmup_remaining_secs: float = 0.0,
+        is_live_orders: bool = False,
+        live_executor: Optional[Any] = None,
+    ) -> Panel:
         mid = book.mid_price
         spread = book.spread
         spread_bps = book.spread_bps
@@ -41,13 +49,24 @@ class TerminalDashboard:
         grid.add_column(justify="right", ratio=2)
 
         coin = (getattr(book, "coin", None) or getattr(trades, "coin", None) or "BTC").upper()
-        net_badge = f"[bold magenta][{network.upper()}][/bold magenta]"
+        if is_live_orders:
+            net_badge = f"[bold red blink][{network.upper()} LIVE][/bold red blink]"
+        else:
+            net_badge = f"[bold magenta][{network.upper()} SIM][/bold magenta]"
+
         if warmup_remaining_secs > 0:
             status_badge = f"[bold yellow on black] WARMUP ({warmup_remaining_secs:.1f}s) [/bold yellow on black]"
         else:
             status_badge = f"[bold green on black] ACTIVE [/bold green on black]"
+
+        live_meta = ""
+        if is_live_orders and live_executor:
+            avail_margin = getattr(live_executor, "available_margin", 0.0)
+            if avail_margin > 0:
+                live_meta = f" | Avail: [bold green]${avail_margin:,.1f}[/bold green]"
+
         left_text = Text.from_markup(
-            f"[bold cyan]HYPERLIQUID L2 ENGINE[/bold cyan] {net_badge} {status_badge} | Coin: [bold yellow]{coin}[/bold yellow] | "
+            f"[bold cyan]HYPERLIQUID L2 ENGINE[/bold cyan] {net_badge} {status_badge} | Coin: [bold yellow]{coin}[/bold yellow]{live_meta} | "
             f"Updates: [green]{book.update_count}[/green]"
         )
 
@@ -233,15 +252,62 @@ class TerminalDashboard:
 
         return Panel(table, title="[bold]Recent Taker Trades[/bold]", border_style="yellow")
 
-    def make_strategy_activity_panel(self, evaluator: EdgeEvaluator, current_price: float, count: int = 4, warmup_remaining_secs: float = 0.0) -> Panel:
+    def make_strategy_activity_panel(
+        self,
+        evaluator: EdgeEvaluator,
+        current_price: float,
+        count: int = 4,
+        warmup_remaining_secs: float = 0.0,
+        is_live_orders: bool = False,
+        live_executor: Optional[Any] = None,
+    ) -> Panel:
         """Renders currently open positions and real-time position open/close activity log."""
         active = evaluator.get_active_positions(current_price)
         events = evaluator.get_recent_position_events(limit=count)
 
         elements = []
 
-        # 1. Active Open Positions Section
-        if active:
+        # 1. Live Exchange Orders / Position Section (When in Live Mode)
+        if is_live_orders and live_executor:
+            cur_pos = getattr(live_executor, "cached_position", 0.0)
+            if abs(cur_pos) > 1e-6:
+                entry_px = getattr(live_executor, "entry_price", current_price)
+                is_long = cur_pos > 0
+                gain_bps = ((current_price - entry_px) / entry_px) * 10000.0 if is_long else ((entry_px - current_price) / entry_px) * 10000.0
+                pnl_usd = (current_price - entry_px) * cur_pos
+                pnl_c = "green" if pnl_usd >= 0 else "red"
+                side_style = "bold green" if is_long else "bold red"
+                strat = getattr(live_executor, "position_strategy", None) or live_executor.strategy_name or "LiveExecution"
+
+                live_pos_table = Table(box=None, expand=True, padding=(0, 1))
+                live_pos_table.add_column("LIVE On-Chain Position", justify="left", style="bold magenta")
+                live_pos_table.add_column("Side/Sz", justify="center")
+                live_pos_table.add_column("Entry Px", justify="right")
+                live_pos_table.add_column("Unrealized PnL", justify="right")
+
+                live_pos_table.add_row(
+                    f"● {strat}",
+                    f"[{side_style}]{'LONG' if is_long else 'SHORT'} {abs(cur_pos):.4f}[/{side_style}]",
+                    f"${entry_px:,.4f}" if entry_px < 10 else f"${entry_px:,.2f}",
+                    f"[{pnl_c}]${pnl_usd:+.2f} ({gain_bps:+.1f}b)[/{pnl_c}]",
+                )
+                elements.append(live_pos_table)
+            elif live_executor.active_order:
+                ao = live_executor.active_order
+                side_str = "BUY" if ao.get("is_buy") else "SELL"
+                side_c = "green" if ao.get("is_buy") else "red"
+                px_val = ao.get("price", 0.0)
+                sz_val = ao.get("size", 0.0)
+                strat = ao.get("strategy_name", live_executor.strategy_name)
+                elements.append(
+                    Text.from_markup(
+                        f"[bold yellow]● RESTING ORDER:[/bold yellow] [{side_c}]{side_str} {sz_val} @ ${px_val:,.2f}[/{side_c}] "
+                        f"[dim]({strat}) | Waiting for fill on book...[/dim]"
+                    )
+                )
+
+        # 2. Paper Simulator Active Open Positions Section (if not live)
+        if not is_live_orders and active:
             pos_table = Table(box=None, expand=True, padding=(0, 1))
             pos_table.add_column("Active Position", justify="left", style="bold cyan")
             pos_table.add_column("Side/Sz", justify="center")
@@ -264,14 +330,14 @@ class TerminalDashboard:
                     f"{p['hold_secs']:.1f}s",
                 )
             elements.append(pos_table)
-        else:
+        elif not elements:
             elements.append(
                 Text.from_markup(
-                    "[dim green]● No open positions[/dim green] [dim]| All capital liquid | Quoting & scanning order book...[/dim]"
+                    "[dim green]● No open positions[/dim green] [dim]| All capital liquid | Scanning order book...[/dim]"
                 )
             )
 
-        # 2. Recent Position Actions (Open / Close lifecycle)
+        # 3. Recent Position Actions (Open / Close lifecycle)
         if events:
             ev_table = Table(box=None, expand=True, padding=(0, 1))
             ev_table.add_column("Time", justify="left", style="dim")
@@ -313,15 +379,17 @@ class TerminalDashboard:
                 elements.append(
                     Text.from_markup(f"[bold yellow]Warming up microstructure buffers ({warmup_remaining_secs:.1f}s remaining)... Holding trades.[/bold yellow]")
                 )
-            else:
+            elif not is_live_orders:
                 elements.append(
                     Text.from_markup("[dim]Awaiting signal conviction triggers to execute initial positions...[/dim]")
                 )
 
+        panel_title = "[bold magenta]Live Exchange Positions & Order Activity[/bold magenta]" if is_live_orders else "[bold]Strategy Positions & Order Activity (Open / Closed)[/bold]"
+        border_col = "magenta" if is_live_orders else "cyan"
         return Panel(
             Group(*elements),
-            title="[bold]Strategy Positions & Order Activity (Open / Closed)[/bold]",
-            border_style="cyan",
+            title=panel_title,
+            border_style=border_col,
         )
 
     def render(
@@ -332,6 +400,8 @@ class TerminalDashboard:
         evaluator: EdgeEvaluator,
         network: str = "Testnet",
         warmup_remaining_secs: float = 0.0,
+        is_live_orders: bool = False,
+        live_executor: Optional[Any] = None,
     ) -> Layout:
         """Constructs full dashboard grid layout."""
         layout = Layout()
@@ -352,13 +422,13 @@ class TerminalDashboard:
             Layout(name="strategy_activity", ratio=6),
         )
 
-        layout["header"].update(self.make_header(book, trades, network=network, warmup_remaining_secs=warmup_remaining_secs))
+        layout["header"].update(self.make_header(book, trades, network=network, warmup_remaining_secs=warmup_remaining_secs, is_live_orders=is_live_orders, live_executor=live_executor))
         layout["book"].update(self.make_orderbook_panel(book))
         layout["signals"].update(self.make_signals_panel(signals_dict))
         layout["perf"].update(self.make_performance_panel(evaluator, book.mid_price))
         layout["market_trades"].update(self.make_trades_panel(trades, count=5))
         layout["strategy_activity"].update(
-            self.make_strategy_activity_panel(evaluator, book.mid_price, count=4, warmup_remaining_secs=warmup_remaining_secs)
+            self.make_strategy_activity_panel(evaluator, book.mid_price, count=4, warmup_remaining_secs=warmup_remaining_secs, is_live_orders=is_live_orders, live_executor=live_executor)
         )
 
         return layout
