@@ -298,7 +298,8 @@
       "entry_escalate_secs": 5.0,
       "exit_escalate_secs": 3.0,
       "defensive_hedge_market": false,
-      "min_confidence": 0.65
+      "min_confidence": 0.65,
+      "price_concession_ratio": 0.0005
     },
     "Dynamic_Spread_Scalper": {
       "enabled": false,

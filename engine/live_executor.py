@@ -104,8 +104,10 @@ class LiveOrderExecutor:
         self.max_leverage: int = 40
 
         # Dynamic max position scaling: for non-BTC assets (e.g. XYZ stocks, SOL, altcoins),
-        # prevent 0.05 BTC hardcoded value from choking orders
-        if self.coin != "BTC" and self.max_position_btc <= 0.05:
+        # prevent 0.05 BTC hardcoded value from choking orders, but respect capital_usd bounds
+        if self.capital_usd is not None and self.capital_usd > 0:
+            pass  # Strictly governed by capital_usd in eff_max_pos
+        elif self.coin != "BTC" and self.max_position_btc <= 0.05:
             self.max_position_btc = max(self.max_position_btc, self.default_order_size_btc * 5.0)
 
         # Margin and account state
@@ -617,6 +619,19 @@ class LiveOrderExecutor:
                     if not is_pending and order_age >= 5.0:
                         self.active_order = None
                 else:
+                    # Multi-Order Stack Guard: When flat, there must NEVER be multiple entry orders resting on-chain
+                    if abs(self.cached_position) < 1e-6 and len(coin_orders) > 1:
+                        self.console.print(
+                            f"[bold yellow]⚠ [LiveExecutor] Detected {len(coin_orders)} open orders while flat! "
+                            f"Cancelling {len(coin_orders)-1} rogue orphan orders to prevent capital limit breach...[/bold yellow]"
+                        )
+                        for extra_o in coin_orders[1:]:
+                            extra_oid = int(extra_o.get("oid", 0))
+                            if extra_oid:
+                                self.cancel_order(extra_oid, non_blocking=True)
+                                if extra_oid in self.active_order_oids:
+                                    self.active_order_oids.remove(extra_oid)
+
                     first_o = coin_orders[0]
                     oid_val = int(first_o["oid"])
                     is_buy_order = first_o.get("side", "B") == "B"
@@ -1368,31 +1383,27 @@ class LiveOrderExecutor:
                                     **kwargs,
                                 )
                             else:
-                                self.console.print(f"[dim yellow][LiveExecutor] [{strat_tag}] Post-only modify would match resting liquidity -> Skipping forced fill to avoid unfavourable entry.[/dim yellow]")
-                                if oid in self.active_order_oids:
-                                    self.active_order_oids.remove(oid)
+                                self.console.print(f"[dim yellow][LiveExecutor] [{strat_tag}] Post-only modify would match resting liquidity -> Cancelling order {oid} to prevent orphan accumulation.[/dim yellow]")
+                                self.cancel_order(oid)
                                 self.active_order = None
                                 self.sync_state(force=True)
                                 return res
 
-                        self.console.print(f"[dim yellow][LiveExecutor] [{strat_tag}] Modify rejected ({err_msg}). Syncing state immediately instead of placing fresh order...[/dim yellow]")
-                        if oid in self.active_order_oids:
-                            self.active_order_oids.remove(oid)
+                        self.console.print(f"[dim yellow][LiveExecutor] [{strat_tag}] Modify rejected ({err_msg}). Cancelling order {oid} to prevent orphan accumulation...[/dim yellow]")
+                        self.cancel_order(oid)
                         self.active_order = None
                         self.sync_state(force=True)
                         return res
 
-                self.console.print(f"[dim yellow][LiveExecutor] [{strat_tag}] Modify rejected with status {res.get('status')}. Syncing state immediately...[/dim yellow]")
-                if oid in self.active_order_oids:
-                    self.active_order_oids.remove(oid)
+                self.console.print(f"[dim yellow][LiveExecutor] [{strat_tag}] Modify rejected with status {res.get('status')}. Cancelling order {oid}...[/dim yellow]")
+                self.cancel_order(oid)
                 self.active_order = None
                 self.sync_state(force=True)
                 return res
 
             except Exception as e:
-                self.console.print(f"[dim red][LiveExecutor] Modify exception: {e}. Syncing state immediately...[/dim red]")
-                if oid in self.active_order_oids:
-                    self.active_order_oids.remove(oid)
+                self.console.print(f"[dim red][LiveExecutor] Modify exception: {e}. Cancelling order {oid}...[/dim red]")
+                self.cancel_order(oid)
                 self.active_order = None
                 self.sync_state(force=True)
                 return None
@@ -1799,7 +1810,11 @@ class LiveOrderExecutor:
                         err_msg = first_status.get("error")
                         self.console.print(f"[bold red]✗ [LiveExecutor] [{strat_tag}] Exchange rejected order: {err_msg}[/bold red]")
                         self.active_order = None
-                        if "Post only order would have immediately matched" in str(err_msg):
+                        self.last_order_time = time.time()  # Enforce cooldown on any exchange rejection
+                        if "Order could not immediately match against any resting orders" in str(err_msg):
+                            self.console.print(f"[dim yellow][LiveExecutor] [{strat_tag}] IOC could not match immediate liquidity. Backing off and syncing book snapshot...[/dim yellow]")
+                            self.sync_state(force=False)
+                        elif "Post only order would have immediately matched" in str(err_msg):
                             # Parse true top-of-book from error string: "bbo was <bid>@<ask>"
                             import re
                             bbo_match = re.search(r"bbo was ([\d\.]+)@([\d\.]+)", str(err_msg))
@@ -1976,6 +1991,14 @@ class LiveOrderExecutor:
 
         strat_tag = strategy_name or self.strategy_name
 
+        # Cancel any existing open entry orders or orphan OIDs to prevent multi-order stacking
+        if not kwargs.get("is_exit", False):
+            if self.active_order_oids:
+                for orphan_oid in list(self.active_order_oids):
+                    self.cancel_order(orphan_oid, non_blocking=False)
+            if self.active_order and not self.active_order.get("is_exit", False) and self.active_order.get("oid", -1) > 0:
+                self.cancel_order(self.active_order["oid"], non_blocking=False)
+
         # Forced market orders override: Never quote passive post-only bracket entry
         if getattr(self, "force_market_orders", False):
             post_only = False
@@ -2135,6 +2158,24 @@ class LiveOrderExecutor:
                         elif "error" in first_status:
                             err_msg = first_status["error"]
                             self.active_order = None
+                            self.last_order_time = time.time()
+                            if "Order could not immediately match against any resting orders" in str(err_msg):
+                                self.console.print(f"[dim yellow][LiveExecutor] [{strat_tag}] IOC bracket entry could not match immediate liquidity ({err_msg}). Backing off until next tick...[/dim yellow]")
+                                if self.auditor:
+                                    self.auditor.record_live_order_event(
+                                        strategy_name=strat_tag,
+                                        event_type="REJECTED",
+                                        side="BUY" if is_buy else "SELL",
+                                        size_btc=sz_fmt,
+                                        price=px_fmt,
+                                        tif=tif,
+                                        status="bracket_rejected",
+                                        error_message=str(err_msg),
+                                        signal_score=signal_score,
+                                    )
+                                self.sync_state(force=False)
+                                return res
+
                             self.console.print(f"[bold red]✗ [LiveExecutor] [{strat_tag}] Exchange rejected bracket order: {err_msg}. Falling back to standard limit/market order...[/bold red]")
                             if self.auditor:
                                 self.auditor.record_live_order_event(
@@ -3092,12 +3133,17 @@ class LiveOrderExecutor:
 
         # Position safety guard: Do not place new entries if already holding a position at or above max_position
         if self.capital_usd is not None and self.capital_usd > 0 and mid_price > 0:
-            max_capital_sz = self.capital_usd / mid_price
-            eff_max_pos = min(max_capital_sz, max(self.max_position_btc, order_size))
+            max_capital_sz = (self.capital_usd * self.allocation_pct) / mid_price
+            eff_max_pos = max_capital_sz
         else:
             eff_max_pos = max(self.max_position_btc, order_size * 2.0)
 
-        if (abs(self.cached_position) + order_size * 0.5) >= (eff_max_pos - 1e-6):
+        # Committed exposure: includes current filled position PLUS active resting entry quote
+        current_committed_sz = abs(self.cached_position)
+        if self.active_order and not self.active_order.get("is_exit", False):
+            current_committed_sz += self.active_order.get("size", 0.0)
+
+        if (current_committed_sz + order_size * 0.5) >= (eff_max_pos - 1e-6):
             return
 
         # High Confidence Guard: Strictly require minimum confidence if configured
@@ -3183,6 +3229,8 @@ class LiveOrderExecutor:
                 concession = float(getattr(strat_cfg, "price_concession", 0.0) or 0.0)
                 if concession <= 0.0 and getattr(strat_cfg, "price_concession_ratio", None) is not None:
                     concession = mid_price * float(strat_cfg.price_concession_ratio)
+                if concession <= 0.0:
+                    concession = max(tick_size * 2.0, mid_price * 0.0005)
                 entry_target_px = self.format_price(best_ask + concession)
 
                 if self.use_native_tpsl:
@@ -3260,6 +3308,30 @@ class LiveOrderExecutor:
                     # Alpha sustained: refresh passive maker quote if price moved, never crossing spread as taker
                     if abs(cur_px - target_px) > tick_size * 1.5:
                         self.console.print(f"[bold cyan][LiveExecutor] [{active_strat_name}] Entry quote aged {order_age:.1f}s with sustained signal -> Updating passive maker quote to ${target_px:,.2f}...[/bold cyan]")
+                        if self.active_order.get("is_bracket", False) or self.use_native_tpsl:
+                            self.cancel_order(self.active_order["oid"])
+                        else:
+                            self.modify_limit_order(
+                                oid=self.active_order["oid"],
+                                is_buy=True,
+                                size_btc=order_size,
+                                price=target_px,
+                                post_only=entry_post_only,
+                                signal_score=signal_score,
+                                is_exit=False,
+                                strategy_name=active_strat_name,
+                            )
+                            return
+                    else:
+                        return
+
+                elif abs(cur_px - target_px) <= tick_size * 1.5:
+                    return
+                else:
+                    # Price has drifted -> for bracket orders cancel old order to keep TP/SL in sync, for limit orders batchModify
+                    if self.active_order.get("is_bracket", False) or self.use_native_tpsl:
+                        self.cancel_order(self.active_order["oid"])
+                    else:
                         self.modify_limit_order(
                             oid=self.active_order["oid"],
                             is_buy=True,
@@ -3270,22 +3342,7 @@ class LiveOrderExecutor:
                             is_exit=False,
                             strategy_name=active_strat_name,
                         )
-                    return
-
-                if abs(cur_px - target_px) <= tick_size * 1.5:
-                    return
-                # Price has drifted -> atomically modify quote to new best bid immediately
-                self.modify_limit_order(
-                    oid=self.active_order["oid"],
-                    is_buy=True,
-                    size_btc=order_size,
-                    price=target_px,
-                    post_only=entry_post_only,
-                    signal_score=signal_score,
-                    is_exit=False,
-                    strategy_name=active_strat_name,
-                )
-                return
+                        return
 
             elif self.active_order and not self.active_order.get("is_buy"):
                 # Active order is on opposite side -> cancel it
@@ -3388,6 +3445,8 @@ class LiveOrderExecutor:
                 concession = float(getattr(strat_cfg, "price_concession", 0.0) or 0.0)
                 if concession <= 0.0 and getattr(strat_cfg, "price_concession_ratio", None) is not None:
                     concession = mid_price * float(strat_cfg.price_concession_ratio)
+                if concession <= 0.0:
+                    concession = max(tick_size * 2.0, mid_price * 0.0005)
                 entry_target_px = self.format_price(max(0.01, best_bid - concession))
 
                 if self.use_native_tpsl:
@@ -3465,6 +3524,30 @@ class LiveOrderExecutor:
                     # Alpha sustained: refresh passive maker quote if price moved, never crossing spread as taker
                     if abs(cur_px - target_px) > tick_size * 1.5:
                         self.console.print(f"[bold cyan][LiveExecutor] [{active_strat_name}] Entry quote aged {order_age:.1f}s with sustained signal -> Updating passive maker quote to ${target_px:,.2f}...[/bold cyan]")
+                        if self.active_order.get("is_bracket", False) or self.use_native_tpsl:
+                            self.cancel_order(self.active_order["oid"])
+                        else:
+                            self.modify_limit_order(
+                                oid=self.active_order["oid"],
+                                is_buy=False,
+                                size_btc=order_size,
+                                price=target_px,
+                                post_only=entry_post_only,
+                                signal_score=signal_score,
+                                is_exit=False,
+                                strategy_name=active_strat_name,
+                            )
+                            return
+                    else:
+                        return
+
+                elif abs(cur_px - target_px) <= tick_size * 1.5:
+                    return
+                else:
+                    # Price has drifted -> for bracket orders cancel old order to keep TP/SL in sync, for limit orders batchModify
+                    if self.active_order.get("is_bracket", False) or self.use_native_tpsl:
+                        self.cancel_order(self.active_order["oid"])
+                    else:
                         self.modify_limit_order(
                             oid=self.active_order["oid"],
                             is_buy=False,
@@ -3475,22 +3558,7 @@ class LiveOrderExecutor:
                             is_exit=False,
                             strategy_name=active_strat_name,
                         )
-                    return
-
-                if abs(cur_px - target_px) <= tick_size * 1.5:
-                    return
-                # Price has drifted -> atomically modify quote to new best ask immediately
-                self.modify_limit_order(
-                    oid=self.active_order["oid"],
-                    is_buy=False,
-                    size_btc=order_size,
-                    price=target_px,
-                    post_only=entry_post_only,
-                    signal_score=signal_score,
-                    is_exit=False,
-                    strategy_name=active_strat_name,
-                )
-                return
+                        return
 
             elif self.active_order and self.active_order.get("is_buy"):
                 # Active order is on opposite side -> cancel it

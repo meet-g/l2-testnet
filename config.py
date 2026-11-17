@@ -714,6 +714,7 @@ DEFAULT_STRATEGIES_JSON = {
             "min_volatility_bps": 3.0,
             "loss_cooldown_secs": 30,
             "fast_fill_enabled": True,
+            "price_concession_ratio": 0.0005,
         },
         "Dynamic_Spread_Scalper": {
             "enabled": False,
