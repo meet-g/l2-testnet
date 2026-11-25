@@ -7,14 +7,22 @@ Validates that:
 4. The sidecar fast WebSocket stream connects with fast=True, updates top touch levels (5 levels) while retaining deep levels,
    evaluates alpha and resting orders immediately, and strictly NEVER records to L2DataRecorder (preventing data skew).
 5. Lifecycle cancellation properly cancels fast_ws_task upon runner shutdown.
+6. Order capture comparison in a set interval: rigorously tests whether the fast WebSocket captures
+   orders (transient orders, price changes, queue transitions) that the normal WebSocket misses,
+   and whether the normal WebSocket captures deep resting orders (levels 6-20) that the fast WebSocket misses.
 """
 
 import asyncio
 import json
+import os
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from config import AppConfig, MarketConfig
+from core.dual_ws_comparator import DualWebSocketOrderComparator, OrderState
 from core.orderbook import OrderBook
 from main import L2EngineRunner, build_parser as build_main_parser
 from main_scalper import build_parser as build_scalper_parser
@@ -271,5 +279,222 @@ class TestDualWebSocketLifecycle(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(task.cancelled())
 
 
+class TestDualWebSocketOrderCaptureComparison(unittest.TestCase):
+    """Compares order capture and visibility between Fast and Normal WebSocket feeds in set intervals."""
+
+    def setUp(self):
+        self.comparator = DualWebSocketOrderComparator(coin="BTC")
+
+    def test_fast_captures_transient_orders_missed_by_normal(self):
+        """Specifically verifies that orders appearing and disappearing between normal snapshots
+        are captured by the fast WebSocket and completely missed by the normal WebSocket."""
+        # 1. Normal snapshot at t = 0.0s (bids around 59000, asks around 59001)
+        normal_t0 = {
+            "channel": "l2Book",
+            "data": {
+                "coin": "BTC",
+                "time": 1000,
+                "levels": [
+                    [{"px": "59000.0", "sz": "1.0", "n": 1}],
+                    [{"px": "59001.0", "sz": "1.0", "n": 1}],
+                ],
+            },
+        }
+        self.comparator.process_message("normal", normal_t0, recv_time_s=0.0)
+        self.comparator.process_message("fast", normal_t0, recv_time_s=0.0)
+
+        # 2. Fast stream receives a flash resting bid at 59000.5 at t = 0.2s
+        fast_t1 = {
+            "channel": "l2Book",
+            "data": {
+                "coin": "BTC",
+                "time": 1200,
+                "levels": [
+                    [{"px": "59000.5", "sz": "2.5", "n": 2}, {"px": "59000.0", "sz": "1.0", "n": 1}],
+                    [{"px": "59001.0", "sz": "1.0", "n": 1}],
+                ],
+            },
+        }
+        self.comparator.process_message("fast", fast_t1, recv_time_s=0.2)
+
+        # 3. Flash bid is amended to size 3.0, n=3 at t = 0.4s
+        fast_t2 = {
+            "channel": "l2Book",
+            "data": {
+                "coin": "BTC",
+                "time": 1400,
+                "levels": [
+                    [{"px": "59000.5", "sz": "3.0", "n": 3}, {"px": "59000.0", "sz": "1.0", "n": 1}],
+                    [{"px": "59001.0", "sz": "1.0", "n": 1}],
+                ],
+            },
+        }
+        self.comparator.process_message("fast", fast_t2, recv_time_s=0.4)
+
+        # 4. Flash bid is filled/canceled before normal snapshot fires at t = 0.8s
+        fast_t3 = {
+            "channel": "l2Book",
+            "data": {
+                "coin": "BTC",
+                "time": 1800,
+                "levels": [
+                    [{"px": "59000.0", "sz": "1.0", "n": 1}],
+                    [{"px": "59001.0", "sz": "1.0", "n": 1}],
+                ],
+            },
+        }
+        self.comparator.process_message("fast", fast_t3, recv_time_s=0.8)
+
+        # 5. Normal stream sends its periodic snapshot at t = 1.0s
+        normal_t1 = {
+            "channel": "l2Book",
+            "data": {
+                "coin": "BTC",
+                "time": 2000,
+                "levels": [
+                    [{"px": "59000.0", "sz": "1.0", "n": 1}],
+                    [{"px": "59001.0", "sz": "1.0", "n": 1}],
+                ],
+            },
+        }
+        self.comparator.process_message("normal", normal_t1, recv_time_s=1.0)
+
+        # Generate report over 1.0s interval
+        report = self.comparator.generate_report(interval_secs=1.0)
+
+        # Assertions
+        # 1. Fast captured the transient orders at 59000.5
+        flash_order_1 = OrderState(side="bid", px=59000.5, sz=2.5, n=2)
+        flash_order_2 = OrderState(side="bid", px=59000.5, sz=3.0, n=3)
+        self.assertIn(flash_order_1, report.fast_only_orders)
+        self.assertIn(flash_order_2, report.fast_only_orders)
+
+        # 2. Normal NEVER saw price 59000.5 or either flash order
+        self.assertIn(("bid", 59000.5), report.fast_only_prices)
+        self.assertNotIn(flash_order_1, report.normal_only_orders)
+        self.assertNotIn(flash_order_1, report.common_orders)
+
+        # 3. Exactly proves fast stream captured unshared orders
+        self.assertGreater(len(report.fast_only_orders), 0)
+        self.assertEqual(len(report.fast_only_prices), 1)
+
+    def test_normal_captures_deep_book_liquidity_missed_by_fast(self):
+        """Verifies that the normal stream captures resting orders in the deep book (levels 6-20)
+        that the fast stream (which only streams top 5) completely misses."""
+        bids_20 = [{"px": str(100.0 - i * 0.1), "sz": "1.0", "n": 1} for i in range(20)]
+        asks_20 = [{"px": str(100.1 + i * 0.1), "sz": "1.0", "n": 1} for i in range(20)]
+
+        normal_msg = {
+            "channel": "l2Book",
+            "data": {"coin": "BTC", "time": 1000, "levels": [bids_20, asks_20]},
+        }
+        # Fast only delivers top 5 levels
+        fast_msg = {
+            "channel": "l2Book",
+            "data": {"coin": "BTC", "time": 1000, "levels": [bids_20[:5], asks_20[:5]]},
+        }
+
+        self.comparator.process_message("normal", normal_msg, recv_time_s=1.0)
+        self.comparator.process_message("fast", fast_msg, recv_time_s=1.0)
+
+        report = self.comparator.generate_report(interval_secs=1.0)
+
+        # Normal has 40 total orders (20 bids + 20 asks)
+        # Fast has 10 total orders (5 bids + 5 asks)
+        self.assertEqual(report.unique_orders_normal, 40)
+        self.assertEqual(report.unique_orders_fast, 10)
+        self.assertEqual(report.common_orders_count, 10)
+
+        # Fast only misses the 30 deeper levels
+        self.assertEqual(len(report.normal_only_orders), 30)
+        self.assertEqual(len(report.normal_only_deep_orders), 30)
+        self.assertEqual(len(report.fast_only_orders), 0)
+
+    def test_queue_state_transitions_captured_by_fast_at_common_price(self):
+        """Verifies that high-frequency queue replenishment and size transitions at the top of the book
+        are captured by Fast while Normal only observes sampled start/end endpoints."""
+        # Start state at t = 0.0s
+        msg_t0 = {
+            "channel": "l2Book",
+            "data": {
+                "coin": "BTC",
+                "time": 1000,
+                "levels": [[{"px": "100.0", "sz": "1.0", "n": 1}], [{"px": "100.1", "sz": "1.0", "n": 1}]],
+            },
+        }
+        self.comparator.process_message("normal", msg_t0, recv_time_s=0.0)
+        self.comparator.process_message("fast", msg_t0, recv_time_s=0.0)
+
+        # Intermediate updates captured ONLY by Fast at t = 0.1s, 0.2s, 0.3s
+        intermediate_sizes = [(2.5, 2), (5.0, 4), (1.5, 2)]
+        for i, (sz, n) in enumerate(intermediate_sizes):
+            fast_msg = {
+                "channel": "l2Book",
+                "data": {
+                    "coin": "BTC",
+                    "time": 1000 + (i + 1) * 100,
+                    "levels": [[{"px": "100.0", "sz": str(sz), "n": n}], [{"px": "100.1", "sz": "1.0", "n": 1}]],
+                },
+            }
+            self.comparator.process_message("fast", fast_msg, recv_time_s=0.1 * (i + 1))
+
+        # End state at t = 1.0s seen by both
+        msg_t1 = {
+            "channel": "l2Book",
+            "data": {
+                "coin": "BTC",
+                "time": 2000,
+                "levels": [[{"px": "100.0", "sz": "3.0", "n": 3}], [{"px": "100.1", "sz": "1.0", "n": 1}]],
+            },
+        }
+        self.comparator.process_message("normal", msg_t1, recv_time_s=1.0)
+        self.comparator.process_message("fast", msg_t1, recv_time_s=1.0)
+
+        report = self.comparator.generate_report(interval_secs=1.0)
+
+        # Fast captured the 3 intermediate queue states at shared price 100.0
+        self.assertEqual(len(report.fast_only_intermediate_updates), 3)
+        for sz, n in intermediate_sizes:
+            self.assertIn(OrderState(side="bid", px=100.0, sz=sz, n=n), report.fast_only_intermediate_updates)
+
+    def test_lead_time_latency_advantage(self):
+        """Verifies that when an order arrives, Fast detects it earlier than Normal."""
+        msg = {
+            "channel": "l2Book",
+            "data": {
+                "coin": "BTC",
+                "time": 1000,
+                "levels": [[{"px": "100.0", "sz": "1.0", "n": 1}], [{"px": "100.1", "sz": "1.0", "n": 1}]],
+            },
+        }
+        # Fast receives it at t = 1.000s
+        self.comparator.process_message("fast", msg, recv_time_s=1.000)
+        # Normal receives it at t = 1.450s (450ms wire/throttle latency)
+        self.comparator.process_message("normal", msg, recv_time_s=1.450)
+
+        report = self.comparator.generate_report(interval_secs=1.0)
+        self.assertAlmostEqual(report.avg_lead_time_ms, 450.0, places=1)
+        self.assertAlmostEqual(report.max_lead_time_ms, 450.0, places=1)
+
+    def test_live_interval_comparison_if_enabled(self):
+        """Optional live test against Hyperliquid WebSocket if RUN_LIVE_WS_TEST=1 is configured."""
+        if os.environ.get("RUN_LIVE_WS_TEST") != "1":
+            self.skipTest("Live WebSocket test skipped (set RUN_LIVE_WS_TEST=1 to enable).")
+
+        async def _run():
+            comp = DualWebSocketOrderComparator(coin="BTC")
+            rep = await comp.run_live(interval_secs=3.0)
+            self.assertGreater(rep.fast_msg_count, 0)
+            self.assertGreater(rep.normal_msg_count, 0)
+            # Under live conditions, fast captures unshared orders
+            self.assertGreater(len(rep.fast_only_orders), 0)
+
+        asyncio.run(_run())
+
+
 if __name__ == "__main__":
+    import sys
+    if "--live" in sys.argv:
+        sys.argv.remove("--live")
+        os.environ["RUN_LIVE_WS_TEST"] = "1"
     unittest.main()

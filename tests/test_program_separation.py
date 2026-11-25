@@ -248,13 +248,11 @@ class TestProgramSeparation(unittest.TestCase):
     def test_core_and_scalper_set_scalping_mode_guards(self):
         """Verifies set_scalping_mode guards preserve strategy integrity on isolated configurations."""
         core_cfg = CoreStrategiesConfig.load("strategies_core.json")
-        # Trying to enable scalping on core config should not disable core strategies
+        initial_states = {name: core_cfg.execution_strategies[name].enabled for name in CORE_EXECUTION_STRATEGIES}
+        # Trying to enable scalping on core config should not alter core strategy states
         core_cfg.set_scalping_mode(enabled=True)
         for name in CORE_EXECUTION_STRATEGIES:
-            if name == "Convexity_Cascade":
-                self.assertFalse(core_cfg.execution_strategies[name].enabled)
-            else:
-                self.assertTrue(core_cfg.execution_strategies[name].enabled)
+            self.assertEqual(core_cfg.execution_strategies[name].enabled, initial_states[name])
         self.assertFalse(core_cfg.is_scalping_mode_active)
 
         scalp_cfg = ScalperStrategiesConfig.load("strategies_scalper.json")
@@ -304,12 +302,10 @@ class TestProgramSeparation(unittest.TestCase):
         cfg = breakout_prop_trader._GLOBAL_STRATEGIES_CFG
         self.assertIsNotNone(cfg)
         self.assertEqual(len(cfg.execution_strategies), len(CORE_EXECUTION_STRATEGIES))
+        expected_enabled = {"Hedged_Convexity", "Convexity_Cascade"}
         for name in CORE_EXECUTION_STRATEGIES:
             self.assertIn(name, cfg.execution_strategies)
-            if name == "Convexity_Cascade":
-                self.assertFalse(cfg.execution_strategies[name].enabled)
-            else:
-                self.assertTrue(cfg.execution_strategies[name].enabled)
+            self.assertEqual(cfg.execution_strategies[name].enabled, name in expected_enabled)
 
 
 if __name__ == "__main__":

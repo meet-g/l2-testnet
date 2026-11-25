@@ -36,7 +36,7 @@
       "coentry_group": "triad"
     },
     "Convexity_Cascade": {
-      "enabled": false,
+      "enabled": true,
       "description": "Multi-tier order book convexity and liquidity hole cascade with order count dispersion and trade flow impulse",
       "signal_key": "ConvexityCascade",
       "execution_type": "HEDGED_MAKER",
@@ -55,7 +55,7 @@
       "coentry_group": "triad"
     },
     "Momentum_Expansion": {
-      "enabled": true,
+      "enabled": false,
       "description": "Multi-minute structural trend expansion entering on order book queue exhaustion, 25-level depth support, and CVD acceleration with absorption trap shielding",
       "signal_key": "MomentumExpansion",
       "execution_type": "HEDGED_MAKER",
@@ -74,7 +74,7 @@
       "coentry_group": "triad"
     },
     "Queue_Replenishment": {
-      "enabled": true,
+      "enabled": false,
       "description": "Orthogonal queue replenishment dynamics with multi-tier cancellation asymmetry, depletion persistence, and defensive maker hedging",
       "signal_key": "QueueReplenishment",
       "execution_type": "HEDGED_MAKER",
@@ -93,7 +93,7 @@
       "coentry_group": "queue_replenishment"
     },
     "Stock_Microstructure_Alpha": {
-      "enabled": true,
+      "enabled": false,
       "description": "High-frequency microstructure alpha engineered specifically for Hyperliquid lower-fee stock pairs (XYZ equities), harvesting MicroPrice fair-value drift, 5-level depth imbalance, VOI delta queues, and tight fee-hurdle trailing ratchets",
       "signal_key": "StockMicrostructure",
       "execution_type": "HEDGED_MAKER",
@@ -123,7 +123,7 @@
       "description": "Hedged Convexity Alpha (depth curvature + order count dispersion + dynamic VPIN toxicity shielding & defensive maker hedge triggers)"
     },
     "ConvexityCascade": {
-      "enabled": false,
+      "enabled": true,
       "weight": 0.0,
       "description": "Order Book Convexity & Liquidity Hole Cascade (queue depletion + depth slope + hole vacuum + CVD impulse)"
     },
